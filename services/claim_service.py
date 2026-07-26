@@ -263,9 +263,9 @@ def update_claim(claim_id, issue_type, description, quantity):
         conn.close()
 
 
-# --------------------------- DELETE CLAIM ---------------------------
+# --------------------------- DELETE CLAIM (FIXED - Resets faulty flag) ---------------------------
 def delete_claim(claim_id):
-    """Delete a claim and restore stock"""
+    """Delete a claim and restore stock, AND reset faulty flag if no active claims remain"""
     conn = get_connection()
     cursor = conn.cursor()
     try:
@@ -288,6 +288,23 @@ def delete_claim(claim_id):
             WHERE id = %s
         """, (quantity, quantity, batch_id))
         
+        # ✅ Check if there are any other active claims for this batch
+        cursor.execute("""
+            SELECT COUNT(*) FROM claims 
+            WHERE batch_id = %s AND status = 'active'
+        """, (batch_id,))
+        active_claims_count = cursor.fetchone()[0]
+        
+        # ✅ If no other active claims, reset the faulty flag
+        if active_claims_count == 0:
+            cursor.execute("""
+                UPDATE purchase_batches 
+                SET is_faulty = FALSE,
+                    claimed_quantity = 0
+                WHERE id = %s
+            """, (batch_id,))
+            print(f"✅ Reset faulty flag for batch {batch_id} - no active claims remain")
+        
         # Restore product stock
         cursor.execute("""
             UPDATE products 
@@ -295,7 +312,7 @@ def delete_claim(claim_id):
             WHERE id = %s
         """, (quantity, product_id))
         
-        # Delete claim
+        # Delete the claim
         cursor.execute("DELETE FROM claims WHERE id = %s", (claim_id,))
         
         conn.commit()
@@ -307,17 +324,46 @@ def delete_claim(claim_id):
         conn.close()
 
 
-# --------------------------- RESOLVE CLAIM ---------------------------
+# --------------------------- RESOLVE CLAIM (FIXED - Resets faulty flag) ---------------------------
 def resolve_claim(claim_id):
-    """Mark a claim as resolved"""
+    """Mark a claim as resolved (stock stays deducted) AND reset faulty flag if no active claims remain"""
     conn = get_connection()
     cursor = conn.cursor()
     try:
+        # Get the claim details
+        cursor.execute("""
+            SELECT batch_id, quantity FROM claims WHERE id = %s
+        """, (claim_id,))
+        claim = cursor.fetchone()
+        if not claim:
+            raise ValueError("Claim not found")
+        
+        batch_id, quantity = claim
+        
+        # Update claim status to resolved
         cursor.execute("""
             UPDATE claims 
             SET status = 'resolved', updated_at = %s
             WHERE id = %s
         """, (datetime.now(), claim_id))
+        
+        # ✅ Check if there are any other active claims for this batch
+        cursor.execute("""
+            SELECT COUNT(*) FROM claims 
+            WHERE batch_id = %s AND status = 'active'
+        """, (batch_id,))
+        active_claims_count = cursor.fetchone()[0]
+        
+        # ✅ If no other active claims, reset the faulty flag
+        if active_claims_count == 0:
+            cursor.execute("""
+                UPDATE purchase_batches 
+                SET is_faulty = FALSE,
+                    claimed_quantity = 0
+                WHERE id = %s
+            """, (batch_id,))
+            print(f"✅ Reset faulty flag for batch {batch_id} - no active claims remain")
+        
         conn.commit()
         return True
     except Exception as e:
