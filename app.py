@@ -2100,11 +2100,13 @@ def api_archive():
     cursor = conn.cursor()
     
     try:
-        # ✅ CRITICAL: Rollback any aborted transaction
         conn.rollback()
         
-        # Get active products
-        cursor.execute("""
+        offset = (page - 1) * per_page
+        search_pattern = f"%{search}%" if search else None
+        
+        # -------------------- GET ACTIVE PRODUCTS WITH PAGINATION --------------------
+        active_query = """
             SELECT 
                 id,
                 name,
@@ -2121,87 +2123,85 @@ def api_archive():
                 AND dp.action = 'PERMANENTLY DELETED' 
                 AND dp.source = 'product'
             )
-        """)
+        """
+        active_params = []
+        active_count_params = []
+        
+        if search:
+            active_query += " AND (name ILIKE %s OR brand ILIKE %s)"
+            active_params.extend([search_pattern, search_pattern])
+            active_count_params.extend([search_pattern, search_pattern])
+        
+        # Get count first
+        count_query = f"SELECT COUNT(*) FROM ({active_query}) sub"
+        cursor.execute(count_query, active_params)
+        active_count = cursor.fetchone()[0]
+        
+        # Get paginated active products
+        active_query += f" ORDER BY name ASC LIMIT {per_page} OFFSET {offset}"
+        cursor.execute(active_query, active_params)
         active_rows = cursor.fetchall()
-        print(f"✅ Found {len(active_rows)} active products")
         
-        active_items = []
-        for r in active_rows:
-            product_id = r[0]
-            
-            # ✅ FIXED: Get claims for this product - removed pb.batch_id reference
-            claims_data = []
-            try:
-                cursor.execute("""
-                    SELECT 
-                        c.id,
-                        c.batch_id,
-                        c.issue_type,
-                        c.description,
-                        c.quantity,
-                        c.status,
-                        c.created_at
-                    FROM claims c
-                    WHERE c.product_id = %s AND c.status = 'active'
-                    ORDER BY c.created_at DESC
-                """, (product_id,))
-                claims = cursor.fetchall()
-                for claim in claims:
-                    claims_data.append({
-                        "claim_id": claim[0],
-                        "batch_id": claim[1],
-                        "issue_type": claim[2],
-                        "description": claim[3],
-                        "quantity": claim[4],
-                        "status": claim[5],
-                        "created_at": claim[6]
-                    })
-            except Exception as claim_err:
-                print(f"⚠️ Could not fetch claims for product {product_id}: {str(claim_err)}")
-                conn.rollback()
-            
-            active_items.append({
-                'id': None,
-                'name': r[1],
-                'brand': r[2] or '',
-                'category': r[3] or '',
-                'cost': float(r[4] or 0),
-                'price': float(r[5] or 0),
-                'stock': int(r[6] or 0),
-                'discount': float(r[7] or 0),
-                'action': 'ACTIVE',
-                'date': '',
-                'source': 'active',
-                'is_permanent': False,
-                'batch_id': None,
-                'batch_quantity': None,
-                'batch_remaining': None,
-                'product_id': r[0],
-                'claims': claims_data,
-                'has_claims': len(claims_data) > 0,
-                'total_claimed': sum(c['quantity'] for c in claims_data) if claims_data else 0
-            })
+        print(f"✅ Found {active_count} active products, showing {len(active_rows)}")
         
-        # Get deleted records
-        cursor.execute("""
+        # -------------------- GET DELETED RECORDS WITH PAGINATION --------------------
+        deleted_query = """
             SELECT 
                 id, name, brand, cost_price, selling_price, stock, 
                 category, discount, action, deleted_at, batch_id, 
                 batch_quantity, batch_remaining, product_id, source
             FROM deleted_products
-            ORDER BY deleted_at DESC
-        """)
-        deleted_rows = cursor.fetchall()
-        print(f"✅ Found {len(deleted_rows)} deleted records")
+            WHERE 1=1
+        """
+        deleted_params = []
+        deleted_count_params = []
         
-        deleted_items = []
-        for r in deleted_rows:
-            action = str(r[8]).upper() if len(r) > 8 and r[8] else 'UNKNOWN'
-            is_permanent = action == 'PERMANENTLY DELETED'
-            
-            claims_data = []
-            product_id = r[13] if len(r) > 13 else None
-            if product_id:
+        if search:
+            deleted_query += " AND (name ILIKE %s OR brand ILIKE %s)"
+            deleted_params.extend([search_pattern, search_pattern])
+            deleted_count_params.extend([search_pattern, search_pattern])
+        
+        if status_filter != 'ALL':
+            deleted_query += " AND action = %s"
+            deleted_params.append(status_filter)
+            deleted_count_params.append(status_filter)
+        
+        # Get count first
+        count_deleted_query = f"SELECT COUNT(*) FROM ({deleted_query}) sub"
+        cursor.execute(count_deleted_query, deleted_count_params)
+        deleted_count = cursor.fetchone()[0]
+        
+        # Get paginated deleted records
+        deleted_query += " ORDER BY deleted_at DESC LIMIT %s OFFSET %s"
+        deleted_params.extend([per_page, offset])
+        cursor.execute(deleted_query, deleted_params)
+        deleted_rows = cursor.fetchall()
+        
+        print(f"✅ Found {deleted_count} deleted records, showing {len(deleted_rows)}")
+        
+        # -------------------- PROCESS RESULTS --------------------
+        # Calculate total across both queries
+        total = active_count + deleted_count
+        
+        # If no results, return empty
+        if total == 0:
+            return jsonify({
+                'items': [],
+                'total': 0,
+                'page': page,
+                'per_page': per_page,
+                'total_pages': 1,
+                'has_more': False
+            })
+        
+        # Process active items with their claims (only if we have active rows)
+        active_items = []
+        if active_rows:
+            for r in active_rows:
+                product_id = r[0]
+                
+                # Get claims for this product (limited to 5 per product for performance)
+                claims_data = []
                 try:
                     cursor.execute("""
                         SELECT 
@@ -2213,8 +2213,9 @@ def api_archive():
                             c.status,
                             c.created_at
                         FROM claims c
-                        WHERE c.product_id = %s
+                        WHERE c.product_id = %s AND c.status = 'active'
                         ORDER BY c.created_at DESC
+                        LIMIT 5
                     """, (product_id,))
                     claims = cursor.fetchall()
                     for claim in claims:
@@ -2228,47 +2229,97 @@ def api_archive():
                             "created_at": claim[6]
                         })
                 except Exception as claim_err:
-                    print(f"⚠️ Could not fetch claims for deleted product {product_id}: {str(claim_err)}")
+                    print(f"⚠️ Could not fetch claims for product {product_id}: {str(claim_err)}")
                     conn.rollback()
-            
-            deleted_items.append({
-                'id': r[0],
-                'name': r[1] if r[1] else '-',
-                'brand': r[2] if r[2] else '-',
-                'category': r[6] if r[6] else '-',
-                'cost': float(r[3] or 0),
-                'price': float(r[4] or 0),
-                'stock': int(r[5] or 0),
-                'discount': float(r[7] or 0),
-                'action': action,
-                'date': r[9].isoformat() if hasattr(r[9], 'isoformat') else str(r[9]) if r[9] else '',
-                'source': r[14] if len(r) > 14 and r[14] else 'product',
-                'is_permanent': is_permanent,
-                'batch_id': r[10] if len(r) > 10 else None,
-                'batch_quantity': r[11] if len(r) > 11 else None,
-                'batch_remaining': r[12] if len(r) > 12 else None,
-                'product_id': r[13] if len(r) > 13 else None,
-                'claims': claims_data,
-                'has_claims': len(claims_data) > 0,
-                'total_claimed': sum(c['quantity'] for c in claims_data) if claims_data else 0
-            })
+                
+                active_items.append({
+                    'id': None,
+                    'name': r[1],
+                    'brand': r[2] or '',
+                    'category': r[3] or '',
+                    'cost': float(r[4] or 0),
+                    'price': float(r[5] or 0),
+                    'stock': int(r[6] or 0),
+                    'discount': float(r[7] or 0),
+                    'action': 'ACTIVE',
+                    'date': '',
+                    'source': 'active',
+                    'is_permanent': False,
+                    'batch_id': None,
+                    'batch_quantity': None,
+                    'batch_remaining': None,
+                    'product_id': r[0],
+                    'claims': claims_data,
+                    'has_claims': len(claims_data) > 0,
+                    'total_claimed': sum(c['quantity'] for c in claims_data) if claims_data else 0
+                })
         
+        # Process deleted items
+        deleted_items = []
+        if deleted_rows:
+            for r in deleted_rows:
+                action = str(r[8]).upper() if len(r) > 8 and r[8] else 'UNKNOWN'
+                is_permanent = action == 'PERMANENTLY DELETED'
+                
+                claims_data = []
+                product_id = r[13] if len(r) > 13 else None
+                if product_id:
+                    try:
+                        cursor.execute("""
+                            SELECT 
+                                c.id,
+                                c.batch_id,
+                                c.issue_type,
+                                c.description,
+                                c.quantity,
+                                c.status,
+                                c.created_at
+                            FROM claims c
+                            WHERE c.product_id = %s
+                            ORDER BY c.created_at DESC
+                            LIMIT 5
+                        """, (product_id,))
+                        claims = cursor.fetchall()
+                        for claim in claims:
+                            claims_data.append({
+                                "claim_id": claim[0],
+                                "batch_id": claim[1],
+                                "issue_type": claim[2],
+                                "description": claim[3],
+                                "quantity": claim[4],
+                                "status": claim[5],
+                                "created_at": claim[6]
+                            })
+                    except Exception as claim_err:
+                        print(f"⚠️ Could not fetch claims for deleted product {product_id}: {str(claim_err)}")
+                        conn.rollback()
+                
+                deleted_items.append({
+                    'id': r[0],
+                    'name': r[1] if r[1] else '-',
+                    'brand': r[2] if r[2] else '-',
+                    'category': r[6] if r[6] else '-',
+                    'cost': float(r[3] or 0),
+                    'price': float(r[4] or 0),
+                    'stock': int(r[5] or 0),
+                    'discount': float(r[7] or 0),
+                    'action': action,
+                    'date': r[9].isoformat() if hasattr(r[9], 'isoformat') else str(r[9]) if r[9] else '',
+                    'source': r[14] if len(r) > 14 and r[14] else 'product',
+                    'is_permanent': is_permanent,
+                    'batch_id': r[10] if len(r) > 10 else None,
+                    'batch_quantity': r[11] if len(r) > 11 else None,
+                    'batch_remaining': r[12] if len(r) > 12 else None,
+                    'product_id': r[13] if len(r) > 13 else None,
+                    'claims': claims_data,
+                    'has_claims': len(claims_data) > 0,
+                    'total_claimed': sum(c['quantity'] for c in claims_data) if claims_data else 0
+                })
+        
+        # Combine and sort for current page
         combined = active_items + deleted_items
         
-        # Apply status filter
-        if status_filter != 'ALL':
-            combined = [item for item in combined if item['action'] == status_filter]
-            print(f"📊 Filtered to {len(combined)} items with status '{status_filter}'")
-        
-        # Apply search filter
-        if search:
-            search_lower = search.lower()
-            combined = [item for item in combined if 
-                search_lower in item['name'].lower() or 
-                search_lower in item['brand'].lower()]
-            print(f"🔍 Filtered to {len(combined)} items with search '{search}'")
-        
-        # Sort
+        # Sort by date (active items first, then deleted by date)
         def sort_key(item):
             if item['action'] == 'ACTIVE':
                 return (datetime.max.replace(tzinfo=timezone.utc), item['name'])
@@ -2283,21 +2334,19 @@ def api_archive():
         
         combined.sort(key=sort_key, reverse=True)
         
-        # Pagination
-        total = len(combined)
-        start = (page - 1) * per_page
-        end = min(start + per_page, total)
-        paginated = combined[start:end] if start < total else []
+        # Calculate total pages
+        total_pages = (total + per_page - 1) // per_page if total > 0 else 1
+        has_more = offset + len(combined) < total
         
-        print(f"📦 Returning {len(paginated)} items of {total} total (page {page}/{((total + per_page - 1) // per_page)})")
+        print(f"📦 Returning {len(combined)} items of {total} total (page {page}/{total_pages})")
         
         return jsonify({
-            'items': paginated,
+            'items': combined,
             'total': total,
             'page': page,
             'per_page': per_page,
-            'total_pages': (total + per_page - 1) // per_page if total > 0 else 1,
-            'has_more': end < total
+            'total_pages': total_pages,
+            'has_more': has_more
         })
         
     except Exception as e:
