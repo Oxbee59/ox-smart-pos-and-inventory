@@ -631,29 +631,59 @@ def admin_edit_user(user_id):
     return render_template("edit_user.html", user_id=user_id, is_oxbee=is_oxbee)
 
 # ===================== USER LOGS API (OXBEE ONLY) =====================
+# ===================== USER LOGS API (UPDATED - Hides oxbee logs from other admins) =====================
 @app.route('/api/user/logs', methods=['GET'])
 @login_required
 def api_user_logs():
+    """Get user logs - oxbee sees all, other admins see all except oxbee logs"""
     current_username = session.get('username')
+    current_user_role = session.get('role')
     
-    if current_username.lower() != 'oxbee':
-        return jsonify({'success': False, 'error': 'Unauthorized - Only system administrator can view logs'}), 403
-    
-    user_id = request.args.get('user_id', type=int)
-    action = request.args.get('action')
-    limit = request.args.get('limit', 50, type=int)
-    offset = request.args.get('offset', 0, type=int)
-    
-    logs = get_user_logs(user_id, limit, offset, action)
+    # Only admins can view logs
+    if current_user_role != 'admin':
+        return jsonify({'success': False, 'error': 'Unauthorized - Admin access required'}), 403
     
     conn = get_connection()
     cursor = conn.cursor()
     try:
-        query = "SELECT COUNT(*) FROM user_logs"
+        # Get the oxbee user ID
+        cursor.execute("SELECT id FROM users WHERE username = 'oxbee'")
+        oxbee_row = cursor.fetchone()
+        OXBEE_USER_ID = oxbee_row[0] if oxbee_row else 1
+        
+        user_id = request.args.get('user_id', type=int)
+        action = request.args.get('action')
+        limit = request.args.get('limit', 50, type=int)
+        offset = request.args.get('offset', 0, type=int)
+        
+        # Build the query
+        query = """
+            SELECT 
+                id,
+                user_id,
+                action,
+                ip_address,
+                user_agent,
+                timestamp
+            FROM user_logs
+            WHERE 1=1
+        """
         params = []
         conditions = []
         
+        # ✅ If current user is NOT oxbee, exclude oxbee logs
+        if current_username.lower() != 'oxbee':
+            conditions.append("user_id != %s")
+            params.append(OXBEE_USER_ID)
+        
         if user_id:
+            # If user is not oxbee and trying to view oxbee's logs, block it
+            if current_username.lower() != 'oxbee' and user_id == OXBEE_USER_ID:
+                conn.close()
+                return jsonify({
+                    'success': False, 
+                    'error': 'Unauthorized - Cannot view system administrator logs'
+                }), 403
             conditions.append("user_id = %s")
             params.append(user_id)
         if action:
@@ -661,30 +691,91 @@ def api_user_logs():
             params.append(action)
         
         if conditions:
-            query += " WHERE " + " AND ".join(conditions)
+            query += " AND " + " AND ".join(conditions)
         
-        cursor.execute(query, params)
+        # Get total count
+        count_query = query.replace(
+            "SELECT id, user_id, action, ip_address, user_agent, timestamp FROM user_logs WHERE 1=1",
+            "SELECT COUNT(*) FROM user_logs WHERE 1=1"
+        )
+        if conditions:
+            # Rebuild count query properly
+            count_query = "SELECT COUNT(*) FROM user_logs"
+            count_params = []
+            count_conditions = []
+            
+            if current_username.lower() != 'oxbee':
+                count_conditions.append("user_id != %s")
+                count_params.append(OXBEE_USER_ID)
+            
+            if user_id and not (current_username.lower() != 'oxbee' and user_id == OXBEE_USER_ID):
+                count_conditions.append("user_id = %s")
+                count_params.append(user_id)
+            if action:
+                count_conditions.append("action = %s")
+                count_params.append(action)
+            
+            if count_conditions:
+                count_query += " WHERE " + " AND ".join(count_conditions)
+            
+            cursor.execute(count_query, count_params)
+        else:
+            cursor.execute(count_query)
         total = cursor.fetchone()[0]
-    finally:
+        
+        # Get paginated logs
+        query += " ORDER BY timestamp DESC LIMIT %s OFFSET %s"
+        params.extend([limit, offset])
+        cursor.execute(query, params)
+        logs = cursor.fetchall()
+        
+        # Format logs with usernames
+        result = []
+        for log in logs:
+            log_dict = {
+                'id': log[0],
+                'user_id': log[1],
+                'action': log[2],
+                'ip_address': log[3],
+                'user_agent': log[4],
+                'timestamp': log[5].isoformat() if log[5] else None
+            }
+            # Get username
+            if log[1]:
+                cursor.execute("SELECT username FROM users WHERE id = %s", (log[1],))
+                user_row = cursor.fetchone()
+                log_dict['username'] = user_row[0] if user_row else 'Unknown'
+            result.append(log_dict)
+        
         conn.close()
-    
-    return jsonify({
-        'success': True,
-        'logs': logs,
-        'total': total,
-        'limit': limit,
-        'offset': offset
-    })
+        
+        return jsonify({
+            'success': True,
+            'logs': result,
+            'total': total,
+            'limit': limit,
+            'offset': offset
+        })
+    except Exception as e:
+        print(f"❌ Error in api_user_logs: {str(e)}")
+        conn.close()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
+
+# ===================== LOGS PAGE =====================
 @app.route("/logs")
 @login_required
 def logs():
     current_username = session.get('username')
+    current_user_role = session.get('role')
     
-    if current_username.lower() != 'oxbee':
-        return render_template("error.html", message="Unauthorized - Only system administrator can view logs"), 403
+    # Only admins can access logs page
+    if current_user_role != 'admin':
+        return render_template("error.html", message="Unauthorized - Admin access required"), 403
     
-    return render_template("logs.html")
+    # Pass the user info to the template
+    return render_template("logs.html", current_user=session.get('username'), is_oxbee=(current_username.lower() == 'oxbee'))
+
 
 # ===================== GET SINGLE USER (Admin) =====================
 @app.route('/api/admin/users/<int:user_id>', methods=['GET'])
@@ -2105,98 +2196,48 @@ def api_archive():
         offset = (page - 1) * per_page
         search_pattern = f"%{search}%" if search else None
         
-        # -------------------- GET ACTIVE PRODUCTS WITH PAGINATION --------------------
-        active_query = """
-            SELECT 
-                id,
-                name,
-                brand,
-                category,
-                cost_price,
-                selling_price,
-                stock,
-                discount
-            FROM products
-            WHERE NOT EXISTS (
-                SELECT 1 FROM deleted_products dp 
-                WHERE dp.product_id = products.id 
-                AND dp.action = 'PERMANENTLY DELETED' 
-                AND dp.source = 'product'
-            )
-        """
-        active_params = []
-        active_count_params = []
-        
-        if search:
-            active_query += " AND (name ILIKE %s OR brand ILIKE %s)"
-            active_params.extend([search_pattern, search_pattern])
-            active_count_params.extend([search_pattern, search_pattern])
-        
-        # Get count first
-        count_query = f"SELECT COUNT(*) FROM ({active_query}) sub"
-        cursor.execute(count_query, active_params)
-        active_count = cursor.fetchone()[0]
-        
-        # Get paginated active products
-        active_query += f" ORDER BY name ASC LIMIT {per_page} OFFSET {offset}"
-        cursor.execute(active_query, active_params)
-        active_rows = cursor.fetchall()
-        
-        print(f"✅ Found {active_count} active products, showing {len(active_rows)}")
-        
-        # -------------------- GET DELETED RECORDS WITH PAGINATION --------------------
-        deleted_query = """
-            SELECT 
-                id, name, brand, cost_price, selling_price, stock, 
-                category, discount, action, deleted_at, batch_id, 
-                batch_quantity, batch_remaining, product_id, source
-            FROM deleted_products
-            WHERE 1=1
-        """
-        deleted_params = []
-        deleted_count_params = []
-        
-        if search:
-            deleted_query += " AND (name ILIKE %s OR brand ILIKE %s)"
-            deleted_params.extend([search_pattern, search_pattern])
-            deleted_count_params.extend([search_pattern, search_pattern])
-        
-        if status_filter != 'ALL':
-            deleted_query += " AND action = %s"
-            deleted_params.append(status_filter)
-            deleted_count_params.append(status_filter)
-        
-        # Get count first
-        count_deleted_query = f"SELECT COUNT(*) FROM ({deleted_query}) sub"
-        cursor.execute(count_deleted_query, deleted_count_params)
-        deleted_count = cursor.fetchone()[0]
-        
-        # Get paginated deleted records
-        deleted_query += " ORDER BY deleted_at DESC LIMIT %s OFFSET %s"
-        deleted_params.extend([per_page, offset])
-        cursor.execute(deleted_query, deleted_params)
-        deleted_rows = cursor.fetchall()
-        
-        print(f"✅ Found {deleted_count} deleted records, showing {len(deleted_rows)}")
-        
-        # -------------------- PROCESS RESULTS --------------------
-        # Calculate total across both queries
-        total = active_count + deleted_count
-        
-        # If no results, return empty
-        if total == 0:
-            return jsonify({
-                'items': [],
-                'total': 0,
-                'page': page,
-                'per_page': per_page,
-                'total_pages': 1,
-                'has_more': False
-            })
-        
-        # Process active items with their claims (only if we have active rows)
+        # -------------------- GET ACTIVE PRODUCTS (only when status_filter is ALL or ACTIVE) --------------------
         active_items = []
-        if active_rows:
+        active_count = 0
+        
+        if status_filter == 'ALL' or status_filter == 'ACTIVE':
+            active_query = """
+                SELECT 
+                    id,
+                    name,
+                    brand,
+                    category,
+                    cost_price,
+                    selling_price,
+                    stock,
+                    discount
+                FROM products
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM deleted_products dp 
+                    WHERE dp.product_id = products.id 
+                    AND dp.action = 'PERMANENTLY DELETED' 
+                    AND dp.source = 'product'
+                )
+            """
+            active_params = []
+            
+            if search:
+                active_query += " AND (name ILIKE %s OR brand ILIKE %s)"
+                active_params.extend([search_pattern, search_pattern])
+            
+            # Get count
+            count_query = f"SELECT COUNT(*) FROM ({active_query}) sub"
+            cursor.execute(count_query, active_params)
+            active_count = cursor.fetchone()[0]
+            
+            # Get paginated active products
+            active_query += f" ORDER BY name ASC LIMIT {per_page} OFFSET {offset}"
+            cursor.execute(active_query, active_params)
+            active_rows = cursor.fetchall()
+            
+            print(f"✅ Found {active_count} active products, showing {len(active_rows)}")
+            
+            # Process active items
             for r in active_rows:
                 product_id = r[0]
                 
@@ -2254,9 +2295,47 @@ def api_archive():
                     'total_claimed': sum(c['quantity'] for c in claims_data) if claims_data else 0
                 })
         
-        # Process deleted items
+        # -------------------- GET DELETED RECORDS (only when status_filter is ALL or a specific status) --------------------
         deleted_items = []
-        if deleted_rows:
+        deleted_count = 0
+        
+        # Show deleted records for ALL status or specific statuses
+        show_deleted = status_filter == 'ALL' or status_filter in ['DELETED', 'PRODUCT DELETED', 'BATCH DELETED', 'PERMANENTLY DELETED', 'UPDATED']
+        
+        if show_deleted:
+            deleted_query = """
+                SELECT 
+                    id, name, brand, cost_price, selling_price, stock, 
+                    category, discount, action, deleted_at, batch_id, 
+                    batch_quantity, batch_remaining, product_id, source
+                FROM deleted_products
+                WHERE 1=1
+            """
+            deleted_params = []
+            
+            if search:
+                deleted_query += " AND (name ILIKE %s OR brand ILIKE %s)"
+                deleted_params.extend([search_pattern, search_pattern])
+            
+            # ✅ Fix: Only apply status filter if not 'ALL'
+            if status_filter != 'ALL':
+                deleted_query += " AND action = %s"
+                deleted_params.append(status_filter)
+            
+            # Get count
+            count_deleted_query = f"SELECT COUNT(*) FROM ({deleted_query}) sub"
+            cursor.execute(count_deleted_query, deleted_params)
+            deleted_count = cursor.fetchone()[0]
+            
+            # Get paginated deleted records
+            deleted_query += " ORDER BY deleted_at DESC LIMIT %s OFFSET %s"
+            deleted_params.extend([per_page, offset])
+            cursor.execute(deleted_query, deleted_params)
+            deleted_rows = cursor.fetchall()
+            
+            print(f"✅ Found {deleted_count} deleted records, showing {len(deleted_rows)}")
+            
+            # Process deleted items
             for r in deleted_rows:
                 action = str(r[8]).upper() if len(r) > 8 and r[8] else 'UNKNOWN'
                 is_permanent = action == 'PERMANENTLY DELETED'
@@ -2315,6 +2394,21 @@ def api_archive():
                     'has_claims': len(claims_data) > 0,
                     'total_claimed': sum(c['quantity'] for c in claims_data) if claims_data else 0
                 })
+        
+        # -------------------- COMBINE RESULTS --------------------
+        # Calculate total
+        total = active_count + deleted_count
+        
+        # If no results, return empty
+        if total == 0:
+            return jsonify({
+                'items': [],
+                'total': 0,
+                'page': page,
+                'per_page': per_page,
+                'total_pages': 1,
+                'has_more': False
+            })
         
         # Combine and sort for current page
         combined = active_items + deleted_items

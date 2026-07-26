@@ -539,18 +539,21 @@
             <div class="border-t border-gray-700 my-2"></div>
             <div class="text-xs text-gray-500 uppercase px-3 py-1">Admin</div>
 
-            <!-- ===== NEW: CLAIMS PAGE ===== -->
+            <!-- ===== CLAIMS PAGE ===== -->
             <a href="/claims" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                 <i class="fas fa-clipboard-list w-5"></i> Claims
                 <span class="text-xs text-yellow-400 ml-auto">⚠️</span>
             </a>
 
-            {% if current_user.username.lower() == 'oxbee' %}
+            <!-- ===== USER LOGS - SHOW TO ALL ADMINS (UPDATED) ===== -->
             <a href="/logs" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                 <i class="fas fa-history w-5"></i> User Logs
-                <span class="text-xs text-red-400 ml-auto">🔒</span>
+                {% if current_user.username.lower() == 'oxbee' %}
+                <span class="text-xs text-red-400 ml-auto">🔒 Full Access</span>
+                {% else %}
+                <span class="text-xs text-blue-400 ml-auto">📋 View</span>
+                {% endif %}
             </a>
-            {% endif %}
 
             <a href="/purchases" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                 <i class="fas fa-shopping-cart w-5"></i> Purchases (Accessories)
