@@ -675,7 +675,7 @@
         }
     }
 
-    // ---------- Render list ----------
+    // ---------- Render list with Profit per Batch ----------
     function renderList(purchases, fromCache = false) {
         const container = document.getElementById('purchasesList');
         if (!purchases || purchases.length === 0) {
@@ -684,20 +684,26 @@
             return;
         }
 
-        container.innerHTML = purchases.map(p => `
+        container.innerHTML = purchases.map(p => {
+            // Calculate profit for this batch
+            const batchProfit = ((p.selling_price || 0) - (p.cost_price || 0)) * (p.quantity || 0);
+            const profitColor = batchProfit >= 0 ? 'text-teal-600' : 'text-red-600';
+            
+            return `
             <div class="border rounded-lg p-4 hover:shadow transition">
-                <div class="flex justify-between items-start">
-                    <div class="flex-1">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
+                    <div class="flex-1 w-full">
                         <h3 class="font-bold text-lg">${escapeHtml(p.name)} (${escapeHtml(p.brand)})</h3>
                         <p class="text-sm text-gray-600">Batch #${p.batch_id} | Qty: ${p.quantity} | Stock: ${p.remaining_quantity}</p>
                         <p class="text-sm">Cost: ₵${(p.cost_price || 0).toFixed(2)} | Discount: ₵${(p.discount || 0).toFixed(2)} | Selling: ₵${(p.selling_price || 0).toFixed(2)}</p>
                         <p class="text-sm">Total: ₵${(p.total_cost || 0).toFixed(2)} | Date: ${formatDate(p.date)}</p>
-                        <p class="text-sm text-gray-500 mt-1"><span class="font-medium">Source:</span> ${escapeHtml(p.source || 'Unknown')}</p>
+                        <p class="text-sm text-gray-500"><span class="font-medium">Source:</span> ${escapeHtml(p.source || 'Unknown')}</p>
+                        <p class="text-sm font-bold ${profitColor}">💎 Profit: ${formatMoney(batchProfit)}</p>
                     </div>
-                    <button onclick="editPurchase(${p.batch_id})" class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-1 rounded ml-2">✏️ Update</button>
+                    <button onclick="editPurchase(${p.batch_id})" class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-1 rounded text-sm whitespace-nowrap">✏️ Update</button>
                 </div>
             </div>
-        `).join('');
+        `}).join('');
         updateSummary(purchases);
     }
 
@@ -733,7 +739,7 @@
         const isCached = !isDataFresh && !isOffline;
         
         document.getElementById('summary').innerHTML = `
-            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 text-sm">
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-2 text-sm">
                 <div class="bg-white rounded p-2 shadow">
                     <span class="text-gray-500">📦 Batches</span><br>
                     <span class="text-lg font-bold text-indigo-600">${totalBatches}</span>
@@ -755,8 +761,12 @@
                     <span class="text-lg font-bold text-red-600">${formatMoney(totalDiscount)}</span>
                 </div>
                 <div class="bg-white rounded p-2 shadow">
-                    <span class="text-gray-500">💎 Profit</span><br>
+                    <span class="text-gray-500">💎 Total Profit</span><br>
                     <span class="text-lg font-bold ${totalProfit >= 0 ? 'text-teal-600' : 'text-red-600'}">${formatMoney(totalProfit)}</span>
+                </div>
+                <div class="bg-white rounded p-2 shadow">
+                    <span class="text-gray-500">📊 Avg Profit/Batch</span><br>
+                    <span class="text-lg font-bold ${totalBatches > 0 && totalProfit / totalBatches >= 0 ? 'text-teal-600' : 'text-red-600'}">${totalBatches > 0 ? formatMoney(totalProfit / totalBatches) : '₵0.00'}</span>
                 </div>
             </div>
             <div class="mt-2 text-xs text-gray-400">

@@ -58,9 +58,16 @@ def get_products_for_sale():
         return_connection(conn)
 
 # ---------------------------
-# GET BATCHES FOR PRODUCT (WITH CLAIM INFO)
+# GET BATCHES FOR PRODUCT (WITH CLAIM INFO - FIXED)
 # ---------------------------
 def get_batches_for_product(product_id, limit=100):
+    """
+    Get batches for a product with claim info.
+    ✅ FIXED: Shows status based on active claims only.
+    - If batch has ACTIVE claims → shows "⚠️ Claimed"
+    - If batch has only RESOLVED claims → shows "✅ Good"
+    - If batch has no claims → shows "✅ Good"
+    """
     conn = get_connection()
     cursor = conn.cursor()
     try:
@@ -79,34 +86,63 @@ def get_batches_for_product(product_id, limit=100):
                     SELECT SUM(quantity) 
                     FROM claims 
                     WHERE batch_id = pb.id AND status = 'active'
-                ), 0) as active_claims_qty
+                ), 0) as active_claims_qty,
+                COALESCE((
+                    SELECT SUM(quantity) 
+                    FROM claims 
+                    WHERE batch_id = pb.id AND status = 'resolved'
+                ), 0) as resolved_claims_qty
             FROM purchase_batches pb
             WHERE pb.product_id = %s AND pb.remaining_quantity > 0
             ORDER BY pb.date ASC
             LIMIT %s
         """, (product_id, limit))
         rows = cursor.fetchall()
-        return [
-            {
-                "batch_id": r[0],
-                "quantity": int(r[1] or 0),
-                "remaining_quantity": int(r[2] or 0),
-                "cost_price": float(r[3] or 0),
-                "selling_price": float(r[4] or 0),
-                "discount": float(r[5] or 0),
-                "date": r[6],
-                "is_faulty": r[7] or False,
-                "claimed_quantity": r[8] or 0,
-                "active_claims": r[9] if len(r) > 9 else 0
-            }
-            for r in rows
-        ]
+        
+        result = []
+        for r in rows:
+            batch_id = r[0]
+            quantity = int(r[1] or 0)
+            remaining_quantity = int(r[2] or 0)
+            cost_price = float(r[3] or 0)
+            selling_price = float(r[4] or 0)
+            discount = float(r[5] or 0)
+            date = r[6]
+            is_faulty = r[7] or False
+            claimed_quantity = r[8] or 0
+            active_claims = r[9] if len(r) > 9 else 0
+            resolved_claims = r[10] if len(r) > 10 else 0
+            
+            # ✅ Determine if batch should show as faulty
+            # Only show as faulty if there are ACTIVE claims
+            has_active_claims = active_claims > 0
+            
+            result.append({
+                "batch_id": batch_id,
+                "quantity": quantity,
+                "remaining_quantity": remaining_quantity,
+                "cost_price": cost_price,
+                "selling_price": selling_price,
+                "discount": discount,
+                "date": date,
+                "is_faulty": has_active_claims,  # ✅ Only active claims make it faulty
+                "claimed_quantity": claimed_quantity,
+                "active_claims": active_claims,
+                "resolved_claims": resolved_claims,
+                "has_claims": active_claims > 0 or resolved_claims > 0,
+                "has_active_claims": active_claims > 0,
+                "has_resolved_claims": resolved_claims > 0,
+                # ✅ Status text for display
+                "status": "⚠️ Claimed" if active_claims > 0 else "✅ Good"
+            })
+        
+        return result
     finally:
         from database.db import return_connection
         return_connection(conn)
 
 # ---------------------------
-# GET SINGLE BATCH BY ID (WITH CLAIM INFO)
+# GET SINGLE BATCH BY ID (WITH CLAIM INFO - FIXED)
 # ---------------------------
 def get_batch_by_id(batch_id):
     """Get a single batch by its ID with claim info"""
@@ -115,15 +151,20 @@ def get_batch_by_id(batch_id):
     try:
         cursor.execute("""
             SELECT 
-                id, 
-                product_id, 
-                remaining_quantity, 
-                cost_price, 
-                selling_price,
-                is_faulty,
-                claimed_quantity
-            FROM purchase_batches
-            WHERE id = %s
+                pb.id, 
+                pb.product_id, 
+                pb.remaining_quantity, 
+                pb.cost_price, 
+                pb.selling_price,
+                pb.is_faulty,
+                pb.claimed_quantity,
+                COALESCE((
+                    SELECT SUM(quantity) 
+                    FROM claims 
+                    WHERE batch_id = pb.id AND status = 'active'
+                ), 0) as active_claims_qty
+            FROM purchase_batches pb
+            WHERE pb.id = %s
         """, (batch_id,))
         row = cursor.fetchone()
         if row:
@@ -134,7 +175,8 @@ def get_batch_by_id(batch_id):
                 "cost_price": float(row[3] or 0),
                 "selling_price": float(row[4] or 0),
                 "is_faulty": row[5] or False,
-                "claimed_quantity": row[6] or 0
+                "claimed_quantity": row[6] or 0,
+                "active_claims": row[7] if len(row) > 7 else 0
             }
         return None
     finally:
@@ -142,7 +184,7 @@ def get_batch_by_id(batch_id):
         return_connection(conn)
 
 # ---------------------------
-# GET MULTIPLE BATCHES IN SINGLE QUERY (WITH CLAIM INFO)
+# GET MULTIPLE BATCHES IN SINGLE QUERY (WITH CLAIM INFO - FIXED)
 # ---------------------------
 def get_batches_by_ids(batch_ids):
     """Fetch multiple batches in one query with claim info"""
@@ -156,15 +198,20 @@ def get_batches_by_ids(batch_ids):
         for batch_id in batch_ids:
             cursor.execute("""
                 SELECT 
-                    id, 
-                    product_id, 
-                    remaining_quantity, 
-                    cost_price, 
-                    selling_price,
-                    is_faulty,
-                    claimed_quantity
-                FROM purchase_batches
-                WHERE id = %s
+                    pb.id, 
+                    pb.product_id, 
+                    pb.remaining_quantity, 
+                    pb.cost_price, 
+                    pb.selling_price,
+                    pb.is_faulty,
+                    pb.claimed_quantity,
+                    COALESCE((
+                        SELECT SUM(quantity) 
+                        FROM claims 
+                        WHERE batch_id = pb.id AND status = 'active'
+                    ), 0) as active_claims_qty
+                FROM purchase_batches pb
+                WHERE pb.id = %s
             """, (batch_id,))
             row = cursor.fetchone()
             if row:
@@ -175,7 +222,8 @@ def get_batches_by_ids(batch_ids):
                     "cost_price": float(row[3] or 0),
                     "selling_price": float(row[4] or 0),
                     "is_faulty": row[5] or False,
-                    "claimed_quantity": row[6] or 0
+                    "claimed_quantity": row[6] or 0,
+                    "active_claims": row[7] if len(row) > 7 else 0
                 }
             else:
                 print(f"⚠️ Batch {batch_id} not found in database")
@@ -207,7 +255,7 @@ def bulk_update_product_stocks(cursor, product_ids):
         update_product_stock(cursor, product_id)
 
 # ---------------------------
-# MAIN SALE CREATION FUNCTION (FIXED: DATE HANDLING)
+# MAIN SALE CREATION FUNCTION
 # ---------------------------
 @handle_timeout
 def create_multi_sale(cart_items, sale_datetime=None, selected_batches=None, payment_method='cash', cheque_number=None, user_id=None):
@@ -342,8 +390,8 @@ def create_multi_sale(cart_items, sale_datetime=None, selected_batches=None, pay
                         if batch["remaining_quantity"] < sb["qty"]:
                             raise ValueError(f"Batch {sb['batch_id']} has only {batch['remaining_quantity']} left, requested {sb['qty']} for {product['name']}")
                         
-                        # Check if batch is faulty
-                        if batch.get("is_faulty", False) or (batch.get("claimed_quantity", 0) > 0):
+                        # ✅ Check if batch has ACTIVE claims (not resolved)
+                        if batch.get("active_claims", 0) > 0 or batch.get("is_faulty", False):
                             has_faulty_batch = True
                         
                         product_batches.append({
@@ -351,8 +399,9 @@ def create_multi_sale(cart_items, sale_datetime=None, selected_batches=None, pay
                             "qty": sb["qty"],
                             "cost_price": batch["cost_price"],
                             "selling_price": batch.get("selling_price", selling_price),
-                            "is_faulty": batch.get("is_faulty", False),
-                            "claimed_quantity": batch.get("claimed_quantity", 0)
+                            "is_faulty": batch.get("active_claims", 0) > 0,
+                            "claimed_quantity": batch.get("claimed_quantity", 0),
+                            "active_claims": batch.get("active_claims", 0)
                         })
                 
                 # Verify quantity

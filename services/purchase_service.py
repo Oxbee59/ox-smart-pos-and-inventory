@@ -89,11 +89,13 @@ def add_purchase(name, brand, category, quantity, cost_price, discount, selling_
         conn.close()
 
 
-# --------------------------- UPDATE BATCH (FIXED - NO DUPLICATES) ---------------------------
+# --------------------------- UPDATE BATCH (FIXED - NO DUPLICATES, NO CROSS-BATCH EFFECTS) ---------------------------
 def update_product(batch_id, name, brand, category, quantity, cost_price, discount, selling_price, source=None):
     """
     Update a batch and its associated product.
-    ✅ FIXED: Updates ALL product fields AND handles name/brand changes without creating duplicates.
+    ✅ FIXED: Updates ONLY the specific batch, not other batches of the same product
+    ✅ FIXED: Product-level prices are NOT updated (they come from batches)
+    ✅ FIXED: Handles name/brand changes without creating duplicates
     """
     quantity = int(quantity)
     cost_price = float(cost_price)
@@ -169,12 +171,12 @@ def update_product(batch_id, name, brand, category, quantity, cost_price, discou
                 """, (new_product_id, quantity, quantity, cost_price, selling_price, 
                       discount, datetime.now(), "updated", source, batch_id))
                 
-                # Update the existing product's prices (optional - merge best prices)
+                # ✅ ONLY update the existing product's category (NOT prices)
                 cursor.execute("""
                     UPDATE products
-                    SET cost_price = %s, selling_price = %s, discount = %s, category = %s
+                    SET category = %s
                     WHERE id = %s
-                """, (cost_price, selling_price, discount, category, new_product_id))
+                """, (category, new_product_id))
                 
                 # Recalculate stock for BOTH products
                 update_product_stock(cursor, new_product_id)
@@ -194,22 +196,22 @@ def update_product(batch_id, name, brand, category, quantity, cost_price, discou
                 return batch_id
             
             else:
-                # ✅ Target product doesn't exist - just update the existing product
+                # ✅ Target product doesn't exist - update the existing product
                 cursor.execute("""
                     UPDATE products
-                    SET name = %s, brand = %s, category = %s, cost_price = %s, selling_price = %s, discount = %s
+                    SET name = %s, brand = %s, category = %s
                     WHERE id = %s
-                """, (name, brand, category, cost_price, selling_price, discount, product_id))
+                """, (name, brand, category, product_id))
 
         else:
-            # ✅ Name/brand didn't change - just update normally
+            # ✅ Name/brand didn't change - ONLY update category, NOT prices
             cursor.execute("""
                 UPDATE products
-                SET category = %s, cost_price = %s, selling_price = %s, discount = %s
+                SET category = %s
                 WHERE id = %s
-            """, (category, cost_price, selling_price, discount, product_id))
+            """, (category, product_id))
 
-        # Update the batch record
+        # ✅ Update ONLY the batch record with the new prices (not the product)
         cursor.execute("""
             UPDATE purchase_batches
             SET quantity = %s, remaining_quantity = %s, cost_price = %s, selling_price = %s, 
