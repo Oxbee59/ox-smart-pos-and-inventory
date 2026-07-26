@@ -763,6 +763,7 @@ def api_user_logs():
 
 
 # ===================== LOGS PAGE =====================
+# ===================== LOGS PAGE =====================
 @app.route("/logs")
 @login_required
 def logs():
@@ -773,9 +774,8 @@ def logs():
     if current_user_role != 'admin':
         return render_template("error.html", message="Unauthorized - Admin access required"), 403
     
-    # Pass the user info to the template
-    return render_template("logs.html", current_user=session.get('username'), is_oxbee=(current_username.lower() == 'oxbee'))
-
+    # Pass is_oxbee to the template (current_user is injected by context processor)
+    return render_template("logs.html", is_oxbee=(current_username.lower() == 'oxbee'))
 
 # ===================== GET SINGLE USER (Admin) =====================
 @app.route('/api/admin/users/<int:user_id>', methods=['GET'])
