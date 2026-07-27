@@ -15,11 +15,65 @@
     <button id="refreshBtn" class="bg-teal-500 hover:bg-teal-600 text-white px-3 py-1.5 md:px-4 md:py-2 rounded-lg text-sm md:text-base">🔄 Refresh</button>
 </div>
 
-<!-- Search Bar -->
-<div class="mb-4">
-    <input type="text" id="searchInput" placeholder="🔍 Search product, brand, or user..."
-           class="w-full border border-gray-300 rounded-lg px-3 py-1.5 md:px-4 md:py-2 text-sm md:text-base">
-    <p class="text-xs text-gray-500 mt-1">🔎 Type to filter sales records by product, brand, or user</p>
+<!-- Search Bar with Advanced Options -->
+<div class="mb-4 bg-white rounded-xl shadow-md p-3 md:p-4">
+    <div class="flex flex-col md:flex-row gap-3">
+        <div class="flex-1">
+            <input type="text" id="searchInput" placeholder="🔍 Search product, brand, user, or category..."
+                   class="w-full border border-gray-300 rounded-lg px-3 py-1.5 md:px-4 md:py-2 text-sm md:text-base">
+        </div>
+        <div class="flex flex-wrap gap-2 items-center">
+            <button id="advancedToggle" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1.5 rounded-lg text-sm">
+                ⚙️ Advanced
+            </button>
+            <button id="clearSearchBtn" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-lg text-sm">
+                ✕ Clear
+            </button>
+        </div>
+    </div>
+    
+    <!-- Advanced Search Options -->
+    <div id="advancedSearch" class="hidden mt-3 pt-3 border-t border-gray-200">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div>
+                <label class="block text-xs font-medium text-gray-700">Search Mode</label>
+                <select id="searchMode" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
+                    <option value="contains">Contains (Partial Match)</option>
+                    <option value="exact">Exact Match</option>
+                    <option value="starts">Starts With</option>
+                    <option value="ends">Ends With</option>
+                    <option value="words">All Words (AND)</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-700">Search In</label>
+                <select id="searchField" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
+                    <option value="all">All Fields</option>
+                    <option value="name">Product Name</option>
+                    <option value="brand">Brand</option>
+                    <option value="username">User</option>
+                    <option value="category">Category</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-700">Case Sensitive</label>
+                <select id="caseSensitive" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
+                    <option value="false">No</option>
+                    <option value="true">Yes</option>
+                </select>
+            </div>
+            <div class="flex items-end">
+                <button id="applyAdvancedSearch" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg text-sm w-full">
+                    🔍 Apply
+                </button>
+            </div>
+        </div>
+        <div class="mt-2 text-xs text-gray-500">
+            💡 Tip: Use "All Words" mode to search for multiple terms (e.g., "king earphone" finds products with both words)
+        </div>
+    </div>
+    
+    <p class="text-xs text-gray-500 mt-1">🔎 Type to filter sales records | <span id="resultCount" class="font-semibold">0</span> results found</p>
 </div>
 
 <!-- Period Filter Buttons -->
@@ -123,11 +177,18 @@
             scrollbar-color: #94a3b8 #f1f1f1;
         }
     }
+    
+    /* Highlight matching text */
+    .highlight-match {
+        background-color: #fef08a;
+        padding: 0 2px;
+        border-radius: 2px;
+    }
 </style>
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {
-        console.log("DOM loaded – initializing Today Sales (Accessories & Phones)");
+        console.log("DOM loaded – initializing Today Sales (Accessories & Phones) with Advanced Search");
 
         let currentSalesData = [];
         let currentFilteredData = [];
@@ -135,6 +196,11 @@
         let currentStartDate = null;
         let currentEndDate = null;
         let currentSearchTerm = '';
+
+        // Advanced search settings
+        let searchMode = 'contains';
+        let searchField = 'all';
+        let caseSensitive = false;
 
         // For reversal modal
         let currentReverseSaleId = null;
@@ -204,6 +270,92 @@
             }
         }
 
+        // ---------- Advanced Search Functions ----------
+        function matchesSearch(value, searchTerm, mode, caseSensitive) {
+            if (!value) return false;
+            
+            let searchValue = value;
+            let term = searchTerm;
+            
+            if (!caseSensitive) {
+                searchValue = searchValue.toLowerCase();
+                term = term.toLowerCase();
+            }
+            
+            switch(mode) {
+                case 'exact':
+                    return searchValue === term;
+                case 'starts':
+                    return searchValue.startsWith(term);
+                case 'ends':
+                    return searchValue.endsWith(term);
+                case 'words':
+                    // Check if ALL words in search term are present
+                    const words = term.split(/\s+/).filter(w => w.length > 0);
+                    return words.every(word => searchValue.includes(word));
+                case 'contains':
+                default:
+                    return searchValue.includes(term);
+            }
+        }
+
+        function getSearchableText(sale, field) {
+            switch(field) {
+                case 'name':
+                    return sale.name || '';
+                case 'brand':
+                    return sale.brand || '';
+                case 'username':
+                    return sale.username || '';
+                case 'category':
+                    return sale.category || '';
+                case 'all':
+                default:
+                    return [
+                        sale.name || '',
+                        sale.brand || '',
+                        sale.username || '',
+                        sale.category || ''
+                    ].join(' ');
+            }
+        }
+
+        function applyAdvancedSearchAndRender() {
+            const searchInput = document.getElementById('searchInput');
+            currentSearchTerm = searchInput ? searchInput.value : '';
+            
+            // Get advanced search settings
+            searchMode = document.getElementById('searchMode').value;
+            searchField = document.getElementById('searchField').value;
+            caseSensitive = document.getElementById('caseSensitive').value === 'true';
+            
+            let filtered = currentSalesData;
+            
+            if (currentSearchTerm.trim()) {
+                const searchTerm = currentSearchTerm.trim();
+                
+                filtered = currentSalesData.filter(sale => {
+                    const searchableText = getSearchableText(sale, searchField);
+                    return matchesSearch(searchableText, searchTerm, searchMode, caseSensitive);
+                });
+            }
+            
+            currentFilteredData = filtered;
+            updateFilterInfo();
+            renderSales(filtered, currentSearchTerm);
+            
+            // Update result count
+            const resultCount = document.getElementById('resultCount');
+            if (resultCount) {
+                const total = currentSalesData.length;
+                const found = filtered.length;
+                resultCount.textContent = found;
+                if (currentSearchTerm.trim()) {
+                    resultCount.textContent = `${found} (of ${total})`;
+                }
+            }
+        }
+
         // ---------- Fetch sales data ----------
         async function loadSalesData() {
             updateOfflineBanner();
@@ -250,10 +402,11 @@
 
             currentSalesData = data;
             updateFilterInfo();
-            applySearchAndRender();
+            applyAdvancedSearchAndRender();
+            
             if (fromCache) {
-                document.getElementById('salesList').innerHTML +=
-                    '<div class="text-xs text-gray-500 text-center mt-2">⚠️ Data may be outdated (offline)</div>';
+                const list = document.getElementById('salesList');
+                list.innerHTML += '<div class="text-xs text-gray-500 text-center mt-2">⚠️ Data may be outdated (offline)</div>';
             }
         }
 
@@ -267,7 +420,23 @@
             
             if (currentSearchTerm) {
                 hasFilter = true;
-                descriptions.push(`Search: "${currentSearchTerm}"`);
+                let modeText = {
+                    'contains': 'contains',
+                    'exact': 'exactly matches',
+                    'starts': 'starts with',
+                    'ends': 'ends with',
+                    'words': 'contains all words'
+                }[searchMode] || 'contains';
+                
+                let fieldText = {
+                    'all': 'all fields',
+                    'name': 'product name',
+                    'brand': 'brand',
+                    'username': 'user',
+                    'category': 'category'
+                }[searchField] || 'all fields';
+                
+                descriptions.push(`Search: "${currentSearchTerm}" (${modeText} in ${fieldText})`);
             }
             
             if (currentStartDate && currentEndDate) {
@@ -291,23 +460,6 @@
             } else {
                 filterInfo.classList.add('hidden');
             }
-        }
-
-        // ---------- Filter and render ----------
-        function applySearchAndRender() {
-            currentSearchTerm = document.getElementById('searchInput').value.toLowerCase();
-            let filtered = currentSalesData;
-            if (currentSearchTerm) {
-                filtered = currentSalesData.filter(sale =>
-                    (sale.name && sale.name.toLowerCase().includes(currentSearchTerm)) ||
-                    (sale.brand && sale.brand.toLowerCase().includes(currentSearchTerm)) ||
-                    (sale.username && sale.username.toLowerCase().includes(currentSearchTerm)) ||
-                    (sale.category && sale.category.toLowerCase().includes(currentSearchTerm))
-                );
-            }
-            currentFilteredData = filtered;
-            updateFilterInfo();
-            renderSales(filtered);
         }
 
         // ---------- Reverse modal functions ----------
@@ -397,16 +549,19 @@
             }
         }
 
-        // ---------- Render sales cards (FIXED - handles all sales properly) ----------
-        function renderSales(sales) {
+        // ---------- Render sales cards with highlighting ----------
+        function renderSales(sales, searchTerm = '') {
             const container = document.getElementById('salesList');
             if (!sales || sales.length === 0) {
-                container.innerHTML = '<div class="text-center text-gray-400 py-8">No sales recorded for this period (Accessories & Phones).</div>';
+                const message = searchTerm ? 
+                    `No sales found matching "${searchTerm}"` : 
+                    'No sales recorded for this period (Accessories & Phones).';
+                container.innerHTML = `<div class="text-center text-gray-400 py-8">${message}</div>`;
                 updateSummary([]);
                 return;
             }
 
-            // ✅ FIXED: Better grouping with validation
+            // Group sales by sale_id
             const saleMap = new Map();
             for (const sale of sales) {
                 if (!sale.sale_id) {
@@ -414,7 +569,6 @@
                     continue;
                 }
                 
-                // Initialize sale group if not exists
                 if (!saleMap.has(sale.sale_id)) {
                     saleMap.set(sale.sale_id, {
                         sale_id: sale.sale_id,
@@ -429,20 +583,14 @@
                     });
                 }
                 
-                // Add item to the sale group
                 saleMap.get(sale.sale_id).items.push(sale);
             }
-
-            console.log('✅ Sale Map size:', saleMap.size);
-            console.log('✅ Sale IDs:', [...saleMap.keys()]);
 
             let html = '';
             let saleCount = 0;
             
             for (const [saleId, saleGroup] of saleMap) {
-                // Skip if no items
                 if (!saleGroup.items || saleGroup.items.length === 0) {
-                    console.warn('⚠️ Sale has no items:', saleId);
                     continue;
                 }
 
@@ -451,9 +599,26 @@
 
                 const itemsHtml = saleGroup.items.map(item => {
                     const statusText = item.is_deleted_batch ? '⚠️ (Batch Deleted - History Only)' : '';
+                    // Highlight search term in product name if it matches
+                    let displayName = escapeHtml(item.name);
+                    let displayBrand = escapeHtml(item.brand);
+                    
+                    if (searchTerm && searchTerm.trim()) {
+                        const term = searchTerm.trim();
+                        // Simple highlighting - could be enhanced
+                        if (item.name && item.name.toLowerCase().includes(term.toLowerCase())) {
+                            const regex = new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+                            displayName = escapeHtml(item.name).replace(regex, '<span class="highlight-match">$1</span>');
+                        }
+                        if (item.brand && item.brand.toLowerCase().includes(term.toLowerCase())) {
+                            const regex = new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+                            displayBrand = escapeHtml(item.brand).replace(regex, '<span class="highlight-match">$1</span>');
+                        }
+                    }
+                    
                     return `
                         <div class="border-b pb-1 md:pb-2 mb-1 md:mb-2 last:border-0">
-                            <div class="font-semibold text-indigo-700 text-sm md:text-base">${escapeHtml(item.name)} (${escapeHtml(item.brand)}) ${statusText}</div>
+                            <div class="font-semibold text-indigo-700 text-sm md:text-base">${displayName} (${displayBrand}) ${statusText}</div>
                             <div class="text-xs md:text-sm grid grid-cols-2 gap-0.5 md:gap-1">
                                 <div>Qty: ${item.quantity}</div>
                                 <div>Selling: ${formatMoney(item.selling_price)}</div>
@@ -502,21 +667,19 @@
             console.log(`✅ Rendered ${saleCount} sales with ${sales.length} total items`);
         }
 
-        // ---------- Update summary (FIXED - handles all payment methods) ----------
+        // ---------- Update summary ----------
         function updateSummary(sales) {
             const seenSales = new Set();
             let totalSales = 0, totalDiscount = 0, totalProfit = 0, totalItems = 0;
             let cashTotal = 0, momoTotal = 0, chequeTotal = 0;
 
             for (const sale of sales) {
-                // Use sale_id to track unique sales
                 if (!seenSales.has(sale.sale_id)) {
                     totalSales += sale.total || 0;
                     totalDiscount += sale.discount || 0;
                     totalProfit += sale.net_profit || 0;
                     seenSales.add(sale.sale_id);
 
-                    // Track payment methods (FIXED)
                     const method = (sale.payment_method || 'cash').toLowerCase();
                     if (method === 'cash' || method === '') {
                         cashTotal += sale.total || 0;
@@ -525,7 +688,6 @@
                     } else if (method === 'cheque') {
                         chequeTotal += sale.total || 0;
                     } else {
-                        // Default to cash if unknown
                         cashTotal += sale.total || 0;
                     }
                 }
@@ -578,7 +740,7 @@
             `;
         }
 
-        // ---------- PDF export – exports ALL filtered data (FIXED) ----------
+        // ---------- PDF export ----------
         async function exportPDF() {
             if (!navigator.onLine) {
                 alert('PDF export requires internet. Please connect and try again.');
@@ -607,10 +769,16 @@
             }
             
             if (currentSearchTerm) {
-                periodText += ` (Filtered by: "${currentSearchTerm}")`;
+                const modeText = {
+                    'contains': 'contains',
+                    'exact': 'exactly matches',
+                    'starts': 'starts with',
+                    'ends': 'ends with',
+                    'words': 'contains all words'
+                }[searchMode] || 'contains';
+                periodText += ` (Filtered by: "${currentSearchTerm}" - ${modeText})`;
             }
             
-            // Get summary data
             const summary = document.getElementById('summaryBar').innerText;
             
             try {
@@ -645,9 +813,37 @@
 
         // ---------- Event listeners ----------
         document.getElementById('refreshBtn').addEventListener('click', () => loadSalesData());
-        document.getElementById('searchInput').addEventListener('input', () => applySearchAndRender());
         document.getElementById('pdfBtn').addEventListener('click', exportPDF);
         document.getElementById('confirmReverseBtn').addEventListener('click', confirmReverseSelected);
+        
+        // Search input with real-time filtering
+        document.getElementById('searchInput').addEventListener('input', () => {
+            applyAdvancedSearchAndRender();
+        });
+        
+        // Clear search
+        document.getElementById('clearSearchBtn').addEventListener('click', () => {
+            document.getElementById('searchInput').value = '';
+            applyAdvancedSearchAndRender();
+        });
+        
+        // Advanced toggle
+        document.getElementById('advancedToggle').addEventListener('click', () => {
+            const advanced = document.getElementById('advancedSearch');
+            advanced.classList.toggle('hidden');
+        });
+        
+        // Apply advanced search
+        document.getElementById('applyAdvancedSearch').addEventListener('click', () => {
+            applyAdvancedSearchAndRender();
+        });
+        
+        // Apply search settings on Enter key in search input
+        document.getElementById('searchInput').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                applyAdvancedSearchAndRender();
+            }
+        });
 
         document.getElementById('applyDateBtn').addEventListener('click', () => {
             const start = document.getElementById('startDate').value;
