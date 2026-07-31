@@ -56,7 +56,7 @@ def create_claim(product_id, batch_id, product_name, brand, category, issue_type
         conn.close()
 
 
-# --------------------------- GET ALL CLAIMS (FIXED) ---------------------------
+# --------------------------- GET ALL CLAIMS (FIXED - Added batch_original) ---------------------------
 def get_all_claims():
     """Get all claims with product and batch info"""
     conn = get_connection()
@@ -78,14 +78,23 @@ def get_all_claims():
                 c.created_at,
                 c.updated_at,
                 COALESCE(pb.remaining_quantity, 0) as batch_stock,
-                COALESCE(pb.is_faulty, FALSE) as is_faulty
+                COALESCE(pb.quantity, 0) as batch_original,
+                COALESCE(pb.is_faulty, FALSE) as is_faulty,
+                COALESCE(pb.claimed_quantity, 0) as batch_claimed
             FROM claims c
             LEFT JOIN purchase_batches pb ON c.batch_id = pb.id
             ORDER BY c.created_at DESC
         """)
         rows = cursor.fetchall()
-        return [
-            {
+        
+        result = []
+        for r in rows:
+            # Calculate the sold quantity
+            batch_original = r[14] if len(r) > 14 else 0
+            batch_stock = r[13] if len(r) > 13 else 0
+            sold = batch_original - batch_stock
+            
+            result.append({
                 "id": r[0],
                 "product_id": r[1],
                 "batch_id": r[2],
@@ -97,21 +106,26 @@ def get_all_claims():
                 "quantity": r[8],
                 "remaining_good": r[9],
                 "status": r[10],
-                "created_at": r[11],
-                "updated_at": r[12],
-                "batch_stock": r[13] if len(r) > 13 else 0,
-                "is_faulty": r[14] if len(r) > 14 else False
-            }
-            for r in rows
-        ]
+                "created_at": r[11].isoformat() if hasattr(r[11], 'isoformat') else str(r[11]),
+                "updated_at": r[12].isoformat() if hasattr(r[12], 'isoformat') else str(r[12]) if r[12] else None,
+                "batch_stock": int(r[13]) if len(r) > 13 else 0,
+                "batch_original": int(r[14]) if len(r) > 14 else 0,
+                "is_faulty": r[15] if len(r) > 15 else False,
+                "batch_claimed": int(r[16]) if len(r) > 16 else 0,
+                "sold": int(sold) if sold > 0 else 0
+            })
+        
+        return result
     except Exception as e:
         print(f"❌ Error in get_all_claims: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return []
     finally:
         conn.close()
 
 
-# --------------------------- GET CLAIMS BY PRODUCT ---------------------------
+# --------------------------- GET CLAIMS BY PRODUCT (FIXED - Added batch_original) ---------------------------
 def get_claims_by_product(product_id):
     """Get all claims for a specific product"""
     conn = get_connection()
@@ -130,15 +144,23 @@ def get_claims_by_product(product_id):
                 c.remaining_good,
                 c.status,
                 c.created_at,
-                COALESCE(pb.remaining_quantity, 0) as batch_stock
+                COALESCE(pb.remaining_quantity, 0) as batch_stock,
+                COALESCE(pb.quantity, 0) as batch_original,
+                COALESCE(pb.claimed_quantity, 0) as batch_claimed
             FROM claims c
             LEFT JOIN purchase_batches pb ON c.batch_id = pb.id
             WHERE c.product_id = %s
             ORDER BY c.created_at DESC
         """, (product_id,))
         rows = cursor.fetchall()
-        return [
-            {
+        
+        result = []
+        for r in rows:
+            batch_original = r[12] if len(r) > 12 else 0
+            batch_stock = r[11] if len(r) > 11 else 0
+            sold = batch_original - batch_stock
+            
+            result.append({
                 "id": r[0],
                 "batch_id": r[1],
                 "product_name": r[2],
@@ -149,11 +171,14 @@ def get_claims_by_product(product_id):
                 "quantity": r[7],
                 "remaining_good": r[8],
                 "status": r[9],
-                "created_at": r[10],
-                "batch_stock": r[11] if len(r) > 11 else 0
-            }
-            for r in rows
-        ]
+                "created_at": r[10].isoformat() if hasattr(r[10], 'isoformat') else str(r[10]),
+                "batch_stock": int(r[11]) if len(r) > 11 else 0,
+                "batch_original": int(r[12]) if len(r) > 12 else 0,
+                "batch_claimed": int(r[13]) if len(r) > 13 else 0,
+                "sold": int(sold) if sold > 0 else 0
+            })
+        
+        return result
     except Exception as e:
         print(f"❌ Error in get_claims_by_product: {str(e)}")
         return []
@@ -181,8 +206,12 @@ def get_claim_by_id(claim_id):
                 c.remaining_good,
                 c.status,
                 c.created_at,
-                c.updated_at
+                c.updated_at,
+                COALESCE(pb.remaining_quantity, 0) as batch_stock,
+                COALESCE(pb.quantity, 0) as batch_original,
+                COALESCE(pb.is_faulty, FALSE) as is_faulty
             FROM claims c
+            LEFT JOIN purchase_batches pb ON c.batch_id = pb.id
             WHERE c.id = %s
         """, (claim_id,))
         row = cursor.fetchone()
@@ -199,8 +228,11 @@ def get_claim_by_id(claim_id):
                 "quantity": row[8],
                 "remaining_good": row[9],
                 "status": row[10],
-                "created_at": row[11],
-                "updated_at": row[12]
+                "created_at": row[11].isoformat() if hasattr(row[11], 'isoformat') else str(row[11]),
+                "updated_at": row[12].isoformat() if hasattr(row[12], 'isoformat') else str(row[12]) if row[12] else None,
+                "batch_stock": int(row[13]) if len(row) > 13 else 0,
+                "batch_original": int(row[14]) if len(row) > 14 else 0,
+                "is_faulty": row[15] if len(row) > 15 else False
             }
         return None
     except Exception as e:
@@ -373,11 +405,11 @@ def resolve_claim(claim_id):
         conn.close()
 
 
-# --------------------------- SEARCH PRODUCTS FOR CLAIMS (FIXED) ---------------------------
+# --------------------------- SEARCH PRODUCTS FOR CLAIMS ---------------------------
 def search_products_for_claims(keyword):
     """
     Search products by name, brand, or category for claim selection.
-    ✅ FIXED: Shows ALL products, including those with 0 stock.
+    Shows ALL products, including those with 0 stock.
     """
     conn = get_connection()
     cursor = conn.cursor()
@@ -526,21 +558,24 @@ def get_product_batches_for_claim(product_id):
             ORDER BY date ASC
         """, (product_id,))
         rows = cursor.fetchall()
-        return [
-            {
+        
+        result = []
+        for r in rows:
+            result.append({
                 "batch_id": r[0],
-                "quantity": r[1],
-                "remaining_quantity": r[2],
+                "quantity": int(r[1] or 0),
+                "remaining_quantity": int(r[2] or 0),
                 "cost_price": float(r[3] or 0),
                 "selling_price": float(r[4] or 0),
                 "discount": float(r[5] or 0),
-                "date": r[6],
+                "date": r[6].isoformat() if hasattr(r[6], 'isoformat') else str(r[6]) if r[6] else None,
                 "is_faulty": r[7] or False,
-                "claimed_quantity": r[8] or 0,
-                "active_claims": r[9] or 0
-            }
-            for r in rows
-        ]
+                "claimed_quantity": int(r[8] or 0),
+                "active_claims": int(r[9] or 0),
+                "good_stock": int(r[2] or 0) - int(r[8] or 0)
+            })
+        
+        return result
     except Exception as e:
         print(f"❌ Error in get_product_batches_for_claim: {str(e)}")
         return []

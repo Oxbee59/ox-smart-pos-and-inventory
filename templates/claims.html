@@ -12,7 +12,7 @@
         <h1 class="text-2xl md:text-3xl font-bold text-red-600">🔧 Claim Issues</h1>
         <p class="text-gray-500 text-sm">Manage product claims for faulty or damaged items</p>
     </div>
-    <button id="newClaimBtn" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center gap-2">
+    <button id="newClaimBtn" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm md:text-base">
         <i class="fas fa-plus"></i> New Claim
     </button>
 </div>
@@ -40,31 +40,31 @@
 </div>
 
 <!-- Claims Summary -->
-<div id="claimsSummary" class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-    <div class="bg-white rounded-xl shadow-md p-4 text-center">
-        <p class="text-gray-500 text-sm">Total Claims</p>
-        <p id="totalClaims" class="text-2xl font-bold text-gray-800">0</p>
+<div id="claimsSummary" class="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4 mb-6">
+    <div class="bg-white rounded-xl shadow-md p-3 md:p-4 text-center border border-gray-100">
+        <p class="text-xs text-gray-500">Total Claims</p>
+        <p id="totalClaims" class="text-xl md:text-2xl font-bold text-gray-800">0</p>
     </div>
-    <div class="bg-white rounded-xl shadow-md p-4 text-center">
-        <p class="text-gray-500 text-sm">Active Claims</p>
-        <p id="activeClaims" class="text-2xl font-bold text-red-600">0</p>
+    <div class="bg-white rounded-xl shadow-md p-3 md:p-4 text-center border border-gray-100">
+        <p class="text-xs text-gray-500">Active Claims</p>
+        <p id="activeClaims" class="text-xl md:text-2xl font-bold text-red-600">0</p>
     </div>
-    <div class="bg-white rounded-xl shadow-md p-4 text-center">
-        <p class="text-gray-500 text-sm">Resolved</p>
-        <p id="resolvedClaims" class="text-2xl font-bold text-green-600">0</p>
+    <div class="bg-white rounded-xl shadow-md p-3 md:p-4 text-center border border-gray-100">
+        <p class="text-xs text-gray-500">Resolved</p>
+        <p id="resolvedClaims" class="text-xl md:text-2xl font-bold text-green-600">0</p>
     </div>
-    <div class="bg-white rounded-xl shadow-md p-4 text-center">
-        <p class="text-gray-500 text-sm">Total Items Claimed</p>
-        <p id="totalItemsClaimed" class="text-2xl font-bold text-purple-600">0</p>
+    <div class="bg-white rounded-xl shadow-md p-3 md:p-4 text-center border border-gray-100">
+        <p class="text-xs text-gray-500">Items Claimed</p>
+        <p id="totalItemsClaimed" class="text-xl md:text-2xl font-bold text-purple-600">0</p>
     </div>
-    <div class="bg-white rounded-xl shadow-md p-4 text-center">
-        <p class="text-gray-500 text-sm">Total Restored</p>
-        <p id="totalRestored" class="text-2xl font-bold text-blue-600">0</p>
+    <div class="bg-white rounded-xl shadow-md p-3 md:p-4 text-center border border-gray-100">
+        <p class="text-xs text-gray-500">Restored</p>
+        <p id="totalRestored" class="text-xl md:text-2xl font-bold text-blue-600">0</p>
     </div>
 </div>
 
 <!-- Claims List -->
-<div id="claimsList" class="space-y-4">
+<div id="claimsList" class="space-y-3 md:space-y-4">
     <div class="text-center text-gray-400 py-8">Loading claims...</div>
 </div>
 
@@ -171,21 +171,63 @@
 </div>
 
 <style>
+    /* ===== COMPACT STOCK BREAKDOWN ===== */
     .stock-breakdown {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-        gap: 0.5rem;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.25rem;
     }
     .stock-item {
-        padding: 0.25rem 0.5rem;
-        border-radius: 0.375rem;
+        padding: 0.125rem 0.25rem;
+        border-radius: 0.25rem;
         text-align: center;
+        font-size: 0.65rem;
     }
     .stock-total { background: #f3f4f6; }
     .stock-sold { background: #dbeafe; }
     .stock-claimed { background: #fee2e2; }
     .stock-good { background: #d1fae5; }
-    .stock-restored { background: #dbeafe; }
+    
+    @media (max-width: 640px) {
+        .stock-breakdown {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+    
+    /* ===== CLAIM CARD ===== */
+    .claim-card {
+        transition: all 0.2s ease;
+    }
+    .claim-card:hover {
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .claim-card .claim-header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .claim-card .claim-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+    .claim-card .claim-actions button {
+        white-space: nowrap;
+        font-size: 0.7rem;
+        padding: 0.15rem 0.5rem;
+    }
+    
+    @media (min-width: 768px) {
+        .claim-card .claim-actions {
+            flex-direction: row;
+            flex-wrap: wrap;
+        }
+        .claim-card .claim-actions button {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.75rem;
+        }
+    }
 </style>
 
 <script>
@@ -228,9 +270,9 @@
 
     function getStatusBadge(status) {
         if (status === 'resolved') {
-            return '<span class="inline-flex items-center bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-medium">✅ Resolved</span>';
+            return '<span class="inline-flex items-center bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs font-medium">✅ Resolved</span>';
         }
-        return '<span class="inline-flex items-center bg-red-100 text-red-800 px-2 py-1 rounded text-xs font-medium">⚠️ Active</span>';
+        return '<span class="inline-flex items-center bg-red-100 text-red-800 px-2 py-0.5 rounded text-xs font-medium">⚠️ Active</span>';
     }
 
     function getIssueBadge(issueType) {
@@ -243,7 +285,7 @@
             'Other': 'bg-gray-100 text-gray-800'
         };
         const color = colors[issueType] || 'bg-gray-100 text-gray-800';
-        return `<span class="inline-flex items-center ${color} px-2 py-1 rounded text-xs font-medium">${escapeHtml(issueType)}</span>`;
+        return `<span class="inline-flex items-center ${color} px-2 py-0.5 rounded text-xs font-medium">${escapeHtml(issueType)}</span>`;
     }
 
     // ---------- Load claims ----------
@@ -274,8 +316,6 @@
         const active = currentClaims.filter(c => c.status === 'active').length;
         const resolved = currentClaims.filter(c => c.status === 'resolved').length;
         const totalItems = currentClaims.reduce((sum, c) => sum + c.quantity, 0);
-        
-        // Items that have been restored (deleted claims)
         const restored = currentClaims.filter(c => c.status === 'deleted' || c.restored === true).length;
 
         document.getElementById('totalClaims').textContent = total;
@@ -307,7 +347,7 @@
         renderClaims(filtered);
     }
 
-    // ---------- Render claims with stock breakdown ----------
+    // ---------- Render claims with compact stock breakdown (FIXED) ----------
     function renderClaims(claims) {
         const container = document.getElementById('claimsList');
         
@@ -317,67 +357,77 @@
         }
 
         container.innerHTML = claims.map(claim => {
-            // Calculate stock breakdown
-            const originalStock = claim.batch_stock + claim.quantity;
+            // ✅ FIXED: Use batch_original for correct total
+            const originalStock = claim.batch_original || (claim.batch_stock + claim.quantity);
             const goodStock = claim.remaining_good || 0;
+            const sold = originalStock - claim.batch_stock;
             
             return `
-            <div class="bg-white rounded-xl shadow-md border p-4 ${claim.status === 'resolved' ? 'border-green-200' : 'border-red-200'}">
+            <div class="claim-card bg-white rounded-xl shadow-md border p-3 md:p-4 ${claim.status === 'resolved' ? 'border-green-200' : 'border-red-200'}">
                 <div class="flex flex-wrap justify-between items-start gap-2">
-                    <div class="flex-1">
-                        <div class="flex items-center gap-2 flex-wrap">
-                            <h3 class="font-bold text-lg text-indigo-700">${escapeHtml(claim.product_name)}</h3>
+                    <div class="flex-1 min-w-0">
+                        <!-- Header -->
+                        <div class="claim-header">
+                            <h3 class="font-bold text-base md:text-lg text-indigo-700 truncate">${escapeHtml(claim.product_name)}</h3>
                             ${getStatusBadge(claim.status)}
                             ${getIssueBadge(claim.issue_type)}
                         </div>
-                        <p class="text-sm text-gray-600">Brand: ${escapeHtml(claim.brand)} | Category: ${escapeHtml(claim.category)}</p>
-                        <p class="text-sm text-gray-600">Batch #${claim.batch_id} | Quantity Claimed: <strong class="text-red-600">${claim.quantity}</strong></p>
                         
-                        <!-- Stock Breakdown -->
-                        <div class="mt-2 p-3 bg-gray-50 rounded-lg">
-                            <p class="text-xs font-medium text-gray-500 mb-1">📦 Stock Breakdown for Batch #${claim.batch_id}</p>
+                        <!-- Details -->
+                        <p class="text-xs md:text-sm text-gray-600 mt-1">
+                            Brand: ${escapeHtml(claim.brand)} | Category: ${escapeHtml(claim.category)}
+                        </p>
+                        <p class="text-xs md:text-sm text-gray-600">
+                            Batch #${claim.batch_id} | Claimed: <strong class="text-red-600">${claim.quantity}</strong>
+                        </p>
+                        
+                        <!-- Stock Breakdown - Compact -->
+                        <div class="mt-2">
                             <div class="stock-breakdown">
                                 <div class="stock-item stock-total">
-                                    <span class="text-xs text-gray-500">Total</span>
-                                    <p class="font-bold text-gray-700">${originalStock}</p>
+                                    <span class="text-gray-500">Total</span>
+                                    <p class="font-bold text-gray-700 text-xs">${originalStock}</p>
                                 </div>
                                 <div class="stock-item stock-sold">
-                                    <span class="text-xs text-gray-500">Sold</span>
-                                    <p class="font-bold text-blue-600">${originalStock - claim.batch_stock}</p>
+                                    <span class="text-gray-500">Sold</span>
+                                    <p class="font-bold text-blue-600 text-xs">${sold}</p>
                                 </div>
                                 <div class="stock-item stock-claimed">
-                                    <span class="text-xs text-gray-500">Claimed</span>
-                                    <p class="font-bold text-red-600">${claim.quantity}</p>
+                                    <span class="text-gray-500">Claimed</span>
+                                    <p class="font-bold text-red-600 text-xs">${claim.quantity}</p>
                                 </div>
                                 <div class="stock-item stock-good">
-                                    <span class="text-xs text-gray-500">✅ Good</span>
-                                    <p class="font-bold text-green-600">${goodStock}</p>
+                                    <span class="text-gray-500">✅ Good</span>
+                                    <p class="font-bold text-green-600 text-xs">${goodStock}</p>
                                 </div>
                             </div>
-                            <div class="mt-1 text-xs text-gray-400">
-                                💡 Original: ${originalStock} → Sold: ${originalStock - claim.batch_stock} → Physical: ${claim.batch_stock} → Claimed: ${claim.quantity} → Good: ${goodStock}
+                            <div class="text-xs text-gray-400 mt-1">
+                                💡 ${originalStock} total → ${sold} sold → ${claim.batch_stock} physical → ${claim.quantity} claimed → ${goodStock} good
                             </div>
                         </div>
                         
-                        ${claim.description ? `<p class="text-sm text-gray-500 mt-1">📝 ${escapeHtml(claim.description)}</p>` : ''}
+                        <!-- Description -->
+                        ${claim.description ? `<p class="text-xs text-gray-500 mt-1">📝 ${escapeHtml(claim.description)}</p>` : ''}
                         <p class="text-xs text-gray-400 mt-1">Created: ${formatDate(claim.created_at)}</p>
                     </div>
-                    <div class="flex flex-col gap-2">
-                        <button onclick="viewClaim(${claim.id})" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm">👁 View</button>
+                    
+                    <!-- Actions -->
+                    <div class="claim-actions">
+                        <button onclick="viewClaim(${claim.id})" class="bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs">👁 View</button>
                         ${claim.status === 'active' ? `
-                            <button onclick="resolveClaim(${claim.id})" class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm">✅ Resolve</button>
-                            <button onclick="editClaim(${claim.id})" class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-sm">✏️ Edit</button>
+                            <button onclick="resolveClaim(${claim.id})" class="bg-green-500 hover:bg-green-600 text-white px-2 py-1 rounded text-xs">✅ Resolve</button>
+                            <button onclick="editClaim(${claim.id})" class="bg-yellow-500 hover:bg-yellow-600 text-white px-2 py-1 rounded text-xs">✏️ Edit</button>
                         ` : `
                             <span class="text-xs text-green-600 text-center">✓ Resolved</span>
                         `}
-                        <button onclick="deleteClaim(${claim.id})" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">🗑️ Delete</button>
+                        <button onclick="deleteClaim(${claim.id})" class="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-xs">🗑️ Delete</button>
                     </div>
                 </div>
             </div>
         `}).join('');
     }
 
-    // ---------- View claim ----------
+    // ---------- View claim (FIXED) ----------
     async function viewClaim(claimId) {
         try {
             const res = await fetch(`/api/claims`);
@@ -389,7 +439,8 @@
                     return;
                 }
 
-                const originalStock = claim.batch_stock + claim.quantity;
+                // ✅ FIXED: Use batch_original for correct total
+                const originalStock = claim.batch_original || (claim.batch_stock + claim.quantity);
                 const sold = originalStock - claim.batch_stock;
 
                 document.getElementById('viewClaimTitle').textContent = `Claim #${claim.id} - ${claim.product_name}`;
@@ -532,12 +583,10 @@
         document.getElementById('claimModalTitle').textContent = '✏️ Edit Claim';
         document.getElementById('saveClaimBtn').textContent = 'Update Claim';
         
-        // Pre-fill form
         document.getElementById('claimIssueType').value = claim.issue_type;
         document.getElementById('claimQuantity').value = claim.quantity;
         document.getElementById('claimDescription').value = claim.description || '';
         
-        // Show selected product
         selectedProduct = {
             id: claim.product_id,
             name: claim.product_name,
@@ -547,7 +596,6 @@
         };
         displaySelectedProduct(selectedProduct);
         
-        // Enable batch selection
         document.getElementById('batchSelectionContainer').classList.remove('hidden');
         loadBatchesForProduct(claim.product_id, claim.batch_id);
         
@@ -763,7 +811,6 @@
             return;
         }
 
-        // Check if quantity exceeds available good stock
         if (selectedBatch) {
             const goodStock = selectedBatch.remaining_quantity - (selectedBatch.claimed_quantity || 0);
             if (quantity > goodStock) {
