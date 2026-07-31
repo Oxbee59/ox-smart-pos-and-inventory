@@ -40,7 +40,7 @@
 
 <!-- Summary - Improved with responsive grid -->
 <div id="summary" class="mb-4">
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
         <div class="bg-white rounded-xl shadow-md p-3 text-center border border-gray-100">
             <p class="text-xs text-gray-500">📦 Products</p>
             <p id="totalProductsCount" class="text-xl md:text-2xl font-bold text-indigo-600">0</p>
@@ -56,6 +56,10 @@
         <div class="bg-white rounded-xl shadow-md p-3 text-center border border-gray-100">
             <p class="text-xs text-gray-500">⚠️ Claimed</p>
             <p id="totalClaimedCount" class="text-xl md:text-2xl font-bold text-red-600">0</p>
+        </div>
+        <div class="bg-white rounded-xl shadow-md p-3 text-center border border-gray-100">
+            <p class="text-xs text-gray-500">✅ Good Stock</p>
+            <p id="totalGoodCount" class="text-xl md:text-2xl font-bold text-green-600">0</p>
         </div>
     </div>
     <div id="cacheStatus" class="text-xs text-gray-400 mt-2 text-center"></div>
@@ -126,6 +130,24 @@
         </div>
     </div>
 </div>
+
+<style>
+    .stock-breakdown {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+        gap: 0.25rem;
+    }
+    .stock-item {
+        padding: 0.125rem 0.25rem;
+        border-radius: 0.25rem;
+        text-align: center;
+        font-size: 0.7rem;
+    }
+    .stock-total { background: #f3f4f6; }
+    .stock-sold { background: #dbeafe; }
+    .stock-claimed { background: #fee2e2; }
+    .stock-good { background: #d1fae5; }
+</style>
 
 <script>
     // -------------------- OFFLINE HELPERS (fallback) --------------------
@@ -258,35 +280,39 @@
                 const container = document.getElementById('claimList');
                 const modal = document.getElementById('claimModal');
                 
+                // Calculate stock breakdown
+                const batchOriginal = batchData ? batchData.quantity : 0;
+                const batchRemaining = batchData ? batchData.remaining_quantity : 0;
                 const totalClaimed = claims.reduce((sum, c) => sum + c.quantity, 0);
                 const activeClaims = claims.filter(c => c.status === 'active');
                 const resolvedClaims = claims.filter(c => c.status === 'resolved');
                 const totalActive = activeClaims.reduce((sum, c) => sum + c.quantity, 0);
                 const totalResolved = resolvedClaims.reduce((sum, c) => sum + c.quantity, 0);
-                
-                const batchRemaining = batchData ? batchData.remaining_quantity : 0;
-                const batchOriginal = batchData ? batchData.quantity : 0;
-                const availableGood = batchRemaining - totalActive;
+                const goodStock = batchRemaining - totalActive;
                 
                 let html = `
                     <div class="bg-gray-50 rounded-lg p-4 mb-4 border border-gray-200">
-                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <div class="text-center">
-                                <p class="text-xs text-gray-500">Total Claimed</p>
-                                <p class="text-xl font-bold text-red-600">${totalClaimed}</p>
+                        <p class="text-xs font-medium text-gray-500 mb-2">📊 Stock Breakdown for Batch #${batchId}</p>
+                        <div class="stock-breakdown">
+                            <div class="stock-item stock-total">
+                                <span class="text-gray-500">Total</span>
+                                <p class="font-bold text-gray-700">${batchOriginal}</p>
                             </div>
-                            <div class="text-center">
-                                <p class="text-xs text-gray-500">Active Claims</p>
-                                <p class="text-xl font-bold text-orange-500">${totalActive}</p>
+                            <div class="stock-item stock-sold">
+                                <span class="text-gray-500">Sold</span>
+                                <p class="font-bold text-blue-600">${batchOriginal - batchRemaining}</p>
                             </div>
-                            <div class="text-center">
-                                <p class="text-xs text-gray-500">Resolved</p>
-                                <p class="text-xl font-bold text-green-600">${totalResolved}</p>
+                            <div class="stock-item stock-claimed">
+                                <span class="text-gray-500">Claimed</span>
+                                <p class="font-bold text-red-600">${totalActive}</p>
                             </div>
-                            <div class="text-center">
-                                <p class="text-xs text-gray-500">Good Stock Remaining</p>
-                                <p class="text-xl font-bold text-blue-600">${Math.max(availableGood, 0)}</p>
+                            <div class="stock-item stock-good">
+                                <span class="text-gray-500">✅ Good</span>
+                                <p class="font-bold text-green-600">${Math.max(goodStock, 0)}</p>
                             </div>
+                        </div>
+                        <div class="mt-2 text-xs text-gray-400">
+                            💡 ${batchOriginal} total → ${batchOriginal - batchRemaining} sold → ${batchRemaining} physical → ${totalActive} claimed → ${Math.max(goodStock, 0)} good
                         </div>
                     </div>
                 `;
@@ -376,7 +402,7 @@
                                     ${batchOriginal} total | 
                                     <span class="text-red-500">${totalActive} claimed</span> | 
                                     <span class="text-green-600">${totalResolved} resolved</span> | 
-                                    <span class="text-blue-600">${Math.max(availableGood, 0)} good</span>
+                                    <span class="text-blue-600">${Math.max(goodStock, 0)} good</span>
                                 </span>
                             </div>
                         </div>
@@ -436,11 +462,14 @@
                 // Calculate totals
                 let totalQty = 0;
                 let totalClaimed = 0;
+                let totalGood = 0;
                 productsData.forEach(p => {
                     totalQty += p.stock || 0;
                     if (p.batches) {
                         p.batches.forEach(b => {
-                            totalClaimed += b.claimed_quantity || 0;
+                            const claimed = b.claimed_quantity || 0;
+                            totalClaimed += claimed;
+                            totalGood += (b.remaining_quantity || 0) - claimed;
                         });
                     }
                 });
@@ -449,7 +478,8 @@
                     total_products: data.total_products || data.products.length, 
                     total_batches: data.total_batches || 0,
                     total_quantity: totalQty,
-                    total_claimed: totalClaimed
+                    total_claimed: totalClaimed,
+                    total_good: Math.max(totalGood, 0)
                 };
                 
                 try {
@@ -475,30 +505,32 @@
                             total_products: parsed.products.length, 
                             total_batches: 0,
                             total_quantity: 0,
-                            total_claimed: 0
+                            total_claimed: 0,
+                            total_good: 0
                         };
                     } else {
                         productsData = [];
-                        summaryData = { total_products: 0, total_batches: 0, total_quantity: 0, total_claimed: 0 };
+                        summaryData = { total_products: 0, total_batches: 0, total_quantity: 0, total_claimed: 0, total_good: 0 };
                     }
                 } else {
                     productsData = [];
-                    summaryData = { total_products: 0, total_batches: 0, total_quantity: 0, total_claimed: 0 };
+                    summaryData = { total_products: 0, total_batches: 0, total_quantity: 0, total_claimed: 0, total_good: 0 };
                 }
             } catch (e) {
                 console.error('Error reading cache:', e);
                 productsData = [];
-                summaryData = { total_products: 0, total_batches: 0, total_quantity: 0, total_claimed: 0 };
+                summaryData = { total_products: 0, total_batches: 0, total_quantity: 0, total_claimed: 0, total_good: 0 };
             }
         }
 
         currentProducts = productsData || [];
         
-        // Update summary with improved grid
+        // Update summary
         document.getElementById('totalProductsCount').textContent = summaryData.total_products || 0;
         document.getElementById('totalBatchesCount').textContent = summaryData.total_batches || 0;
         document.getElementById('totalQuantityCount').textContent = summaryData.total_quantity || 0;
         document.getElementById('totalClaimedCount').textContent = summaryData.total_claimed || 0;
+        document.getElementById('totalGoodCount').textContent = summaryData.total_good || 0;
         
         const cacheStatus = document.getElementById('cacheStatus');
         if (fromCache) {
@@ -563,6 +595,7 @@
             
             let hasFaulty = false;
             let faultyCount = 0;
+            let goodStock = 0;
             let totalProductClaims = 0;
             let batchesWithClaims = 0;
             
@@ -575,6 +608,7 @@
                         totalProductClaims += claimed;
                         batchesWithClaims += 1;
                     }
+                    goodStock += (batch.remaining_quantity || 0) - claimed;
                 });
             }
             
@@ -595,6 +629,7 @@
                             <p class="text-gray-600 text-sm">Category: ${escapeHtml(p.category)} | Stock: ${p.stock}</p>
                             <p class="text-xs md:text-sm">Cost: ₵${(p.cost_price || 0).toFixed(2)} | Selling: ₵${(p.selling_price || 0).toFixed(2)} | Discount: ₵${(p.discount || 0).toFixed(2)}</p>
                             ${claimsInfo}
+                            ${goodStock > 0 ? `<p class="text-xs text-green-500">✅ ${goodStock} good units available</p>` : ''}
                         </div>
                         <div class="flex flex-wrap items-center gap-2">
                             <span class="font-semibold ${statusColor} text-sm">● ${status}</span>
@@ -659,6 +694,13 @@
             const statusText = batch.remaining_quantity > 0 ? '● In Stock' : '● Depleted';
             const statusColor = batch.remaining_quantity > 0 ? 'text-green-600' : 'text-red-600';
             
+            // Calculate stock breakdown for this batch
+            const totalQty = batch.quantity || 0;
+            const remainingQty = batch.remaining_quantity || 0;
+            const claimedQty = batch.claimed_quantity || 0;
+            const goodQty = remainingQty - claimedQty;
+            const soldQty = totalQty - remainingQty;
+            
             info.innerHTML = `
                 <div class="flex flex-wrap justify-between items-start gap-1">
                     <div class="flex flex-wrap items-center gap-1">
@@ -678,14 +720,19 @@
                         </button>
                     </div>
                 </div>
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mt-1 text-xs">
-                    <span>Qty: <strong>${batch.quantity}</strong></span>
-                    <span>Remaining: <strong>${batch.remaining_quantity}</strong></span>
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-1 mt-1 text-xs">
+                    <span>Total: <strong>${totalQty}</strong></span>
+                    <span>Sold: <strong class="text-blue-600">${soldQty}</strong></span>
+                    <span>Remaining: <strong>${remainingQty}</strong></span>
+                    <span>Claimed: <strong class="text-red-600">${claimedQty}</strong></span>
+                    <span>✅ Good: <strong class="text-green-600">${Math.max(goodQty, 0)}</strong></span>
+                </div>
+                <div class="grid grid-cols-3 gap-2 mt-1 text-xs">
                     <span>Cost: ₵${(batch.cost_price || 0).toFixed(2)}</span>
                     <span>Selling: ₵${(batch.selling_price || 0).toFixed(2)}</span>
+                    ${batch.discount > 0 ? `<span>Discount: ₵${batch.discount.toFixed(2)}</span>` : ''}
                 </div>
-                ${hasClaims ? `<div class="text-xs text-red-500 mt-1">⚠️ ${batch.claimed_quantity} units claimed as faulty</div>` : ''}
-                ${batch.discount > 0 ? `<div class="text-xs text-gray-500 mt-1">Discount: ₵${batch.discount.toFixed(2)}</div>` : ''}
+                ${hasClaims ? `<div class="text-xs text-red-500 mt-1">⚠️ ${claimedQty} units claimed as faulty</div>` : ''}
             `;
             
             flexDiv.appendChild(cb);

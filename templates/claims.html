@@ -40,7 +40,7 @@
 </div>
 
 <!-- Claims Summary -->
-<div id="claimsSummary" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+<div id="claimsSummary" class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
     <div class="bg-white rounded-xl shadow-md p-4 text-center">
         <p class="text-gray-500 text-sm">Total Claims</p>
         <p id="totalClaims" class="text-2xl font-bold text-gray-800">0</p>
@@ -56,6 +56,10 @@
     <div class="bg-white rounded-xl shadow-md p-4 text-center">
         <p class="text-gray-500 text-sm">Total Items Claimed</p>
         <p id="totalItemsClaimed" class="text-2xl font-bold text-purple-600">0</p>
+    </div>
+    <div class="bg-white rounded-xl shadow-md p-4 text-center">
+        <p class="text-gray-500 text-sm">Total Restored</p>
+        <p id="totalRestored" class="text-2xl font-bold text-blue-600">0</p>
     </div>
 </div>
 
@@ -119,11 +123,28 @@
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Quantity to Claim</label>
                 <input type="number" id="claimQuantity" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" min="1" placeholder="Enter quantity">
+                <p class="text-xs text-gray-500 mt-1">⚠️ This will be deducted from the batch's good stock</p>
             </div>
             
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
                 <textarea id="claimDescription" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" rows="3" placeholder="Describe the issue..."></textarea>
+            </div>
+
+            <!-- Stock Impact Preview -->
+            <div id="stockImpact" class="hidden bg-yellow-50 p-3 rounded-lg border border-yellow-200">
+                <p class="text-sm font-medium text-yellow-800">📊 Stock Impact Preview</p>
+                <div class="grid grid-cols-2 gap-2 mt-2 text-sm">
+                    <div>
+                        <span class="text-gray-600">Current Good Stock:</span>
+                        <span id="currentStockDisplay" class="font-bold">0</span>
+                    </div>
+                    <div>
+                        <span class="text-gray-600">After Claim:</span>
+                        <span id="afterStockDisplay" class="font-bold text-red-600">0</span>
+                    </div>
+                </div>
+                <p class="text-xs text-yellow-600 mt-1">💡 Claimed items are removed from good stock</p>
             </div>
         </div>
         <div class="sticky bottom-0 bg-white p-4 border-t flex justify-end gap-3">
@@ -149,6 +170,24 @@
     </div>
 </div>
 
+<style>
+    .stock-breakdown {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 0.5rem;
+    }
+    .stock-item {
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.375rem;
+        text-align: center;
+    }
+    .stock-total { background: #f3f4f6; }
+    .stock-sold { background: #dbeafe; }
+    .stock-claimed { background: #fee2e2; }
+    .stock-good { background: #d1fae5; }
+    .stock-restored { background: #dbeafe; }
+</style>
+
 <script>
     // ---------- Main variables ----------
     let currentClaims = [];
@@ -156,7 +195,7 @@
     let selectedProduct = null;
     let selectedBatch = null;
     let claimProductSearchTimeout = null;
-    let searchResultsCache = []; // Store search results for quick selection
+    let searchResultsCache = [];
 
     // ---------- Offline banner ----------
     function updateOfflineBanner() {
@@ -235,11 +274,15 @@
         const active = currentClaims.filter(c => c.status === 'active').length;
         const resolved = currentClaims.filter(c => c.status === 'resolved').length;
         const totalItems = currentClaims.reduce((sum, c) => sum + c.quantity, 0);
+        
+        // Items that have been restored (deleted claims)
+        const restored = currentClaims.filter(c => c.status === 'deleted' || c.restored === true).length;
 
         document.getElementById('totalClaims').textContent = total;
         document.getElementById('activeClaims').textContent = active;
         document.getElementById('resolvedClaims').textContent = resolved;
         document.getElementById('totalItemsClaimed').textContent = totalItems;
+        document.getElementById('totalRestored').textContent = restored || 0;
     }
 
     // ---------- Apply filters ----------
@@ -264,7 +307,7 @@
         renderClaims(filtered);
     }
 
-    // ---------- Render claims ----------
+    // ---------- Render claims with stock breakdown ----------
     function renderClaims(claims) {
         const container = document.getElementById('claimsList');
         
@@ -273,7 +316,12 @@
             return;
         }
 
-        container.innerHTML = claims.map(claim => `
+        container.innerHTML = claims.map(claim => {
+            // Calculate stock breakdown
+            const originalStock = claim.batch_stock + claim.quantity;
+            const goodStock = claim.remaining_good || 0;
+            
+            return `
             <div class="bg-white rounded-xl shadow-md border p-4 ${claim.status === 'resolved' ? 'border-green-200' : 'border-red-200'}">
                 <div class="flex flex-wrap justify-between items-start gap-2">
                     <div class="flex-1">
@@ -283,8 +331,34 @@
                             ${getIssueBadge(claim.issue_type)}
                         </div>
                         <p class="text-sm text-gray-600">Brand: ${escapeHtml(claim.brand)} | Category: ${escapeHtml(claim.category)}</p>
-                        <p class="text-sm text-gray-600">Batch #${claim.batch_id} | Quantity Claimed: <strong>${claim.quantity}</strong></p>
-                        <p class="text-sm text-gray-600">Remaining Good: ${claim.remaining_good} | Batch Stock: ${claim.batch_stock || 0}</p>
+                        <p class="text-sm text-gray-600">Batch #${claim.batch_id} | Quantity Claimed: <strong class="text-red-600">${claim.quantity}</strong></p>
+                        
+                        <!-- Stock Breakdown -->
+                        <div class="mt-2 p-3 bg-gray-50 rounded-lg">
+                            <p class="text-xs font-medium text-gray-500 mb-1">📦 Stock Breakdown for Batch #${claim.batch_id}</p>
+                            <div class="stock-breakdown">
+                                <div class="stock-item stock-total">
+                                    <span class="text-xs text-gray-500">Total</span>
+                                    <p class="font-bold text-gray-700">${originalStock}</p>
+                                </div>
+                                <div class="stock-item stock-sold">
+                                    <span class="text-xs text-gray-500">Sold</span>
+                                    <p class="font-bold text-blue-600">${originalStock - claim.batch_stock}</p>
+                                </div>
+                                <div class="stock-item stock-claimed">
+                                    <span class="text-xs text-gray-500">Claimed</span>
+                                    <p class="font-bold text-red-600">${claim.quantity}</p>
+                                </div>
+                                <div class="stock-item stock-good">
+                                    <span class="text-xs text-gray-500">✅ Good</span>
+                                    <p class="font-bold text-green-600">${goodStock}</p>
+                                </div>
+                            </div>
+                            <div class="mt-1 text-xs text-gray-400">
+                                💡 Original: ${originalStock} → Sold: ${originalStock - claim.batch_stock} → Physical: ${claim.batch_stock} → Claimed: ${claim.quantity} → Good: ${goodStock}
+                            </div>
+                        </div>
+                        
                         ${claim.description ? `<p class="text-sm text-gray-500 mt-1">📝 ${escapeHtml(claim.description)}</p>` : ''}
                         <p class="text-xs text-gray-400 mt-1">Created: ${formatDate(claim.created_at)}</p>
                     </div>
@@ -296,12 +370,11 @@
                         ` : `
                             <span class="text-xs text-green-600 text-center">✓ Resolved</span>
                         `}
-                        <!-- ✅ DELETE BUTTON - SHOWS ON ALL CARDS (Active & Resolved) -->
                         <button onclick="deleteClaim(${claim.id})" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">🗑️ Delete</button>
                     </div>
                 </div>
             </div>
-        `).join('');
+        `}).join('');
     }
 
     // ---------- View claim ----------
@@ -316,6 +389,9 @@
                     return;
                 }
 
+                const originalStock = claim.batch_stock + claim.quantity;
+                const sold = originalStock - claim.batch_stock;
+
                 document.getElementById('viewClaimTitle').textContent = `Claim #${claim.id} - ${claim.product_name}`;
                 document.getElementById('viewClaimContent').innerHTML = `
                     <div class="space-y-3">
@@ -328,9 +404,33 @@
                             <div class="bg-gray-50 p-3 rounded">
                                 <p class="text-xs text-gray-500">Batch</p>
                                 <p class="font-bold">#${claim.batch_id}</p>
-                                <p class="text-sm text-gray-600">Stock: ${claim.batch_stock || 0}</p>
+                                <p class="text-sm text-gray-600">Status: ${claim.is_faulty ? '⚠️ Faulty' : '✅ Good'}</p>
                             </div>
                         </div>
+                        
+                        <div class="bg-gray-50 p-3 rounded">
+                            <p class="text-xs text-gray-500 font-medium mb-2">📊 Stock Breakdown</p>
+                            <div class="stock-breakdown">
+                                <div class="stock-item stock-total">
+                                    <span class="text-xs text-gray-500">Total</span>
+                                    <p class="font-bold text-gray-700">${originalStock}</p>
+                                </div>
+                                <div class="stock-item stock-sold">
+                                    <span class="text-xs text-gray-500">Sold</span>
+                                    <p class="font-bold text-blue-600">${sold}</p>
+                                </div>
+                                <div class="stock-item stock-claimed">
+                                    <span class="text-xs text-gray-500">Claimed</span>
+                                    <p class="font-bold text-red-600">${claim.quantity}</p>
+                                </div>
+                                <div class="stock-item stock-good">
+                                    <span class="text-xs text-gray-500">✅ Good</span>
+                                    <p class="font-bold text-green-600">${claim.remaining_good}</p>
+                                </div>
+                            </div>
+                            <p class="text-xs text-gray-400 mt-1">${originalStock} total → ${sold} sold → ${claim.batch_stock} physical → ${claim.quantity} claimed → ${claim.remaining_good} good</p>
+                        </div>
+                        
                         <div class="grid grid-cols-2 gap-3">
                             <div class="bg-gray-50 p-3 rounded">
                                 <p class="text-xs text-gray-500">Quantity Claimed</p>
@@ -361,6 +461,9 @@
                                 <p class="text-sm">${formatDate(claim.updated_at)}</p>
                             </div>
                         ` : ''}
+                        <div class="bg-blue-50 p-3 rounded border border-blue-200">
+                            <p class="text-xs text-blue-700">💡 Claimed items are removed from good stock. Resolving marks the claim as complete without restoring stock. Deleting restores stock.</p>
+                        </div>
                     </div>
                 `;
                 document.getElementById('viewClaimModal').classList.remove('hidden');
@@ -376,7 +479,7 @@
 
     // ---------- Resolve claim ----------
     async function resolveClaim(claimId) {
-        if (!confirm('Mark this claim as resolved?')) return;
+        if (!confirm('Mark this claim as resolved? The claimed items will remain deducted from stock.')) return;
         
         try {
             const res = await fetch(`/api/claims/${claimId}/resolve`, { method: 'POST' });
@@ -392,13 +495,14 @@
         }
     }
 
-    // ---------- Delete claim (UPDATED with better confirmation) ----------
+    // ---------- Delete claim ----------
     async function deleteClaim(claimId) {
         const claim = currentClaims.find(c => c.id === claimId);
-        const statusText = claim ? claim.status : '';
-        const message = statusText === 'resolved' 
-            ? '⚠️ This claim is already resolved. Deleting it will restore the stock to inventory.\n\nContinue?'
-            : '⚠️ Are you sure you want to delete this claim? This will restore stock to inventory.';
+        if (!claim) return;
+        
+        const message = claim.status === 'resolved' 
+            ? `⚠️ This claim is resolved. Deleting it will restore ${claim.quantity} units to inventory.\n\nContinue?`
+            : `⚠️ Are you sure you want to delete this claim? This will restore ${claim.quantity} units to inventory.\n\nContinue?`;
         
         if (!confirm(message)) return;
         
@@ -406,7 +510,7 @@
             const res = await fetch(`/api/claims/${claimId}`, { method: 'DELETE' });
             const data = await res.json();
             if (data.success) {
-                alert('✅ Claim deleted successfully. Stock restored.');
+                alert(`✅ Claim deleted successfully. ${claim.quantity} units restored to inventory.`);
                 loadClaims();
             } else {
                 alert('Error: ' + data.error);
@@ -464,6 +568,7 @@
         document.getElementById('claimSearchResults').classList.add('hidden');
         document.getElementById('claimBatchSelect').innerHTML = '<option value="">Select a batch...</option>';
         document.getElementById('batchInfoDisplay').classList.add('hidden');
+        document.getElementById('stockImpact').classList.add('hidden');
         selectedProduct = null;
         selectedBatch = null;
         searchResultsCache = [];
@@ -496,10 +601,11 @@
         document.getElementById('claimSearchResults').classList.add('hidden');
         document.getElementById('claimBatchSelect').innerHTML = '<option value="">Select a batch...</option>';
         document.getElementById('batchInfoDisplay').classList.add('hidden');
+        document.getElementById('stockImpact').classList.add('hidden');
         searchResultsCache = [];
     }
 
-    // ---------- Search products (FIXED) ----------
+    // ---------- Search products ----------
     async function searchProducts(keyword) {
         if (!keyword || keyword.length < 2) {
             document.getElementById('claimSearchResults').classList.add('hidden');
@@ -511,7 +617,6 @@
             const res = await fetch(`/api/claims/search?q=${encodeURIComponent(keyword)}`);
             const data = await res.json();
             
-            // Store results in cache for quick selection
             searchResultsCache = data.success ? (data.products || []) : [];
             
             if (data.success && searchResultsCache.length > 0) {
@@ -525,56 +630,24 @@
                 results.classList.remove('hidden');
             } else {
                 document.getElementById('claimSearchResults').innerHTML = `
-                    <div class="px-3 py-2 text-gray-500">${searchResultsCache.length === 0 ? 'No products found' : 'No products match your search'}</div>
+                    <div class="px-3 py-2 text-gray-500">No products found</div>
                 `;
                 document.getElementById('claimSearchResults').classList.remove('hidden');
             }
         } catch (error) {
             console.error('Search error:', error);
-            document.getElementById('claimSearchResults').innerHTML = `
-                <div class="px-3 py-2 text-red-500">Error searching products. Please try again.</div>
-            `;
-            document.getElementById('claimSearchResults').classList.remove('hidden');
         }
     }
 
-    // ---------- Select product (FIXED - uses cache) ----------
+    // ---------- Select product ----------
     function selectProduct(productId) {
-        // Try to find product in cached search results
         const product = searchResultsCache.find(p => p.id === productId);
         
         if (product) {
             selectedProduct = product;
             displaySelectedProduct(product);
             document.getElementById('claimSearchResults').classList.add('hidden');
-            // Load batches for this product
             loadBatchesForProduct(productId);
-            return;
-        }
-        
-        // Fallback: fetch product details
-        fetchProductById(productId);
-    }
-
-    // ---------- Fetch product by ID (fallback) ----------
-    async function fetchProductById(productId) {
-        try {
-            const res = await fetch(`/api/claims/search?q=${encodeURIComponent(productId)}`);
-            const data = await res.json();
-            if (data.success && data.products) {
-                const product = data.products.find(p => p.id === productId);
-                if (product) {
-                    selectedProduct = product;
-                    displaySelectedProduct(product);
-                    document.getElementById('claimSearchResults').classList.add('hidden');
-                    loadBatchesForProduct(productId);
-                    return;
-                }
-            }
-            alert('Product not found. Please try searching again.');
-        } catch (error) {
-            console.error('Error fetching product:', error);
-            alert('Error loading product details. Please try again.');
         }
     }
 
@@ -589,35 +662,36 @@
                 data.batches.forEach(batch => {
                     const option = document.createElement('option');
                     option.value = batch.batch_id;
-                    const label = `#${batch.batch_id} - ${batch.remaining_quantity} left - ₵${batch.selling_price.toFixed(2)}`;
+                    const goodStock = batch.remaining_quantity - (batch.claimed_quantity || 0);
+                    const label = `#${batch.batch_id} - ${goodStock} good - ₵${batch.selling_price.toFixed(2)}`;
                     option.textContent = label;
                     if (selectedBatchId && batch.batch_id === selectedBatchId) {
                         option.selected = true;
                     }
-                    // Store batch data for info display
                     option.dataset.batchData = JSON.stringify(batch);
                     select.appendChild(option);
                 });
                 document.getElementById('batchSelectionContainer').classList.remove('hidden');
                 
-                // If we have a selected batch ID, show its info
                 if (selectedBatchId) {
                     const batch = data.batches.find(b => b.batch_id === selectedBatchId);
                     if (batch) {
                         showBatchInfo(batch);
+                        updateStockImpact(batch);
                     }
                 }
                 
-                // Set up batch selection change
                 select.onchange = function() {
                     if (this.value) {
                         const batchData = JSON.parse(this.options[this.selectedIndex].dataset.batchData);
                         showBatchInfo(batchData);
                         selectedBatch = batchData;
-                        // Update max quantity
-                        document.getElementById('claimQuantity').max = batchData.remaining_quantity;
+                        const goodStock = batchData.remaining_quantity - (batchData.claimed_quantity || 0);
+                        document.getElementById('claimQuantity').max = goodStock;
+                        updateStockImpact(batchData);
                     } else {
                         document.getElementById('batchInfoDisplay').classList.add('hidden');
+                        document.getElementById('stockImpact').classList.add('hidden');
                         selectedBatch = null;
                     }
                 };
@@ -627,21 +701,47 @@
             }
         } catch (error) {
             console.error('Error loading batches:', error);
-            document.getElementById('batchSelectionContainer').classList.add('hidden');
         }
     }
 
     // ---------- Show batch info ----------
     function showBatchInfo(batch) {
         const display = document.getElementById('batchInfoDisplay');
+        const goodStock = batch.remaining_quantity - (batch.claimed_quantity || 0);
         display.innerHTML = `
             <span class="font-medium">Batch #${batch.batch_id}</span>
-            | Stock: ${batch.remaining_quantity}
-            | Price: ₵${batch.selling_price.toFixed(2)}
-            ${batch.is_faulty ? '<span class="text-red-500 font-bold ml-2">⚠️ Faulty</span>' : ''}
-            ${batch.claimed_quantity > 0 ? `<span class="text-orange-500 ml-2">Claimed: ${batch.claimed_quantity}</span>` : ''}
+            | Total: ${batch.quantity || batch.remaining_quantity + (batch.claimed_quantity || 0)}
+            | Physical: ${batch.remaining_quantity}
+            | ✅ Good: ${goodStock}
+            | 💰 Price: ₵${batch.selling_price.toFixed(2)}
+            ${batch.claimed_quantity > 0 ? `<span class="text-orange-500 ml-2">📌 Claimed: ${batch.claimed_quantity}</span>` : ''}
         `;
         display.classList.remove('hidden');
+    }
+
+    // ---------- Update stock impact ----------
+    function updateStockImpact(batch) {
+        const container = document.getElementById('stockImpact');
+        const currentStock = document.getElementById('currentStockDisplay');
+        const afterStock = document.getElementById('afterStockDisplay');
+        
+        const goodStock = batch.remaining_quantity - (batch.claimed_quantity || 0);
+        currentStock.textContent = goodStock;
+        
+        const quantityInput = document.getElementById('claimQuantity');
+        quantityInput.oninput = function() {
+            const qty = parseInt(this.value) || 0;
+            const newStock = goodStock - qty;
+            afterStock.textContent = newStock >= 0 ? newStock : 0;
+            afterStock.className = `font-bold ${newStock >= 0 ? 'text-green-600' : 'text-red-600'}`;
+        };
+        
+        const qty = parseInt(quantityInput.value) || 0;
+        const newStock = goodStock - qty;
+        afterStock.textContent = newStock >= 0 ? newStock : 0;
+        afterStock.className = `font-bold ${newStock >= 0 ? 'text-green-600' : 'text-red-600'}`;
+        
+        container.classList.remove('hidden');
     }
 
     // ---------- Save claim ----------
@@ -661,6 +761,15 @@
         if (!quantity || quantity < 1) {
             alert('Please enter a valid quantity.');
             return;
+        }
+
+        // Check if quantity exceeds available good stock
+        if (selectedBatch) {
+            const goodStock = selectedBatch.remaining_quantity - (selectedBatch.claimed_quantity || 0);
+            if (quantity > goodStock) {
+                alert(`⚠️ You cannot claim more than the available good stock (${goodStock}).`);
+                return;
+            }
         }
 
         const issueType = document.getElementById('claimIssueType').value;
@@ -710,13 +819,9 @@
         loadClaims();
         updateOfflineBanner();
 
-        // New claim button
         document.getElementById('newClaimBtn').addEventListener('click', openNewClaimModal);
-
-        // Save claim button
         document.getElementById('saveClaimBtn').addEventListener('click', saveClaim);
 
-        // Close modal on outside click
         document.getElementById('claimModal').addEventListener('click', function(e) {
             if (e.target === this) closeClaimModal();
         });
@@ -724,7 +829,6 @@
             if (e.target === this) closeViewClaimModal();
         });
 
-        // Search product with debounce
         document.getElementById('claimProductSearch').addEventListener('input', function() {
             clearTimeout(claimProductSearchTimeout);
             const keyword = this.value.trim();
@@ -733,7 +837,6 @@
             }, 300);
         });
 
-        // Filter buttons
         document.getElementById('applyFilterBtn').addEventListener('click', applyFilters);
         document.getElementById('clearFilterBtn').addEventListener('click', function() {
             document.getElementById('searchInput').value = '';
@@ -745,7 +848,6 @@
         document.getElementById('statusFilter').addEventListener('change', applyFilters);
     });
 
-    // Auto-refresh on reconnect
     window.addEventListener('online', function() {
         loadClaims();
     });
