@@ -101,6 +101,57 @@
     </button>
 </div>
 
+<!-- Advanced Search Options -->
+<div id="advancedSearch" class="bg-white rounded-xl shadow-md p-4 mb-6 hidden">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div>
+            <label class="block text-sm font-medium text-gray-700">Search Mode</label>
+            <select id="searchMode" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                <option value="contains">Contains (Partial Match)</option>
+                <option value="exact">Exact Match</option>
+                <option value="starts">Starts With</option>
+                <option value="ends">Ends With</option>
+                <option value="words">All Words (AND)</option>
+            </select>
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-gray-700">Search In</label>
+            <select id="searchField" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                <option value="all">All Fields</option>
+                <option value="name">Product Name</option>
+                <option value="brand">Brand</option>
+                <option value="category">Category</option>
+                <option value="source">Source</option>
+            </select>
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-gray-700">Case Sensitive</label>
+            <select id="caseSensitive" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                <option value="false">No</option>
+                <option value="true">Yes</option>
+            </select>
+        </div>
+        <div class="flex items-end">
+            <button id="applyAdvancedSearch" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm w-full">
+                🔍 Apply
+            </button>
+        </div>
+    </div>
+    <div class="mt-2 text-xs text-gray-500">
+        💡 Tip: Use "All Words" mode to search for multiple terms (e.g., "samsung screen" finds products with both words)
+    </div>
+</div>
+
+<!-- Advanced Search Toggle -->
+<div class="mb-4">
+    <button id="advancedToggle" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm">
+        ⚙️ Advanced Search
+    </button>
+    <button id="clearSearchBtn" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm ml-2 hidden">
+        ✕ Clear Search
+    </button>
+</div>
+
 <!-- PURCHASES LIST (scrollable) -->
 <div class="bg-white rounded-xl shadow-md p-4">
     <div id="purchasesList" class="max-h-[500px] overflow-y-auto space-y-3">
@@ -153,11 +204,9 @@
         }
         
         try {
-            // Clear the specific purchase cache
             localStorage.removeItem(CACHE_KEY);
             localStorage.removeItem(CACHE_TIMESTAMP_KEY);
             
-            // Also clear any batch caches
             const allKeys = Object.keys(localStorage);
             allKeys.forEach(key => {
                 if (key.startsWith('batches_')) {
@@ -167,10 +216,7 @@
             });
             
             console.log('✅ Cache cleared successfully');
-            
-            // Reload purchases from server
             loadPurchases(true);
-            
             alert('✅ Cache cleared. Data reloaded from server.');
         } catch (e) {
             console.error('Error clearing cache:', e);
@@ -190,7 +236,6 @@
         }
         
         try {
-            // Clear all app-related localStorage items
             const keysToClear = [
                 'cached_products_accessories',
                 'cached_products_screen',
@@ -213,7 +258,6 @@
                 } catch(e) {}
             });
             
-            // Clear any batch caches
             const allKeys = Object.keys(localStorage);
             allKeys.forEach(key => {
                 if (key.startsWith('batches_')) {
@@ -230,7 +274,6 @@
         }
     }
 
-    // Make functions globally available
     window.forceRefresh = forceRefresh;
     window.clearAllLocalData = clearAllLocalData;
 
@@ -243,6 +286,11 @@
     let isLoading = false;
     const CACHE_KEY = 'cached_purchases_accessories';
     const CACHE_TIMESTAMP_KEY = 'cached_purchases_accessories_timestamp';
+
+    // Advanced search settings
+    let searchMode = 'contains';
+    let searchField = 'all';
+    let caseSensitive = false;
 
     // ---------- Helper functions ----------
     function escapeHtml(str) {
@@ -263,6 +311,82 @@
 
     function formatMoney(amount) {
         return '₵' + (parseFloat(amount) || 0).toFixed(2);
+    }
+
+    // ---------- Advanced Search Functions ----------
+    function matchesSearch(value, searchTerm, mode, caseSensitive) {
+        if (!value) return false;
+        
+        let searchValue = value;
+        let term = searchTerm;
+        
+        if (!caseSensitive) {
+            searchValue = searchValue.toLowerCase();
+            term = term.toLowerCase();
+        }
+        
+        switch(mode) {
+            case 'exact':
+                return searchValue === term;
+            case 'starts':
+                return searchValue.startsWith(term);
+            case 'ends':
+                return searchValue.endsWith(term);
+            case 'words':
+                const words = term.split(/\s+/).filter(w => w.length > 0);
+                return words.every(word => searchValue.includes(word));
+            case 'contains':
+            default:
+                return searchValue.includes(term);
+        }
+    }
+
+    function getSearchableText(purchase, field) {
+        switch(field) {
+            case 'name':
+                return purchase.name || '';
+            case 'brand':
+                return purchase.brand || '';
+            case 'category':
+                return purchase.category || '';
+            case 'source':
+                return purchase.source || '';
+            case 'all':
+            default:
+                return [
+                    purchase.name || '',
+                    purchase.brand || '',
+                    purchase.category || '',
+                    purchase.source || ''
+                ].join(' ');
+        }
+    }
+
+    function applyAdvancedSearch() {
+        const keyword = document.getElementById('searchInput').value.trim();
+        searchMode = document.getElementById('searchMode').value;
+        searchField = document.getElementById('searchField').value;
+        caseSensitive = document.getElementById('caseSensitive').value === 'true';
+        
+        let filtered = currentPurchases;
+        
+        if (keyword) {
+            filtered = currentPurchases.filter(p => {
+                const searchableText = getSearchableText(p, searchField);
+                return matchesSearch(searchableText, keyword, searchMode, caseSensitive);
+            });
+        }
+        
+        currentFilteredData = filtered;
+        renderList(filtered, !isDataFresh);
+        
+        // Show/hide clear button
+        const clearBtn = document.getElementById('clearSearchBtn');
+        if (keyword) {
+            clearBtn.classList.remove('hidden');
+        } else {
+            clearBtn.classList.add('hidden');
+        }
     }
 
     // ---------- Caching ----------
@@ -675,7 +799,7 @@
         }
     }
 
-    // ---------- Render list with Profit per Batch ----------
+    // ---------- Render list with Profit and Stock ----------
     function renderList(purchases, fromCache = false) {
         const container = document.getElementById('purchasesList');
         if (!purchases || purchases.length === 0) {
@@ -685,20 +809,32 @@
         }
 
         container.innerHTML = purchases.map(p => {
-            // Calculate profit for this batch
             const batchProfit = ((p.selling_price || 0) - (p.cost_price || 0)) * (p.quantity || 0);
             const profitColor = batchProfit >= 0 ? 'text-teal-600' : 'text-red-600';
+            const claimedQty = p.claimed_quantity || 0;
+            const goodStock = (p.remaining_quantity || 0) - claimedQty;
+            const soldQty = (p.quantity || 0) - (p.remaining_quantity || 0);
             
             return `
             <div class="border rounded-lg p-4 hover:shadow transition">
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
                     <div class="flex-1 w-full">
-                        <h3 class="font-bold text-lg">${escapeHtml(p.name)} (${escapeHtml(p.brand)})</h3>
-                        <p class="text-sm text-gray-600">Batch #${p.batch_id} | Qty: ${p.quantity} | Stock: ${p.remaining_quantity}</p>
-                        <p class="text-sm">Cost: ₵${(p.cost_price || 0).toFixed(2)} | Discount: ₵${(p.discount || 0).toFixed(2)} | Selling: ₵${(p.selling_price || 0).toFixed(2)}</p>
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <h3 class="font-bold text-lg">${escapeHtml(p.name)} (${escapeHtml(p.brand)})</h3>
+                            ${claimedQty > 0 ? `<span class="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">⚠️ ${claimedQty} Claimed</span>` : ''}
+                        </div>
+                        <p class="text-sm text-gray-600">Batch #${p.batch_id}</p>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-1 mt-1 text-xs">
+                            <span>Total: <strong>${p.quantity || 0}</strong></span>
+                            <span>Sold: <strong class="text-blue-600">${soldQty}</strong></span>
+                            <span>Remaining: <strong>${p.remaining_quantity || 0}</strong></span>
+                            <span>✅ Good: <strong class="text-green-600">${Math.max(goodStock, 0)}</strong></span>
+                        </div>
+                        <p class="text-sm mt-1">Cost: ₵${(p.cost_price || 0).toFixed(2)} | Discount: ₵${(p.discount || 0).toFixed(2)} | Selling: ₵${(p.selling_price || 0).toFixed(2)}</p>
                         <p class="text-sm">Total: ₵${(p.total_cost || 0).toFixed(2)} | Date: ${formatDate(p.date)}</p>
                         <p class="text-sm text-gray-500"><span class="font-medium">Source:</span> ${escapeHtml(p.source || 'Unknown')}</p>
                         <p class="text-sm font-bold ${profitColor}">💎 Profit: ${formatMoney(batchProfit)}</p>
+                        ${claimedQty > 0 ? `<p class="text-xs text-red-500">⚠️ ${claimedQty} units claimed as faulty</p>` : ''}
                     </div>
                     <button onclick="editPurchase(${p.batch_id})" class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-1 rounded text-sm whitespace-nowrap">✏️ Update</button>
                 </div>
@@ -707,27 +843,35 @@
         updateSummary(purchases);
     }
 
-    // ---------- Update summary ----------
+    // ---------- Update summary with Remaining Stock ----------
     function updateSummary(purchases) {
         let totalQty = 0;
+        let totalRemaining = 0;
         let totalCost = 0;
         let totalDiscount = 0;
         let totalSelling = 0;
         let totalProfit = 0;
         let totalCapital = 0;
+        let totalClaimed = 0;
+        let totalGood = 0;
         const totalBatches = purchases ? purchases.length : 0;
         
         if (purchases && purchases.length > 0) {
             purchases.forEach(p => {
                 const itemQty = p.quantity || 0;
+                const remainingQty = p.remaining_quantity || 0;
                 const itemCost = p.cost_price || 0;
                 const itemSelling = p.selling_price || 0;
                 const itemDiscount = p.discount || 0;
+                const claimed = p.claimed_quantity || 0;
                 
                 totalQty += itemQty;
+                totalRemaining += remainingQty;
                 totalCost += p.total_cost || (itemCost * itemQty);
                 totalDiscount += itemDiscount;
                 totalSelling += itemSelling * itemQty;
+                totalClaimed += claimed;
+                totalGood += remainingQty - claimed;
                 
                 const itemProfit = (itemSelling - itemCost) * itemQty - itemDiscount;
                 totalProfit += itemProfit;
@@ -739,40 +883,45 @@
         const isCached = !isDataFresh && !isOffline;
         
         document.getElementById('summary').innerHTML = `
-            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-2 text-sm">
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2 text-sm">
                 <div class="bg-white rounded p-2 shadow">
                     <span class="text-gray-500">📦 Batches</span><br>
                     <span class="text-lg font-bold text-indigo-600">${totalBatches}</span>
                 </div>
                 <div class="bg-white rounded p-2 shadow">
                     <span class="text-gray-500">🧾 Total Qty</span><br>
-                    <span class="text-lg font-bold text-blue-600">${totalQty}</span>
+                    <span class="text-lg font-bold text-teal-600">${totalQty}</span>
+                </div>
+                <div class="bg-white rounded p-2 shadow">
+                    <span class="text-gray-500">📦 Remaining</span><br>
+                    <span class="text-lg font-bold text-blue-600">${totalRemaining}</span>
+                </div>
+                <div class="bg-white rounded p-2 shadow">
+                    <span class="text-gray-500">⚠️ Claimed</span><br>
+                    <span class="text-lg font-bold text-red-600">${totalClaimed}</span>
+                </div>
+                <div class="bg-white rounded p-2 shadow">
+                    <span class="text-gray-500">✅ Good</span><br>
+                    <span class="text-lg font-bold text-green-600">${Math.max(totalGood, 0)}</span>
                 </div>
                 <div class="bg-white rounded p-2 shadow">
                     <span class="text-gray-500">💰 Capital</span><br>
                     <span class="text-lg font-bold text-purple-600">${formatMoney(totalCapital)}</span>
                 </div>
                 <div class="bg-white rounded p-2 shadow">
-                    <span class="text-gray-500">📈 Total Selling</span><br>
-                    <span class="text-lg font-bold text-green-600">${formatMoney(totalSelling)}</span>
-                </div>
-                <div class="bg-white rounded p-2 shadow">
-                    <span class="text-gray-500">📉 Total Discount</span><br>
-                    <span class="text-lg font-bold text-red-600">${formatMoney(totalDiscount)}</span>
-                </div>
-                <div class="bg-white rounded p-2 shadow">
-                    <span class="text-gray-500">💎 Total Profit</span><br>
+                    <span class="text-gray-500">💎 Profit</span><br>
                     <span class="text-lg font-bold ${totalProfit >= 0 ? 'text-teal-600' : 'text-red-600'}">${formatMoney(totalProfit)}</span>
                 </div>
                 <div class="bg-white rounded p-2 shadow">
-                    <span class="text-gray-500">📊 Avg Profit/Batch</span><br>
+                    <span class="text-gray-500">📊 Avg/Batch</span><br>
                     <span class="text-lg font-bold ${totalBatches > 0 && totalProfit / totalBatches >= 0 ? 'text-teal-600' : 'text-red-600'}">${totalBatches > 0 ? formatMoney(totalProfit / totalBatches) : '₵0.00'}</span>
                 </div>
             </div>
             <div class="mt-2 text-xs text-gray-400">
-                ${isOffline ? '⚠️ Offline mode' : ''}
-                ${isCached ? '📦 Showing cached data' : ''}
-                ${!isOffline && !isCached ? '✅ Live data' : ''}
+                💡 Total: ${totalQty} | Remaining: ${totalRemaining} | Sold: ${totalQty - totalRemaining} | Claimed: ${totalClaimed} | Good: ${Math.max(totalGood, 0)}
+                ${isOffline ? ' | ⚠️ Offline mode' : ''}
+                ${isCached ? ' | 📦 Showing cached data' : ''}
+                ${!isOffline && !isCached ? ' | ✅ Live data' : ''}
             </div>
         `;
     }
@@ -848,7 +997,6 @@
                     window.history.pushState({}, '', newUrl);
                 }
                 
-                // ✅ Reset edit mode before reloading
                 editMode = false;
                 editBatchId = null;
                 
@@ -965,32 +1113,16 @@
             await loadPurchases();
             currentFilteredData = currentPurchases;
         }
-        applySearch();
+        applyAdvancedSearch();
     }
 
     function clearFilters() {
         document.getElementById('fromDate').value = '';
         document.getElementById('toDate').value = '';
         document.getElementById('searchInput').value = '';
+        document.getElementById('clearSearchBtn').classList.add('hidden');
         currentFilteredData = currentPurchases;
         loadPurchases(true);
-    }
-
-    function applySearch() {
-        const keyword = document.getElementById('searchInput').value.toLowerCase().trim();
-        if (!keyword) {
-            currentFilteredData = currentPurchases;
-            renderList(currentPurchases, !isDataFresh);
-            return;
-        }
-        const filtered = currentPurchases.filter(p =>
-            (p.name && p.name.toLowerCase().includes(keyword)) ||
-            (p.brand && p.brand.toLowerCase().includes(keyword)) ||
-            (p.category && p.category.toLowerCase().includes(keyword)) ||
-            (p.source && p.source.toLowerCase().includes(keyword))
-        );
-        currentFilteredData = filtered;
-        renderList(filtered, !isDataFresh);
     }
 
     // ---------- PDF with Enhanced Summary ----------
@@ -1163,19 +1295,48 @@
         loadPurchases();
         if (typeof updatePendingBadge === 'function') updatePendingBadge();
         
-        // View Pending button
         const viewPendingBtn = document.getElementById('viewPendingBtn');
         if (viewPendingBtn) {
             viewPendingBtn.addEventListener('click', viewPendingPurchases);
         }
         
-        // Submit button
         document.getElementById('submitBtn').addEventListener('click', submitPurchase);
         document.getElementById('cancelBtn').addEventListener('click', resetForm);
         document.getElementById('filterBtn').addEventListener('click', filterPurchases);
         document.getElementById('clearFilterBtn').addEventListener('click', clearFilters);
         document.getElementById('pdfBtn').addEventListener('click', generatePDF);
-        document.getElementById('searchInput').addEventListener('input', applySearch);
+        
+        // Advanced search
+        document.getElementById('advancedToggle').addEventListener('click', function() {
+            const advanced = document.getElementById('advancedSearch');
+            advanced.classList.toggle('hidden');
+        });
+        
+        document.getElementById('applyAdvancedSearch').addEventListener('click', function() {
+            applyAdvancedSearch();
+        });
+        
+        document.getElementById('clearSearchBtn').addEventListener('click', function() {
+            document.getElementById('searchInput').value = '';
+            this.classList.add('hidden');
+            applyAdvancedSearch();
+        });
+        
+        document.getElementById('searchInput').addEventListener('input', function() {
+            const keyword = this.value.trim();
+            if (keyword) {
+                document.getElementById('clearSearchBtn').classList.remove('hidden');
+            } else {
+                document.getElementById('clearSearchBtn').classList.add('hidden');
+            }
+            applyAdvancedSearch();
+        });
+        
+        document.getElementById('searchInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                applyAdvancedSearch();
+            }
+        });
         
         // Autocomplete listeners
         document.getElementById('name').addEventListener('input', () => { 
@@ -1191,7 +1352,6 @@
             sourceTimeout = setTimeout(fetchSourceSuggestions, 300); 
         });
         
-        // Close suggestions on click outside
         document.addEventListener('click', function(e) {
             if (!e.target.closest('#name')) document.getElementById('nameSuggestions').classList.add('hidden');
             if (!e.target.closest('#category')) document.getElementById('categorySuggestions').classList.add('hidden');
@@ -1199,7 +1359,6 @@
         });
     });
 
-    // Auto-refresh on reconnect
     window.addEventListener('online', function() {
         loadPurchases(true);
     });

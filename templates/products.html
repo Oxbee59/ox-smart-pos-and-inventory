@@ -32,13 +32,65 @@
     <p class="text-gray-600 mt-1">Manage your accessory products and batches</p>
 </div>
 
-<!-- Search Bar -->
-<div class="mb-4">
-    <input type="text" id="searchInput" placeholder="🔍 Search accessory by name, brand or category..." 
-           class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm md:text-base">
+<!-- Search Bar with Advanced Options -->
+<div class="mb-4 bg-white rounded-xl shadow-md p-3 md:p-4">
+    <div class="flex flex-col md:flex-row gap-3">
+        <div class="flex-1">
+            <input type="text" id="searchInput" placeholder="🔍 Search accessory by name, brand or category..." 
+                   class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm md:text-base">
+        </div>
+        <div class="flex flex-wrap gap-2 items-center">
+            <button id="advancedToggle" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1.5 rounded-lg text-sm">
+                ⚙️ Advanced
+            </button>
+            <button id="clearSearchBtn" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-lg text-sm hidden">
+                ✕ Clear
+            </button>
+        </div>
+    </div>
+    
+    <!-- Advanced Search Options -->
+    <div id="advancedSearch" class="hidden mt-3 pt-3 border-t border-gray-200">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div>
+                <label class="block text-xs font-medium text-gray-700">Search Mode</label>
+                <select id="searchMode" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
+                    <option value="contains">Contains (Partial Match)</option>
+                    <option value="exact">Exact Match</option>
+                    <option value="starts">Starts With</option>
+                    <option value="ends">Ends With</option>
+                    <option value="words">All Words (AND)</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-700">Search In</label>
+                <select id="searchField" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
+                    <option value="all">All Fields</option>
+                    <option value="name">Product Name</option>
+                    <option value="brand">Brand</option>
+                    <option value="category">Category</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-700">Case Sensitive</label>
+                <select id="caseSensitive" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
+                    <option value="false">No</option>
+                    <option value="true">Yes</option>
+                </select>
+            </div>
+            <div class="flex items-end">
+                <button id="applyAdvancedSearch" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg text-sm w-full">
+                    🔍 Apply
+                </button>
+            </div>
+        </div>
+        <div class="mt-2 text-xs text-gray-500">
+            💡 Tip: Use "All Words" mode to search for multiple terms (e.g., "samsung screen" finds products with both words)
+        </div>
+    </div>
 </div>
 
-<!-- Summary - Improved with responsive grid -->
+<!-- Summary - Fixed Calculations -->
 <div id="summary" class="mb-4">
     <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
         <div class="bg-white rounded-xl shadow-md p-3 text-center border border-gray-100">
@@ -134,7 +186,7 @@
 <style>
     .stock-breakdown {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+        grid-template-columns: repeat(3, 1fr);
         gap: 0.25rem;
     }
     .stock-item {
@@ -145,7 +197,6 @@
     }
     .stock-total { background: #f3f4f6; }
     .stock-sold { background: #dbeafe; }
-    .stock-claimed { background: #fee2e2; }
     .stock-good { background: #d1fae5; }
 </style>
 
@@ -256,6 +307,11 @@
     let currentBatches = [];
     let isLoading = false;
 
+    // Advanced search settings
+    let searchMode = 'contains';
+    let searchField = 'all';
+    let caseSensitive = false;
+
     function escapeHtml(str) {
         if (!str) return '';
         return str.replace(/[&<>]/g, function(m) {
@@ -269,6 +325,78 @@
     function navigateToPurchase(batchId) {
         const url = `/purchases?edit_batch=${batchId}`;
         window.open(url, '_blank');
+    }
+
+    // ---------- Advanced Search Functions ----------
+    function matchesSearch(value, searchTerm, mode, caseSensitive) {
+        if (!value) return false;
+        
+        let searchValue = value;
+        let term = searchTerm;
+        
+        if (!caseSensitive) {
+            searchValue = searchValue.toLowerCase();
+            term = term.toLowerCase();
+        }
+        
+        switch(mode) {
+            case 'exact':
+                return searchValue === term;
+            case 'starts':
+                return searchValue.startsWith(term);
+            case 'ends':
+                return searchValue.endsWith(term);
+            case 'words':
+                const words = term.split(/\s+/).filter(w => w.length > 0);
+                return words.every(word => searchValue.includes(word));
+            case 'contains':
+            default:
+                return searchValue.includes(term);
+        }
+    }
+
+    function getSearchableText(product, field) {
+        switch(field) {
+            case 'name':
+                return product.name || '';
+            case 'brand':
+                return product.brand || '';
+            case 'category':
+                return product.category || '';
+            case 'all':
+            default:
+                return [
+                    product.name || '',
+                    product.brand || '',
+                    product.category || ''
+                ].join(' ');
+        }
+    }
+
+    function applyAdvancedSearch() {
+        const keyword = document.getElementById('searchInput').value.trim();
+        searchMode = document.getElementById('searchMode').value;
+        searchField = document.getElementById('searchField').value;
+        caseSensitive = document.getElementById('caseSensitive').value === 'true';
+        
+        let filtered = currentProducts;
+        
+        if (keyword) {
+            filtered = currentProducts.filter(p => {
+                const searchableText = getSearchableText(p, searchField);
+                return matchesSearch(searchableText, keyword, searchMode, caseSensitive);
+            });
+        }
+        
+        renderProducts(filtered);
+        
+        // Show/hide clear button
+        const clearBtn = document.getElementById('clearSearchBtn');
+        if (keyword) {
+            clearBtn.classList.remove('hidden');
+        } else {
+            clearBtn.classList.add('hidden');
+        }
     }
 
     async function viewBatchClaims(batchId, productName, batchData) {
@@ -289,6 +417,7 @@
                 const totalActive = activeClaims.reduce((sum, c) => sum + c.quantity, 0);
                 const totalResolved = resolvedClaims.reduce((sum, c) => sum + c.quantity, 0);
                 const goodStock = batchRemaining - totalActive;
+                const sold = batchOriginal - batchRemaining;
                 
                 let html = `
                     <div class="bg-gray-50 rounded-lg p-4 mb-4 border border-gray-200">
@@ -300,11 +429,7 @@
                             </div>
                             <div class="stock-item stock-sold">
                                 <span class="text-gray-500">Sold</span>
-                                <p class="font-bold text-blue-600">${batchOriginal - batchRemaining}</p>
-                            </div>
-                            <div class="stock-item stock-claimed">
-                                <span class="text-gray-500">Claimed</span>
-                                <p class="font-bold text-red-600">${totalActive}</p>
+                                <p class="font-bold text-blue-600">${sold}</p>
                             </div>
                             <div class="stock-item stock-good">
                                 <span class="text-gray-500">✅ Good</span>
@@ -312,7 +437,8 @@
                             </div>
                         </div>
                         <div class="mt-2 text-xs text-gray-400">
-                            💡 ${batchOriginal} total → ${batchOriginal - batchRemaining} sold → ${batchRemaining} physical → ${totalActive} claimed → ${Math.max(goodStock, 0)} good
+                            💡 ${batchOriginal} total → ${sold} sold → ${Math.max(goodStock, 0)} good remaining
+                            ${totalActive > 0 ? `⚠️ ${totalActive} units claimed as faulty` : ''}
                         </div>
                     </div>
                 `;
@@ -353,7 +479,6 @@
                                             ${claim.description ? `<p class="text-sm text-gray-600 mt-1">📝 ${escapeHtml(claim.description)}</p>` : ''}
                                             <div class="flex items-center gap-4 mt-1 text-xs text-gray-500">
                                                 <span>📅 ${new Date(claim.created_at).toLocaleString()}</span>
-                                                <span>📦 Remaining Good: ${claim.remaining_good}</span>
                                             </div>
                                         </div>
                                         <span class="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded font-medium">Active</span>
@@ -401,8 +526,7 @@
                                 <span class="font-medium">
                                     ${batchOriginal} total | 
                                     <span class="text-red-500">${totalActive} claimed</span> | 
-                                    <span class="text-green-600">${totalResolved} resolved</span> | 
-                                    <span class="text-blue-600">${Math.max(goodStock, 0)} good</span>
+                                    <span class="text-green-600">${Math.max(goodStock, 0)} good</span>
                                 </span>
                             </div>
                         </div>
@@ -459,24 +583,31 @@
             if (data && data.products && Array.isArray(data.products)) {
                 productsData = data.products;
                 
-                // Calculate totals
+                // ✅ FIXED: Calculate totals correctly
                 let totalQty = 0;
                 let totalClaimed = 0;
                 let totalGood = 0;
+                let totalBatches = 0;
+                
                 productsData.forEach(p => {
+                    // Use p.stock directly from the product (already summed from batches)
                     totalQty += p.stock || 0;
+                    
                     if (p.batches) {
                         p.batches.forEach(b => {
+                            totalBatches += 1;
                             const claimed = b.claimed_quantity || 0;
                             totalClaimed += claimed;
-                            totalGood += (b.remaining_quantity || 0) - claimed;
                         });
                     }
                 });
                 
+                // ✅ Calculate good stock as: totalQty - totalClaimed
+                totalGood = totalQty - totalClaimed;
+                
                 summaryData = { 
                     total_products: data.total_products || data.products.length, 
-                    total_batches: data.total_batches || 0,
+                    total_batches: totalBatches,
                     total_quantity: totalQty,
                     total_claimed: totalClaimed,
                     total_good: Math.max(totalGood, 0)
@@ -542,7 +673,7 @@
             cacheStatus.classList.add('text-green-500');
         }
         
-        applySearch();
+        applyAdvancedSearch();
         autoOpenBatches();
         isLoading = false;
     }
@@ -570,19 +701,6 @@
         }
     }
 
-    function applySearch() {
-        const keyword = document.getElementById('searchInput').value.toLowerCase().trim();
-        let filtered = currentProducts;
-        if (keyword) {
-            filtered = currentProducts.filter(p => 
-                (p.name && p.name.toLowerCase().includes(keyword)) ||
-                (p.brand && p.brand.toLowerCase().includes(keyword)) ||
-                (p.category && p.category.toLowerCase().includes(keyword))
-            );
-        }
-        renderProducts(filtered);
-    }
-
     function renderProducts(products) {
         const container = document.getElementById('productsList');
         if (!products || products.length === 0) {
@@ -590,25 +708,33 @@
             return;
         }
         container.innerHTML = products.map(p => {
-            const status = p.stock > 0 ? "In Stock" : "Out of Stock";
-            const statusColor = p.stock > 0 ? "text-green-600" : "text-red-600";
-            
+            // Calculate totals for this product
+            let totalStock = p.stock || 0;
+            let totalClaimed = 0;
+            let totalGood = 0;
             let hasFaulty = false;
-            let faultyCount = 0;
-            let goodStock = 0;
+            
             if (p.batches && p.batches.length > 0) {
                 p.batches.forEach(batch => {
                     const claimed = batch.claimed_quantity || 0;
+                    const remaining = batch.remaining_quantity || 0;
                     if (claimed > 0) {
                         hasFaulty = true;
-                        faultyCount += claimed;
+                        totalClaimed += claimed;
                     }
-                    goodStock += (batch.remaining_quantity || 0) - claimed;
+                    totalGood += remaining - claimed;
                 });
             }
             
+            // ✅ If totalGood doesn't match totalStock - totalClaimed, use the calculation
+            const calculatedGood = totalStock - totalClaimed;
+            const displayGood = totalGood === calculatedGood ? totalGood : calculatedGood;
+            
+            const status = totalStock > 0 ? "In Stock" : "Out of Stock";
+            const statusColor = totalStock > 0 ? "text-green-600" : "text-red-600";
+            
             const faultyBadge = hasFaulty ? 
-                `<span class="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded ml-2">⚠️ ${faultyCount} Claimed</span>` : '';
+                `<span class="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded ml-2">⚠️ ${totalClaimed} Claimed</span>` : '';
 
             return `
                 <div class="bg-white rounded-xl shadow-md p-4 border hover:shadow-lg transition-shadow duration-200">
@@ -618,10 +744,10 @@
                                 <h3 class="text-lg md:text-xl font-bold text-indigo-700">${escapeHtml(p.name)} (${escapeHtml(p.brand)})</h3>
                                 ${faultyBadge}
                             </div>
-                            <p class="text-gray-600 text-sm">Category: ${escapeHtml(p.category)} | Stock: ${p.stock}</p>
+                            <p class="text-gray-600 text-sm">Category: ${escapeHtml(p.category)} | Total Stock: ${totalStock}</p>
                             <p class="text-xs md:text-sm">Cost: ₵${(p.cost_price || 0).toFixed(2)} | Selling: ₵${(p.selling_price || 0).toFixed(2)} | Discount: ₵${(p.discount || 0).toFixed(2)}</p>
-                            ${hasFaulty ? `<p class="text-xs text-red-500 mt-1">⚠️ ${faultyCount} units claimed as faulty</p>` : ''}
-                            ${goodStock > 0 ? `<p class="text-xs text-green-500">✅ ${goodStock} good units available</p>` : ''}
+                            ${hasFaulty ? `<p class="text-xs text-red-500 mt-1">⚠️ ${totalClaimed} units claimed as faulty</p>` : ''}
+                            <p class="text-xs text-green-600 font-bold mt-1">✅ ${displayGood} good units available</p>
                         </div>
                         <div class="flex flex-wrap items-center gap-2">
                             <span class="font-semibold ${statusColor} text-sm">● ${status}</span>
@@ -851,7 +977,19 @@
     }
 
     // Event listeners
-    document.getElementById('searchInput').addEventListener('input', applySearch);
+    document.getElementById('searchInput').addEventListener('input', applyAdvancedSearch);
+    document.getElementById('clearSearchBtn').addEventListener('click', function() {
+        document.getElementById('searchInput').value = '';
+        this.classList.add('hidden');
+        applyAdvancedSearch();
+    });
+    document.getElementById('advancedToggle').addEventListener('click', function() {
+        const advanced = document.getElementById('advancedSearch');
+        advanced.classList.toggle('hidden');
+    });
+    document.getElementById('applyAdvancedSearch').addEventListener('click', function() {
+        applyAdvancedSearch();
+    });
     document.getElementById('deleteKeepBtn').addEventListener('click', () => deleteProduct('keep'));
     document.getElementById('deleteCleanBtn').addEventListener('click', () => deleteProduct('clean'));
 
