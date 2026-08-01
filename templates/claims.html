@@ -40,7 +40,7 @@
 </div>
 
 <!-- Claims Summary -->
-<div id="claimsSummary" class="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4 mb-6">
+<div id="claimsSummary" class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
     <div class="bg-white rounded-xl shadow-md p-3 md:p-4 text-center border border-gray-100">
         <p class="text-xs text-gray-500">Total Claims</p>
         <p id="totalClaims" class="text-xl md:text-2xl font-bold text-gray-800">0</p>
@@ -56,10 +56,6 @@
     <div class="bg-white rounded-xl shadow-md p-3 md:p-4 text-center border border-gray-100">
         <p class="text-xs text-gray-500">Items Claimed</p>
         <p id="totalItemsClaimed" class="text-xl md:text-2xl font-bold text-purple-600">0</p>
-    </div>
-    <div class="bg-white rounded-xl shadow-md p-3 md:p-4 text-center border border-gray-100">
-        <p class="text-xs text-gray-500">Restored</p>
-        <p id="totalRestored" class="text-xl md:text-2xl font-bold text-blue-600">0</p>
     </div>
 </div>
 
@@ -154,7 +150,7 @@
     </div>
 </div>
 
-<!-- ===== MODAL: VIEW/EDIT CLAIM ===== -->
+<!-- ===== MODAL: VIEW CLAIM ===== -->
 <div id="viewClaimModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div class="sticky top-0 bg-white p-4 border-b flex justify-between items-center">
@@ -185,6 +181,7 @@
     }
     .stock-total { background: #f3f4f6; }
     .stock-sold { background: #dbeafe; }
+    .stock-physical { background: #e0e7ff; }
     .stock-claimed { background: #fee2e2; }
     .stock-good { background: #d1fae5; }
     
@@ -316,13 +313,11 @@
         const active = currentClaims.filter(c => c.status === 'active').length;
         const resolved = currentClaims.filter(c => c.status === 'resolved').length;
         const totalItems = currentClaims.reduce((sum, c) => sum + c.quantity, 0);
-        const restored = currentClaims.filter(c => c.status === 'deleted' || c.restored === true).length;
 
         document.getElementById('totalClaims').textContent = total;
         document.getElementById('activeClaims').textContent = active;
         document.getElementById('resolvedClaims').textContent = resolved;
         document.getElementById('totalItemsClaimed').textContent = totalItems;
-        document.getElementById('totalRestored').textContent = restored || 0;
     }
 
     // ---------- Apply filters ----------
@@ -347,7 +342,7 @@
         renderClaims(filtered);
     }
 
-    // ---------- Render claims with compact stock breakdown (FIXED) ----------
+    // ---------- Render claims with full stock breakdown ----------
     function renderClaims(claims) {
         const container = document.getElementById('claimsList');
         
@@ -357,10 +352,11 @@
         }
 
         container.innerHTML = claims.map(claim => {
-            // ✅ FIXED: Use batch_original for correct total
+            // ✅ Full stock breakdown
             const originalStock = claim.batch_original || (claim.batch_stock + claim.quantity);
+            const physicalStock = claim.batch_stock || 0;
             const goodStock = claim.remaining_good || 0;
-            const sold = originalStock - claim.batch_stock;
+            const sold = originalStock - physicalStock;
             
             return `
             <div class="claim-card bg-white rounded-xl shadow-md border p-3 md:p-4 ${claim.status === 'resolved' ? 'border-green-200' : 'border-red-200'}">
@@ -381,7 +377,7 @@
                             Batch #${claim.batch_id} | Claimed: <strong class="text-red-600">${claim.quantity}</strong>
                         </p>
                         
-                        <!-- Stock Breakdown - Compact -->
+                        <!-- Stock Breakdown - Full -->
                         <div class="mt-2">
                             <div class="stock-breakdown">
                                 <div class="stock-item stock-total">
@@ -392,9 +388,9 @@
                                     <span class="text-gray-500">Sold</span>
                                     <p class="font-bold text-blue-600 text-xs">${sold}</p>
                                 </div>
-                                <div class="stock-item stock-claimed">
-                                    <span class="text-gray-500">Claimed</span>
-                                    <p class="font-bold text-red-600 text-xs">${claim.quantity}</p>
+                                <div class="stock-item stock-physical">
+                                    <span class="text-gray-500">Physical</span>
+                                    <p class="font-bold text-indigo-600 text-xs">${physicalStock}</p>
                                 </div>
                                 <div class="stock-item stock-good">
                                     <span class="text-gray-500">✅ Good</span>
@@ -402,7 +398,7 @@
                                 </div>
                             </div>
                             <div class="text-xs text-gray-400 mt-1">
-                                💡 ${originalStock} total → ${sold} sold → ${claim.batch_stock} physical → ${claim.quantity} claimed → ${goodStock} good
+                                💡 ${originalStock} total → ${sold} sold → ${physicalStock} physical → ${claim.quantity} claimed → ${goodStock} good
                             </div>
                         </div>
                         
@@ -427,7 +423,7 @@
         `}).join('');
     }
 
-    // ---------- View claim (FIXED) ----------
+    // ---------- View claim ----------
     async function viewClaim(claimId) {
         try {
             const res = await fetch(`/api/claims`);
@@ -439,9 +435,11 @@
                     return;
                 }
 
-                // ✅ FIXED: Use batch_original for correct total
+                // ✅ Full stock breakdown
                 const originalStock = claim.batch_original || (claim.batch_stock + claim.quantity);
-                const sold = originalStock - claim.batch_stock;
+                const physicalStock = claim.batch_stock || 0;
+                const goodStock = claim.remaining_good || 0;
+                const sold = originalStock - physicalStock;
 
                 document.getElementById('viewClaimTitle').textContent = `Claim #${claim.id} - ${claim.product_name}`;
                 document.getElementById('viewClaimContent').innerHTML = `
@@ -470,16 +468,16 @@
                                     <span class="text-xs text-gray-500">Sold</span>
                                     <p class="font-bold text-blue-600">${sold}</p>
                                 </div>
-                                <div class="stock-item stock-claimed">
-                                    <span class="text-xs text-gray-500">Claimed</span>
-                                    <p class="font-bold text-red-600">${claim.quantity}</p>
+                                <div class="stock-item stock-physical">
+                                    <span class="text-xs text-gray-500">Physical</span>
+                                    <p class="font-bold text-indigo-600">${physicalStock}</p>
                                 </div>
                                 <div class="stock-item stock-good">
                                     <span class="text-xs text-gray-500">✅ Good</span>
-                                    <p class="font-bold text-green-600">${claim.remaining_good}</p>
+                                    <p class="font-bold text-green-600">${goodStock}</p>
                                 </div>
                             </div>
-                            <p class="text-xs text-gray-400 mt-1">${originalStock} total → ${sold} sold → ${claim.batch_stock} physical → ${claim.quantity} claimed → ${claim.remaining_good} good</p>
+                            <p class="text-xs text-gray-400 mt-1">${originalStock} total → ${sold} sold → ${physicalStock} physical → ${claim.quantity} claimed → ${goodStock} good</p>
                         </div>
                         
                         <div class="grid grid-cols-2 gap-3">
@@ -759,7 +757,6 @@
         display.innerHTML = `
             <span class="font-medium">Batch #${batch.batch_id}</span>
             | Total: ${batch.quantity || batch.remaining_quantity + (batch.claimed_quantity || 0)}
-            | Physical: ${batch.remaining_quantity}
             | ✅ Good: ${goodStock}
             | 💰 Price: ₵${batch.selling_price.toFixed(2)}
             ${batch.claimed_quantity > 0 ? `<span class="text-orange-500 ml-2">📌 Claimed: ${batch.claimed_quantity}</span>` : ''}

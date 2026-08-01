@@ -56,9 +56,9 @@ def create_claim(product_id, batch_id, product_name, brand, category, issue_type
         conn.close()
 
 
-# --------------------------- GET ALL CLAIMS (FIXED - Added batch_original) ---------------------------
+# --------------------------- GET ALL CLAIMS (FIXED - DYNAMIC remaining_good) ---------------------------
 def get_all_claims():
-    """Get all claims with product and batch info"""
+    """Get all claims with product and batch info - DYNAMIC remaining_good"""
     conn = get_connection()
     cursor = conn.cursor()
     try:
@@ -89,9 +89,14 @@ def get_all_claims():
         
         result = []
         for r in rows:
-            # Calculate the sold quantity
             batch_original = r[14] if len(r) > 14 else 0
             batch_stock = r[13] if len(r) > 13 else 0
+            claimed_qty = r[8]
+            batch_claimed_total = r[16] if len(r) > 16 else 0
+            
+            # ✅ DYNAMIC CALCULATION: remaining_good = batch_stock - claimed_qty
+            # This reflects current stock minus this claim's quantity
+            remaining_good_dynamic = batch_stock - claimed_qty
             sold = batch_original - batch_stock
             
             result.append({
@@ -103,15 +108,15 @@ def get_all_claims():
                 "category": r[5] or '',
                 "issue_type": r[6],
                 "description": r[7] or '',
-                "quantity": r[8],
-                "remaining_good": r[9],
+                "quantity": claimed_qty,
+                "remaining_good": remaining_good_dynamic,  # ✅ DYNAMIC
                 "status": r[10],
                 "created_at": r[11].isoformat() if hasattr(r[11], 'isoformat') else str(r[11]),
                 "updated_at": r[12].isoformat() if hasattr(r[12], 'isoformat') else str(r[12]) if r[12] else None,
-                "batch_stock": int(r[13]) if len(r) > 13 else 0,
-                "batch_original": int(r[14]) if len(r) > 14 else 0,
+                "batch_stock": int(batch_stock),
+                "batch_original": int(batch_original),
                 "is_faulty": r[15] if len(r) > 15 else False,
-                "batch_claimed": int(r[16]) if len(r) > 16 else 0,
+                "batch_claimed": int(batch_claimed_total),
                 "sold": int(sold) if sold > 0 else 0
             })
         
@@ -125,9 +130,9 @@ def get_all_claims():
         conn.close()
 
 
-# --------------------------- GET CLAIMS BY PRODUCT (FIXED - Added batch_original) ---------------------------
+# --------------------------- GET CLAIMS BY PRODUCT (FIXED - DYNAMIC remaining_good) ---------------------------
 def get_claims_by_product(product_id):
-    """Get all claims for a specific product"""
+    """Get all claims for a specific product - DYNAMIC remaining_good"""
     conn = get_connection()
     cursor = conn.cursor()
     try:
@@ -158,6 +163,11 @@ def get_claims_by_product(product_id):
         for r in rows:
             batch_original = r[12] if len(r) > 12 else 0
             batch_stock = r[11] if len(r) > 11 else 0
+            claimed_qty = r[7]
+            batch_claimed_total = r[13] if len(r) > 13 else 0
+            
+            # ✅ DYNAMIC CALCULATION
+            remaining_good_dynamic = batch_stock - claimed_qty
             sold = batch_original - batch_stock
             
             result.append({
@@ -168,13 +178,13 @@ def get_claims_by_product(product_id):
                 "category": r[4] or '',
                 "issue_type": r[5],
                 "description": r[6] or '',
-                "quantity": r[7],
-                "remaining_good": r[8],
+                "quantity": claimed_qty,
+                "remaining_good": remaining_good_dynamic,  # ✅ DYNAMIC
                 "status": r[9],
                 "created_at": r[10].isoformat() if hasattr(r[10], 'isoformat') else str(r[10]),
-                "batch_stock": int(r[11]) if len(r) > 11 else 0,
-                "batch_original": int(r[12]) if len(r) > 12 else 0,
-                "batch_claimed": int(r[13]) if len(r) > 13 else 0,
+                "batch_stock": int(batch_stock),
+                "batch_original": int(batch_original),
+                "batch_claimed": int(batch_claimed_total),
                 "sold": int(sold) if sold > 0 else 0
             })
         
@@ -186,9 +196,9 @@ def get_claims_by_product(product_id):
         conn.close()
 
 
-# --------------------------- GET CLAIM BY ID ---------------------------
+# --------------------------- GET CLAIM BY ID (FIXED - DYNAMIC remaining_good) ---------------------------
 def get_claim_by_id(claim_id):
-    """Get a single claim by ID"""
+    """Get a single claim by ID - DYNAMIC remaining_good"""
     conn = get_connection()
     cursor = conn.cursor()
     try:
@@ -209,13 +219,23 @@ def get_claim_by_id(claim_id):
                 c.updated_at,
                 COALESCE(pb.remaining_quantity, 0) as batch_stock,
                 COALESCE(pb.quantity, 0) as batch_original,
-                COALESCE(pb.is_faulty, FALSE) as is_faulty
+                COALESCE(pb.is_faulty, FALSE) as is_faulty,
+                COALESCE(pb.claimed_quantity, 0) as batch_claimed
             FROM claims c
             LEFT JOIN purchase_batches pb ON c.batch_id = pb.id
             WHERE c.id = %s
         """, (claim_id,))
         row = cursor.fetchone()
         if row:
+            batch_original = row[14] if len(row) > 14 else 0
+            batch_stock = row[13] if len(row) > 13 else 0
+            claimed_qty = row[8]
+            batch_claimed_total = row[16] if len(row) > 16 else 0
+            
+            # ✅ DYNAMIC CALCULATION
+            remaining_good_dynamic = batch_stock - claimed_qty
+            sold = batch_original - batch_stock
+            
             return {
                 "id": row[0],
                 "product_id": row[1],
@@ -225,14 +245,16 @@ def get_claim_by_id(claim_id):
                 "category": row[5] or '',
                 "issue_type": row[6],
                 "description": row[7] or '',
-                "quantity": row[8],
-                "remaining_good": row[9],
+                "quantity": claimed_qty,
+                "remaining_good": remaining_good_dynamic,  # ✅ DYNAMIC
                 "status": row[10],
                 "created_at": row[11].isoformat() if hasattr(row[11], 'isoformat') else str(row[11]),
                 "updated_at": row[12].isoformat() if hasattr(row[12], 'isoformat') else str(row[12]) if row[12] else None,
-                "batch_stock": int(row[13]) if len(row) > 13 else 0,
-                "batch_original": int(row[14]) if len(row) > 14 else 0,
-                "is_faulty": row[15] if len(row) > 15 else False
+                "batch_stock": int(batch_stock),
+                "batch_original": int(batch_original),
+                "is_faulty": row[15] if len(row) > 15 else False,
+                "batch_claimed": int(batch_claimed_total),
+                "sold": int(sold) if sold > 0 else 0
             }
         return None
     except Exception as e:
@@ -561,18 +583,22 @@ def get_product_batches_for_claim(product_id):
         
         result = []
         for r in rows:
+            remaining_qty = int(r[2] or 0)
+            claimed_qty = int(r[8] or 0)
+            good_stock = remaining_qty - claimed_qty
+            
             result.append({
                 "batch_id": r[0],
                 "quantity": int(r[1] or 0),
-                "remaining_quantity": int(r[2] or 0),
+                "remaining_quantity": remaining_qty,
                 "cost_price": float(r[3] or 0),
                 "selling_price": float(r[4] or 0),
                 "discount": float(r[5] or 0),
                 "date": r[6].isoformat() if hasattr(r[6], 'isoformat') else str(r[6]) if r[6] else None,
                 "is_faulty": r[7] or False,
-                "claimed_quantity": int(r[8] or 0),
+                "claimed_quantity": claimed_qty,
                 "active_claims": int(r[9] or 0),
-                "good_stock": int(r[2] or 0) - int(r[8] or 0)
+                "good_stock": good_stock  # ✅ This is the real remaining good stock
             })
         
         return result
