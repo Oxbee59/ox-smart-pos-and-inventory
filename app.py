@@ -1191,6 +1191,7 @@ def api_suggest_source():
     return jsonify(suggestions)
 
 # ===================== PRODUCT API =====================
+# ===================== PRODUCT API =====================
 @app.route('/api/products', methods=['GET'])
 @login_required
 def api_get_products():
@@ -1225,7 +1226,7 @@ def api_get_products():
         
         where_sql = "WHERE " + " AND ".join(where_clauses)
         
-        # ✅ FIXED: Single query with proper WHERE clause
+        # ✅ FIXED: Removed p.stock from SELECT - we calculate from batches
         query = f"""
             SELECT 
                 p.id as product_id,
@@ -1233,7 +1234,6 @@ def api_get_products():
                 p.brand,
                 p.cost_price,
                 p.selling_price,
-                p.stock,
                 p.category,
                 p.discount,
                 pb.id as batch_id,
@@ -1261,7 +1261,7 @@ def api_get_products():
         cursor.execute(query, params)
         rows = cursor.fetchall()
         
-        # Group results by product
+        # Group results by product - calculate stock from batches
         products_dict = {}
         total_batches = 0
         
@@ -1274,27 +1274,34 @@ def api_get_products():
                     'brand': r[2] or "-",
                     'cost_price': r[3] or 0.0,
                     'selling_price': r[4] or 0.0,
-                    'stock': r[5] or 0,
-                    'category': r[6] or "-",
-                    'discount': r[7] or 0.0,
+                    'stock': 0,  # ✅ Will be calculated from batches
+                    'category': r[5] or "-",
+                    'discount': r[6] or 0.0,
                     'batches': []
                 }
             
             # Add batch if it exists
-            if r[8] is not None:  # batch_id exists
+            if r[7] is not None:  # batch_id exists (index 7 after removing p.stock)
                 total_batches += 1
+                remaining_qty = int(r[9] or 0)  # index 9 is remaining_quantity
+                claimed_qty = r[15] or 0  # index 15 is claimed_quantity
+                active_claims = r[16] or 0  # index 16 is active_claims_qty
+                
                 batch = {
-                    'batch_id': r[8],
-                    'quantity': int(r[9] or 0),
-                    'remaining_quantity': int(r[10] or 0),
-                    'cost_price': float(r[11] or 0),
-                    'selling_price': float(r[12] or 0),
-                    'discount': float(r[13] or 0),
-                    'date': r[14],
-                    'is_faulty': r[15] or False,
-                    'claimed_quantity': r[16] or 0
+                    'batch_id': r[7],
+                    'quantity': int(r[8] or 0),
+                    'remaining_quantity': remaining_qty,
+                    'cost_price': float(r[10] or 0),
+                    'selling_price': float(r[11] or 0),
+                    'discount': float(r[12] or 0),
+                    'date': r[13],
+                    'is_faulty': r[14] or False,
+                    'claimed_quantity': claimed_qty,
+                    'active_claims': active_claims
                 }
                 products_dict[product_id]['batches'].append(batch)
+                # ✅ Calculate stock from batches
+                products_dict[product_id]['stock'] += remaining_qty
         
         result = list(products_dict.values())
         
