@@ -583,30 +583,27 @@
             if (data && data.products && Array.isArray(data.products)) {
                 productsData = data.products;
                 
-                // ✅ FIXED: Calculate totals correctly
+                // ✅ FIXED: Calculate totals correctly from the data
                 let totalQty = 0;
                 let totalClaimed = 0;
-                let totalGood = 0;
-                let totalBatches = 0;
+                let totalBatches = data.total_batches || 0;
                 
                 productsData.forEach(p => {
-                    // Use p.stock directly from the product (already summed from batches)
+                    // p.stock is now calculated from batches in the API
                     totalQty += p.stock || 0;
                     
                     if (p.batches) {
                         p.batches.forEach(b => {
-                            totalBatches += 1;
-                            const claimed = b.claimed_quantity || 0;
-                            totalClaimed += claimed;
+                            totalClaimed += b.claimed_quantity || 0;
                         });
                     }
                 });
                 
-                // ✅ Calculate good stock as: totalQty - totalClaimed
-                totalGood = totalQty - totalClaimed;
+                // ✅ Good stock = totalQty - totalClaimed
+                const totalGood = totalQty - totalClaimed;
                 
                 summaryData = { 
-                    total_products: data.total_products || data.products.length, 
+                    total_products: data.total_products || productsData.length, 
                     total_batches: totalBatches,
                     total_quantity: totalQty,
                     total_claimed: totalClaimed,
@@ -711,24 +708,20 @@
             // Calculate totals for this product
             let totalStock = p.stock || 0;
             let totalClaimed = 0;
-            let totalGood = 0;
             let hasFaulty = false;
             
             if (p.batches && p.batches.length > 0) {
                 p.batches.forEach(batch => {
                     const claimed = batch.claimed_quantity || 0;
-                    const remaining = batch.remaining_quantity || 0;
                     if (claimed > 0) {
                         hasFaulty = true;
                         totalClaimed += claimed;
                     }
-                    totalGood += remaining - claimed;
                 });
             }
             
-            // ✅ If totalGood doesn't match totalStock - totalClaimed, use the calculation
-            const calculatedGood = totalStock - totalClaimed;
-            const displayGood = totalGood === calculatedGood ? totalGood : calculatedGood;
+            // ✅ Good stock = totalStock - totalClaimed
+            const displayGood = totalStock - totalClaimed;
             
             const status = totalStock > 0 ? "In Stock" : "Out of Stock";
             const statusColor = totalStock > 0 ? "text-green-600" : "text-red-600";

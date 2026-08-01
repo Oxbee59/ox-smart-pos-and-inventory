@@ -12,6 +12,7 @@ def recalc_stock(cursor, product_id):
     cursor.execute("UPDATE products SET stock = %s WHERE id = %s", (stock, product_id))
     return stock
 
+
 # ---------------- DELETE SINGLE BATCH (KEEPS HISTORY) ----------------
 def delete_batch(batch_id):
     conn = get_connection()
@@ -42,6 +43,7 @@ def delete_batch(batch_id):
         conn.rollback()
         conn.close()
         raise e
+
 
 # ---------------- DELETE SINGLE BATCH (CLEAN EVERYTHING) ----------------
 def delete_batch_clean_all(batch_id):
@@ -75,6 +77,7 @@ def delete_batch_clean_all(batch_id):
         conn.close()
         raise e
 
+
 # ---------------- DELETE FULL PRODUCT (KEEPS HISTORY) ----------------
 def delete_product_keep_history(product_id):
     conn = get_connection()
@@ -106,6 +109,7 @@ def delete_product_keep_history(product_id):
         conn.close()
         raise e
 
+
 # ---------------- DELETE PRODUCT (CLEAN EVERYTHING) ----------------
 def delete_product_clean_all(product_id):
     conn = get_connection()
@@ -128,6 +132,7 @@ def delete_product_clean_all(product_id):
         conn.rollback()
         conn.close()
         raise e
+
 
 # ---------------- UPDATE BATCH (WITH SOURCE PARAMETER) ----------------
 def update_product(batch_id, name, brand, category, quantity, cost_price, discount, selling_price, source=None):
@@ -173,17 +178,17 @@ def update_product(batch_id, name, brand, category, quantity, cost_price, discou
     finally:
         conn.close()
 
-# ===================== OPTIMIZED GET ALL PRODUCTS =====================
+
+# ===================== OPTIMIZED GET ALL PRODUCTS (FIXED - Stock from batches) =====================
 def get_all_products():
     """
     Get all products with their batches and claim information.
-    OPTIMIZED: Uses a single query with JOIN instead of per-product subqueries.
-    ✅ FIXED: Now shows products with zero stock (all batches depleted)
+    ✅ FIXED: Stock is calculated from batches, not from products.stock
+    ✅ FIXED: Shows products with zero stock (all batches depleted)
     """
     conn = get_connection()
     cursor = conn.cursor()
     try:
-        # ✅ FIXED: Removed "AND pb2.remaining_quantity > 0" to show ALL products
         cursor.execute("""
             SELECT 
                 p.id as product_id,
@@ -191,7 +196,6 @@ def get_all_products():
                 p.brand,
                 p.cost_price,
                 p.selling_price,
-                p.stock,
                 p.category,
                 p.discount,
                 pb.id as batch_id,
@@ -229,6 +233,8 @@ def get_all_products():
         
         # Group results by product
         products_dict = {}
+        total_batches = 0
+        
         for r in rows:
             product_id = r[0]
             if product_id not in products_dict:
@@ -238,39 +244,53 @@ def get_all_products():
                     "brand": r[2] or "-",
                     "cost_price": r[3] or 0.0,
                     "selling_price": r[4] or 0.0,
-                    "stock": r[5] or 0,
-                    "category": r[6] or "-",
-                    "discount": r[7] or 0.0,
+                    "stock": 0,  # ✅ Will be calculated from batches
+                    "category": r[5] or "-",
+                    "discount": r[6] or 0.0,
                     "batches": [],
                     "total_claimed": 0
                 }
             
             # Add batch if it exists
-            if r[8] is not None:  # batch_id exists
-                active_claims = r[17] or 0
+            if r[7] is not None:  # batch_id exists
+                total_batches += 1
+                active_claims = r[16] or 0
+                remaining_qty = int(r[9] or 0)
+                claimed_qty = r[15] or 0
+                
                 batch = {
-                    "batch_id": r[8],
-                    "quantity": int(r[9] or 0),
-                    "remaining_quantity": int(r[10] or 0),
-                    "cost_price": float(r[11] or 0),
-                    "selling_price": float(r[12] or 0),
-                    "discount": float(r[13] or 0),
-                    "date": r[14],
-                    "is_faulty": r[15] or False,
-                    "claimed_quantity": r[16] or 0,
-                    "active_claims": active_claims
+                    "batch_id": r[7],
+                    "quantity": int(r[8] or 0),
+                    "remaining_quantity": remaining_qty,
+                    "cost_price": float(r[10] or 0),
+                    "selling_price": float(r[11] or 0),
+                    "discount": float(r[12] or 0),
+                    "date": r[13],
+                    "is_faulty": r[14] or False,
+                    "claimed_quantity": claimed_qty,
+                    "active_claims": active_claims,
+                    "good_stock": remaining_qty - claimed_qty  # ✅ Good stock per batch
                 }
                 products_dict[product_id]["batches"].append(batch)
+                products_dict[product_id]["stock"] += remaining_qty  # ✅ Calculate stock from batches
                 products_dict[product_id]["total_claimed"] += active_claims
         
-        return list(products_dict.values())
+        # Convert to list
+        result = list(products_dict.values())
+        
+        return {
+            "products": result,
+            "total_products": len(result),
+            "total_batches": total_batches
+        }
     except Exception as e:
         print(f"❌ Error in get_all_products: {str(e)}")
         import traceback
         traceback.print_exc()
-        return []
+        return {"products": [], "total_products": 0, "total_batches": 0}
     finally:
         conn.close()
+
 
 # ---------------- GET DELETED PRODUCTS ----------------
 def get_deleted_products():
@@ -290,6 +310,7 @@ def get_deleted_products():
         return []
     finally:
         conn.close()
+
 
 # ---------------- RESTORE ARCHIVED ----------------
 def restore_archive(archive_id):
