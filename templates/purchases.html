@@ -814,6 +814,7 @@
             const claimedQty = p.claimed_quantity || 0;
             const goodStock = (p.remaining_quantity || 0) - claimedQty;
             const soldQty = (p.quantity || 0) - (p.remaining_quantity || 0);
+            const claimedCost = claimedQty * (p.cost_price || 0);
             
             return `
             <div class="border rounded-lg p-4 hover:shadow transition">
@@ -821,7 +822,7 @@
                     <div class="flex-1 w-full">
                         <div class="flex items-center gap-2 flex-wrap">
                             <h3 class="font-bold text-lg">${escapeHtml(p.name)} (${escapeHtml(p.brand)})</h3>
-                            ${claimedQty > 0 ? `<span class="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">⚠️ ${claimedQty} Claimed</span>` : ''}
+                            ${claimedQty > 0 ? `<span class="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">⚠️ ${claimedQty} Claimed (₵${claimedCost.toFixed(2)})</span>` : ''}
                         </div>
                         <p class="text-sm text-gray-600">Batch #${p.batch_id}</p>
                         <div class="grid grid-cols-2 md:grid-cols-4 gap-1 mt-1 text-xs">
@@ -834,7 +835,7 @@
                         <p class="text-sm">Total: ₵${(p.total_cost || 0).toFixed(2)} | Date: ${formatDate(p.date)}</p>
                         <p class="text-sm text-gray-500"><span class="font-medium">Source:</span> ${escapeHtml(p.source || 'Unknown')}</p>
                         <p class="text-sm font-bold ${profitColor}">💎 Profit: ${formatMoney(batchProfit)}</p>
-                        ${claimedQty > 0 ? `<p class="text-xs text-red-500">⚠️ ${claimedQty} units claimed as faulty</p>` : ''}
+                        ${claimedQty > 0 ? `<p class="text-xs text-red-500">⚠️ ${claimedQty} units claimed as faulty (Cost: ₵${claimedCost.toFixed(2)})</p>` : ''}
                     </div>
                     <button onclick="editPurchase(${p.batch_id})" class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-1 rounded text-sm whitespace-nowrap">✏️ Update</button>
                 </div>
@@ -843,7 +844,7 @@
         updateSummary(purchases);
     }
 
-    // ---------- Update summary with Remaining Stock ----------
+    // ---------- Update summary with Financial Metrics ----------
     function updateSummary(purchases) {
         let totalQty = 0;
         let totalRemaining = 0;
@@ -854,6 +855,7 @@
         let totalCapital = 0;
         let totalClaimed = 0;
         let totalGood = 0;
+        let totalClaimedCost = 0;
         const totalBatches = purchases ? purchases.length : 0;
         
         if (purchases && purchases.length > 0) {
@@ -872,6 +874,7 @@
                 totalSelling += itemSelling * itemQty;
                 totalClaimed += claimed;
                 totalGood += remainingQty - claimed;
+                totalClaimedCost += claimed * itemCost;
                 
                 const itemProfit = (itemSelling - itemCost) * itemQty - itemDiscount;
                 totalProfit += itemProfit;
@@ -879,11 +882,15 @@
             });
         }
         
+        // ✅ Adjusted Capital: Total Cost - Claimed Cost
+        const adjustedCapital = totalCost - totalClaimedCost;
+        const totalSoldQty = totalQty - totalRemaining;
+        
         const isOffline = !navigator.onLine;
         const isCached = !isDataFresh && !isOffline;
         
         document.getElementById('summary').innerHTML = `
-            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2 text-sm">
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-9 gap-2 text-sm">
                 <div class="bg-white rounded p-2 shadow">
                     <span class="text-gray-500">📦 Batches</span><br>
                     <span class="text-lg font-bold text-indigo-600">${totalBatches}</span>
@@ -897,6 +904,10 @@
                     <span class="text-lg font-bold text-blue-600">${totalRemaining}</span>
                 </div>
                 <div class="bg-white rounded p-2 shadow">
+                    <span class="text-gray-500">📦 Sold</span><br>
+                    <span class="text-lg font-bold text-purple-600">${totalSoldQty}</span>
+                </div>
+                <div class="bg-white rounded p-2 shadow">
                     <span class="text-gray-500">⚠️ Claimed</span><br>
                     <span class="text-lg font-bold text-red-600">${totalClaimed}</span>
                 </div>
@@ -905,20 +916,38 @@
                     <span class="text-lg font-bold text-green-600">${Math.max(totalGood, 0)}</span>
                 </div>
                 <div class="bg-white rounded p-2 shadow">
-                    <span class="text-gray-500">💰 Capital</span><br>
-                    <span class="text-lg font-bold text-purple-600">${formatMoney(totalCapital)}</span>
+                    <span class="text-gray-500">💰 Total Cost</span><br>
+                    <span class="text-lg font-bold text-gray-700">${formatMoney(totalCost)}</span>
                 </div>
                 <div class="bg-white rounded p-2 shadow">
-                    <span class="text-gray-500">💎 Profit</span><br>
+                    <span class="text-gray-500">📉 Claimed Cost</span><br>
+                    <span class="text-lg font-bold text-red-600">${formatMoney(totalClaimedCost)}</span>
+                </div>
+                <div class="bg-white rounded p-2 shadow">
+                    <span class="text-gray-500">💰 Capital</span><br>
+                    <span class="text-lg font-bold text-purple-600">${formatMoney(adjustedCapital)}</span>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm mt-2">
+                <div class="bg-white rounded p-2 shadow">
+                    <span class="text-gray-500">📈 Total Selling</span><br>
+                    <span class="text-lg font-bold text-green-600">${formatMoney(totalSelling)}</span>
+                </div>
+                <div class="bg-white rounded p-2 shadow">
+                    <span class="text-gray-500">📉 Total Discount</span><br>
+                    <span class="text-lg font-bold text-orange-600">${formatMoney(totalDiscount)}</span>
+                </div>
+                <div class="bg-white rounded p-2 shadow">
+                    <span class="text-gray-500">💎 Gross Profit</span><br>
                     <span class="text-lg font-bold ${totalProfit >= 0 ? 'text-teal-600' : 'text-red-600'}">${formatMoney(totalProfit)}</span>
                 </div>
                 <div class="bg-white rounded p-2 shadow">
-                    <span class="text-gray-500">📊 Avg/Batch</span><br>
+                    <span class="text-gray-500">📊 Avg Profit/Batch</span><br>
                     <span class="text-lg font-bold ${totalBatches > 0 && totalProfit / totalBatches >= 0 ? 'text-teal-600' : 'text-red-600'}">${totalBatches > 0 ? formatMoney(totalProfit / totalBatches) : '₵0.00'}</span>
                 </div>
             </div>
             <div class="mt-2 text-xs text-gray-400">
-                💡 Total: ${totalQty} | Remaining: ${totalRemaining} | Sold: ${totalQty - totalRemaining} | Claimed: ${totalClaimed} | Good: ${Math.max(totalGood, 0)}
+                💡 Total: ${totalQty} | Remaining: ${totalRemaining} | Sold: ${totalSoldQty} | Claimed: ${totalClaimed} | Good: ${Math.max(totalGood, 0)} | Capital: ${formatMoney(adjustedCapital)} (${formatMoney(totalCost)} - ${formatMoney(totalClaimedCost)} claimed cost)
                 ${isOffline ? ' | ⚠️ Offline mode' : ''}
                 ${isCached ? ' | 📦 Showing cached data' : ''}
                 ${!isOffline && !isCached ? ' | ✅ Live data' : ''}
@@ -1147,22 +1176,33 @@
         let totalSelling = 0;
         let totalProfit = 0;
         let totalCapital = 0;
+        let totalClaimed = 0;
+        let totalClaimedCost = 0;
+        let totalRemaining = 0;
         
         purchasesToExport.forEach(p => {
             const itemQty = p.quantity || 0;
+            const remainingQty = p.remaining_quantity || 0;
             const itemCost = p.cost_price || 0;
             const itemSelling = p.selling_price || 0;
             const itemDiscount = p.discount || 0;
+            const claimed = p.claimed_quantity || 0;
             
             totalQty += itemQty;
+            totalRemaining += remainingQty;
             totalCost += p.total_cost || (itemCost * itemQty);
             totalDiscount += itemDiscount;
             totalSelling += itemSelling * itemQty;
+            totalClaimed += claimed;
+            totalClaimedCost += claimed * itemCost;
             
             const itemProfit = (itemSelling - itemCost) * itemQty - itemDiscount;
             totalProfit += itemProfit;
             totalCapital += (itemCost * itemQty) - itemDiscount;
         });
+
+        const adjustedCapital = totalCost - totalClaimedCost;
+        const totalSoldQty = totalQty - totalRemaining;
 
         try {
             const res = await fetch('/api/purchases/pdf', {
@@ -1174,11 +1214,16 @@
                     to_date: toDate,
                     totals: {
                         total_qty: totalQty,
+                        total_remaining: totalRemaining,
+                        total_sold: totalSoldQty,
                         total_cost: totalCost,
                         total_discount: totalDiscount,
                         total_selling: totalSelling,
                         total_profit: totalProfit,
                         total_capital: totalCapital,
+                        adjusted_capital: adjustedCapital,
+                        total_claimed: totalClaimed,
+                        total_claimed_cost: totalClaimedCost,
                         total_batches: purchasesToExport.length
                     }
                 })

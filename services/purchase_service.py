@@ -233,7 +233,7 @@ def update_product(batch_id, name, brand, category, quantity, cost_price, discou
         conn.close()
 
 
-# --------------------------- GET ALL PURCHASES ---------------------------
+# --------------------------- GET ALL PURCHASES (FIXED - Added claimed_quantity) ---------------------------
 def get_all_purchases():
     conn = get_connection()
     try:
@@ -243,7 +243,8 @@ def get_all_purchases():
                    b.quantity, b.remaining_quantity,
                    b.cost_price, b.discount, b.selling_price,
                    (b.cost_price * b.quantity - b.discount) AS total,
-                   b.date, b.action, b.source
+                   b.date, b.action, b.source,
+                   COALESCE(b.claimed_quantity, 0) as claimed_quantity
             FROM purchase_batches b
             JOIN products p ON p.id = b.product_id
             WHERE NOT EXISTS (
@@ -269,7 +270,8 @@ def get_all_purchases():
                 "total_cost": r[9],
                 "date": r[10],
                 "action": r[11],
-                "source": r[12] if len(r) > 12 else 'Unknown'
+                "source": r[12] if len(r) > 12 else 'Unknown',
+                "claimed_quantity": r[13] if len(r) > 13 else 0
             }
             for r in rows
         ]
@@ -280,7 +282,7 @@ def get_all_purchases():
         conn.close()
 
 
-# --------------------------- GET PURCHASES BY DATE RANGE ---------------------------
+# --------------------------- GET PURCHASES BY DATE RANGE (FIXED - Added claimed_quantity) ---------------------------
 def get_purchases_by_date_range(start_date, end_date):
     conn = get_connection()
     try:
@@ -290,7 +292,8 @@ def get_purchases_by_date_range(start_date, end_date):
                    b.quantity, b.remaining_quantity,
                    b.cost_price, b.discount, b.selling_price,
                    (b.cost_price * b.quantity - b.discount) AS total,
-                   b.date, b.action, b.source
+                   b.date, b.action, b.source,
+                   COALESCE(b.claimed_quantity, 0) as claimed_quantity
             FROM purchase_batches b
             JOIN products p ON p.id = b.product_id
             WHERE b.date::date BETWEEN %s AND %s
@@ -317,7 +320,8 @@ def get_purchases_by_date_range(start_date, end_date):
                 "total_cost": r[9],
                 "date": r[10],
                 "action": r[11],
-                "source": r[12] if len(r) > 12 else 'Unknown'
+                "source": r[12] if len(r) > 12 else 'Unknown',
+                "claimed_quantity": r[13] if len(r) > 13 else 0
             }
             for r in rows
         ]

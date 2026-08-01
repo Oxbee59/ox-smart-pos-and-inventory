@@ -1027,8 +1027,9 @@ def api_purchases_pdf():
         elements.append(Paragraph(f"Date Range: {from_date} → {to_date}", styles["Normal"]))
     elements.append(Spacer(1, 12))
 
-    table_data = [["ID", "Name", "Brand", "Qty", "Stock", "Cost", "Discount", "Total", "Selling", "Source", "Date/Time"]]
-    total_qty = total_cost = total_discount = total_selling = 0
+    # ✅ Updated table with Claimed and Sold columns
+    table_data = [["ID", "Name", "Brand", "Qty", "Remaining", "Sold", "Claimed", "Cost", "Discount", "Total", "Selling", "Source", "Date/Time"]]
+    total_qty = total_cost = total_discount = total_selling = total_claimed = total_claimed_cost = 0
     row_colors = [colors.whitesmoke, colors.lightgrey]
 
     for p in purchases:
@@ -1039,34 +1040,45 @@ def api_purchases_pdf():
                 date_str = dt.strftime("%Y-%m-%d %H:%M")
             except:
                 date_str = str(date_str)[:16]
+        
+        qty = p.get("quantity", 0)
+        remaining = p.get("remaining_quantity", 0)
+        claimed = p.get("claimed_quantity", 0)
+        sold = qty - remaining
+        cost = p.get("cost_price", 0)
+        claimed_cost = claimed * cost
 
         table_data.append([
             p["batch_id"], 
             p["name"], 
             p["brand"],
-            p["quantity"], 
-            p["remaining_quantity"],
-            f"₵{p.get('cost_price', 0):.2f}",
+            qty, 
+            remaining,
+            sold,
+            claimed,
+            f"₵{cost:.2f}",
             f"₵{p.get('discount', 0):.2f}",
             f"₵{p.get('total_cost', 0):.2f}",
             f"₵{p.get('selling_price', 0):.2f}",
             p.get('source', 'Unknown'),
             date_str
         ])
-        total_qty += p.get("quantity", 0)
+        total_qty += qty
         total_cost += p.get("total_cost", 0)
         total_discount += p.get("discount", 0)
-        total_selling += p.get("selling_price", 0) * p.get("quantity", 0)
+        total_selling += p.get("selling_price", 0) * qty
+        total_claimed += claimed
+        total_claimed_cost += claimed_cost
 
     table = Table(table_data, repeatRows=1, hAlign='LEFT',
-                  colWidths=[1.8*cm, 4.5*cm, 3.5*cm, 1.8*cm, 1.8*cm, 2.2*cm, 2.2*cm, 2.5*cm, 2.5*cm, 3*cm, 3.5*cm])
+                  colWidths=[1.5*cm, 4*cm, 3*cm, 1.5*cm, 1.5*cm, 1.5*cm, 1.5*cm, 2*cm, 2*cm, 2.5*cm, 2.5*cm, 2.5*cm, 3*cm])
     style = TableStyle([
         ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#00CFCF")),
         ("TEXTCOLOR", (0,0), (-1,0), colors.whitesmoke),
         ("ALIGN", (3,1), (-2,-1), "CENTER"),
         ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
         ("GRID", (0,0), (-1,-1), 0.4, colors.black),
-        ("FONTSIZE", (0,0), (-1,-1), 7.5),
+        ("FONTSIZE", (0,0), (-1,-1), 7),
     ])
     for i in range(1, len(table_data)):
         style.add("BACKGROUND", (0,i), (-1,i), row_colors[i%2])
@@ -1077,31 +1089,28 @@ def api_purchases_pdf():
     elements.append(Paragraph("📊 Summary", styles["Heading2"]))
     elements.append(Spacer(1, 6))
     
-    if totals:
-        total_batches_export = totals.get('total_batches', len(purchases))
-        total_qty_export = totals.get('total_qty', total_qty)
-        total_cost_export = totals.get('total_cost', total_cost)
-        total_discount_export = totals.get('total_discount', total_discount)
-        total_selling_export = totals.get('total_selling', total_selling)
-        total_capital_export = totals.get('total_capital', total_cost - total_discount)
-        total_profit_export = totals.get('total_profit', total_selling - (total_cost - total_discount))
-    else:
-        total_batches_export = len(purchases)
-        total_qty_export = total_qty
-        total_cost_export = total_cost
-        total_discount_export = total_discount
-        total_selling_export = total_selling
-        total_capital_export = total_cost - total_discount
-        total_profit_export = total_selling - total_capital_export
+    # ✅ Updated summary with all metrics
+    total_batches = len(purchases)
+    total_remaining = total_qty - (totals.get('total_sold', 0) if totals else 0)
+    total_sold = totals.get('total_sold', total_qty - total_remaining) if totals else 0
+    adjusted_capital = totals.get('adjusted_capital', total_cost - total_claimed_cost) if totals else total_cost - total_claimed_cost
+    total_profit = totals.get('total_profit', total_selling - (total_cost - total_discount)) if totals else total_selling - (total_cost - total_discount)
+    total_good = total_remaining - total_claimed
     
     summary_data = [
         ["Metric", "Value"],
-        ["📦 Total Batches", str(total_batches_export)],
-        ["🧾 Total Quantity", str(total_qty_export)],
-        ["💰 Capital (Total Cost - Discount)", f"₵{total_capital_export:.2f}"],
-        ["📈 Total Selling Price", f"₵{total_selling_export:.2f}"],
-        ["📉 Total Discount", f"₵{total_discount_export:.2f}"],
-        ["💎 Total Profit", f"₵{total_profit_export:.2f}"]
+        ["📦 Total Batches", str(total_batches)],
+        ["🧾 Total Quantity", str(total_qty)],
+        ["📦 Remaining Stock", str(total_remaining)],
+        ["📦 Sold", str(total_sold)],
+        ["⚠️ Claimed", str(total_claimed)],
+        ["✅ Good Stock", str(max(total_good, 0))],
+        ["💰 Total Cost", f"₵{total_cost:.2f}"],
+        ["📉 Claimed Cost", f"₵{total_claimed_cost:.2f}"],
+        ["💰 Capital (Adjusted)", f"₵{adjusted_capital:.2f}"],
+        ["📈 Total Selling Price", f"₵{total_selling:.2f}"],
+        ["📉 Total Discount", f"₵{total_discount:.2f}"],
+        ["💎 Total Profit", f"₵{total_profit:.2f}"]
     ]
     
     summary_table = Table(summary_data, colWidths=[6*cm, 6*cm], hAlign='CENTER')
@@ -1109,21 +1118,21 @@ def api_purchases_pdf():
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#1E3A5F")),
         ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
         ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0,0), (-1,-1), 10),
+        ('FONTSIZE', (0,0), (-1,-1), 9),
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ('GRID', (0,0), (-1,-1), 0.5, colors.black),
-        ('BACKGROUND', (1,1), (1,6), colors.lightgrey),
-        ('TEXTCOLOR', (1,1), (1,6), colors.black),
-        ('BACKGROUND', (0,1), (0,6), colors.whitesmoke),
+        ('BACKGROUND', (1,1), (1,-1), colors.lightgrey),
+        ('TEXTCOLOR', (1,1), (1,-1), colors.black),
+        ('BACKGROUND', (0,1), (0,-1), colors.whitesmoke),
     ]))
     elements.append(summary_table)
     
-    profit_color = colors.green if total_profit_export >= 0 else colors.red
-    profit_status = "📈 PROFIT" if total_profit_export >= 0 else "📉 LOSS"
+    profit_color = colors.green if total_profit >= 0 else colors.red
+    profit_status = "📈 PROFIT" if total_profit >= 0 else "📉 LOSS"
     elements.append(Spacer(1, 6))
     elements.append(Paragraph(
-        f"<font color='{profit_color}' size='14'><b>{profit_status}: ₵{total_profit_export:.2f}</b></font>",
+        f"<font color='{profit_color}' size='14'><b>{profit_status}: ₵{total_profit:.2f}</b></font>",
         styles["Normal"]
     ))
     
@@ -1132,7 +1141,6 @@ def api_purchases_pdf():
     return send_file(buffer, as_attachment=True,
                      download_name=f"Purchases_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
                      mimetype='application/pdf')
-
 @app.route('/api/purchases', methods=['POST'])
 @login_required
 def api_add_purchase():
