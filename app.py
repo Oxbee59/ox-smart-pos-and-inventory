@@ -1770,6 +1770,8 @@ def api_today_sales_pdf():
     data = request.json
     sales_data = data.get('sales_data', [])
     period_text = data.get('period_text', 'Sales Report')
+    summary = data.get('summary', '')
+    
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), 
                            rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20)
@@ -1779,32 +1781,54 @@ def api_today_sales_pdf():
     elements.append(Spacer(1, 0.2*cm))
     elements.append(Paragraph(period_text, styles['Normal']))
     elements.append(Spacer(1, 0.2*cm))
+    
     seen_sales = set()
     total_sales = 0.0
     total_discount = 0.0
-    total_profit = 0.0
+    total_profit = 0.0  # This will be net profit (after discount)
     total_items = 0
+    total_subtotal = 0.0
+    gross_profit = 0.0
+    
     for sale in sales_data:
         sale_id = sale['sale_id']
         if sale_id not in seen_sales:
             total_sales += sale['total']
             total_discount += sale['discount']
             seen_sales.add(sale_id)
-        total_profit += sale['profit']
+        
+        # ✅ Calculate item profit correctly
+        # Gross profit = (selling_price - cost_price) * quantity
+        item_gross_profit = (sale['selling_price'] - sale['cost_price']) * sale['quantity']
+        gross_profit += item_gross_profit
         total_items += sale['quantity']
+        total_subtotal += sale['selling_price'] * sale['quantity']
+    
+    # ✅ Net profit = Gross profit - Total discount
+    net_profit = gross_profit - total_discount
+    
+    # ✅ Use net_profit for display (matches UI)
+    total_profit = net_profit
+    
     elements.append(Paragraph(
         f"🧾 Items: {total_items}   |   💰 Sales: ₵{total_sales:.2f}   |   "
         f"📉 Discount: ₵{total_discount:.2f}   |   📈 Profit: ₵{total_profit:.2f}",
         styles['Normal']
     ))
     elements.append(Spacer(1, 0.3*cm))
+    
     table_data = [["Name", "Brand", "Category", "Qty", "Price", "Subtotal", 
                    "Discount", "Total", "Profit", "Batch", "Cost", "Sale Date", "Payment", "Status", "User"]]
+    
     for s in sales_data:
         status = "Deleted Batch" if s['is_deleted_batch'] else "Active"
         payment_display = s.get('payment_method', 'cash').upper()
         if s.get('cheque_number'):
             payment_display += f" #{s['cheque_number']}"
+        
+        # ✅ Calculate item profit correctly (gross profit per item)
+        item_profit = (s['selling_price'] - s['cost_price']) * s['quantity']
+        
         row = [
             s['name'], s['brand'], s['category'],
             str(s['quantity']),
@@ -1812,7 +1836,7 @@ def api_today_sales_pdf():
             f"₵{s['subtotal']:.2f}",
             f"₵{s['discount']:.2f}",
             f"₵{s['total']:.2f}",
-            f"₵{s['profit']:.2f}",
+            f"₵{item_profit:.2f}",
             str(s['batch_id']) if s['batch_id'] != -1 else "DELETED",
             f"₵{s['cost_price']:.2f}",
             s['sale_date'],
@@ -1821,6 +1845,7 @@ def api_today_sales_pdf():
             s.get('username', 'Unknown')
         ]
         table_data.append(row)
+    
     table = Table(table_data, repeatRows=1)
     table.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#1E3A5F")),
@@ -1831,12 +1856,43 @@ def api_today_sales_pdf():
         ('FONTSIZE', (0,0), (-1,-1), 7),
     ]))
     elements.append(table)
+    
+    # ✅ Add summary section
+    elements.append(Spacer(1, 0.5*cm))
+    elements.append(Paragraph("📊 Summary", styles["Heading2"]))
+    elements.append(Spacer(1, 0.2*cm))
+    
+    summary_data = [
+        ["Metric", "Value"],
+        ["🧾 Total Sales", f"₵{total_sales:.2f}"],
+        ["📦 Total Items", str(total_items)],
+        ["📉 Total Discount", f"₵{total_discount:.2f}"],
+        ["📈 Net Profit", f"₵{net_profit:.2f}"],
+        ["💵 Cash Payments", f"₵{sum(s['total'] for s in sales_data if s.get('payment_method', 'cash') == 'cash') if sales_data else 0:.2f}"],
+        ["📱 MoMo Payments", f"₵{sum(s['total'] for s in sales_data if s.get('payment_method') == 'momo') if sales_data else 0:.2f}"],
+        ["📝 Cheque Payments", f"₵{sum(s['total'] for s in sales_data if s.get('payment_method') == 'cheque') if sales_data else 0:.2f}"]
+    ]
+    
+    summary_table = Table(summary_data, colWidths=[6*cm, 6*cm], hAlign='CENTER')
+    summary_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#1E3A5F")),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,-1), 9),
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.black),
+        ('BACKGROUND', (1,1), (1,-1), colors.lightgrey),
+        ('TEXTCOLOR', (1,1), (1,-1), colors.black),
+        ('BACKGROUND', (0,1), (0,-1), colors.whitesmoke),
+    ]))
+    elements.append(summary_table)
+    
     doc.build(elements)
     buffer.seek(0)
     return send_file(buffer, as_attachment=True,
                      download_name=f"SalesReport_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
                      mimetype='application/pdf')
-
 # ===================== ANALYTICS API =====================
 @app.route('/api/analytics/summary', methods=['GET'])
 @login_required
@@ -2191,6 +2247,62 @@ def api_analytics_top_products():
     result = [{'name': r[0], 'brand': r[1] or '', 'category': r[2] or '', 'quantity': int(r[3])} for r in rows]
     return jsonify(result)
 
+
+   # ===================== SETTINGS API =====================
+from services.settings_service import (
+    get_user_settings,
+    update_user_settings,
+    format_currency,
+    format_date
+)
+
+@app.route('/settings', methods=['GET'])
+@login_required
+def settings_page():
+    return render_template('settings.html')
+
+@app.route('/api/settings', methods=['GET'])
+@login_required
+def api_get_settings():
+    user_id = session.get('user_id')
+    try:
+        settings = get_user_settings(user_id)
+        return jsonify({'success': True, 'settings': settings})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/settings', methods=['POST'])
+@login_required
+def api_update_settings():
+    user_id = session.get('user_id')
+    data = request.json
+    
+    try:
+        success = update_user_settings(user_id, data)
+        if success:
+            return jsonify({'success': True})
+        else:
+            return jsonify({'success': False, 'error': 'No settings to update'}), 400
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500 
+
+
+@app.context_processor
+def inject_settings():
+    if 'user_id' in session:
+        try:
+            from services.settings_service import get_user_settings, format_currency, format_date
+            settings = get_user_settings(session.get('user_id'))
+            return {
+                'settings': settings,
+                'format_currency': lambda amount: format_currency(amount, session.get('user_id')),
+                'format_date': lambda dt: format_date(dt, session.get('user_id'))
+            }
+        except:
+            return {
+                'settings': {'theme': 'light', 'currency_symbol': '₵', 'currency_code': 'GHS', 'language': 'en', 'date_format': 'DD/MM/YYYY'}
+            }
+    return {'settings': {'theme': 'light', 'currency_symbol': '₵', 'currency_code': 'GHS', 'language': 'en', 'date_format': 'DD/MM/YYYY'}}
 # ===================== ARCHIVE API =====================
 @app.route('/api/archive', methods=['GET'])
 @login_required
