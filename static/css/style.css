@@ -89,127 +89,6 @@ body {
 }
 
 /* ============================================================
-   SIDEBAR
-   ============================================================ */
-.sidebar {
-    position: fixed;
-    left: 0;
-    top: 0;
-    width: 240px;
-    height: 100vh;
-    background: var(--bg-sidebar);
-    padding: 20px 0;
-    box-sizing: border-box;
-    overflow-y: auto;
-    z-index: 1000;
-    transition: background-color 0.3s ease;
-}
-
-.sidebar .brand {
-    padding: 0 20px 20px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    margin-bottom: 20px;
-}
-
-.sidebar .brand h2 {
-    color: var(--text-white);
-    text-align: center;
-    margin: 0;
-    font-size: 1.25rem;
-    font-weight: 700;
-}
-
-.sidebar .brand .subtitle {
-    color: rgba(255, 255, 255, 0.6);
-    text-align: center;
-    font-size: 0.7rem;
-    margin-top: 4px;
-}
-
-.sidebar a {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    color: rgba(255, 255, 255, 0.7);
-    text-decoration: none;
-    padding: 10px 20px;
-    margin: 2px 10px;
-    border-radius: 8px;
-    transition: all 0.2s ease;
-    font-size: 0.9rem;
-}
-
-.sidebar a i {
-    width: 20px;
-    text-align: center;
-    font-size: 1rem;
-}
-
-.sidebar a:hover {
-    background: var(--bg-sidebar-hover);
-    color: #ffffff;
-}
-
-.sidebar a.active {
-    background: var(--bg-sidebar-hover);
-    color: #ffffff;
-    border-left: 3px solid var(--accent);
-}
-
-.sidebar a .badge {
-    margin-left: auto;
-    background: var(--danger);
-    color: white;
-    font-size: 0.65rem;
-    padding: 2px 6px;
-    border-radius: 10px;
-}
-
-.sidebar .divider {
-    margin: 15px 20px;
-    border: none;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.sidebar .sidebar-footer {
-    position: absolute;
-    bottom: 20px;
-    left: 0;
-    right: 0;
-    padding: 0 20px;
-    font-size: 0.7rem;
-    color: rgba(255, 255, 255, 0.3);
-    text-align: center;
-}
-
-/* Mobile Toggle */
-.sidebar-toggle {
-    display: none;
-    position: fixed;
-    top: 10px;
-    left: 10px;
-    z-index: 1001;
-    background: var(--bg-sidebar);
-    color: white;
-    border: none;
-    border-radius: 8px;
-    padding: 8px 12px;
-    cursor: pointer;
-    font-size: 1.2rem;
-}
-
-/* ============================================================
-   MAIN CONTENT
-   ============================================================ */
-.content {
-    margin-left: 260px;
-    padding: 25px 30px;
-    min-height: 100vh;
-    background: var(--bg-primary);
-    transition: margin-left 0.3s ease, background-color 0.3s ease;
-}
-
-/* ============================================================
    CARDS & CONTAINERS
    ============================================================ */
 .card {
@@ -601,26 +480,6 @@ body.dark-theme .theme-option.bg-amber-50 {
 }
 
 @media (max-width: 768px) {
-    .sidebar {
-        transform: translateX(-100%);
-        transition: transform 0.3s ease;
-        width: 280px;
-    }
-    
-    .sidebar.open {
-        transform: translateX(0);
-    }
-    
-    .sidebar-toggle {
-        display: block;
-    }
-    
-    .content {
-        margin-left: 0;
-        padding: 15px;
-        padding-top: 60px;
-    }
-    
     .grid-2, .grid-3, .grid-4 {
         grid-template-columns: 1fr;
     }
@@ -640,11 +499,6 @@ body.dark-theme .theme-option.bg-amber-50 {
 }
 
 @media (max-width: 480px) {
-    .content {
-        padding: 10px;
-        padding-top: 55px;
-    }
-    
     .card {
         padding: 12px;
     }
@@ -656,24 +510,14 @@ body.dark-theme .theme-option.bg-amber-50 {
     h2 {
         font-size: 1.1rem;
     }
-    
-    .sidebar {
-        width: 100%;
-        max-width: 300px;
-    }
 }
 
 /* ============================================================
    PRINT STYLES
    ============================================================ */
 @media print {
-    .sidebar, .sidebar-toggle, .no-print {
+    .no-print {
         display: none !important;
-    }
-    
-    .content {
-        margin-left: 0 !important;
-        padding: 20px !important;
     }
     
     body {
@@ -787,7 +631,7 @@ body.dark-theme .theme-option.bg-amber-50 {
 }
 
 /* ============================================================
-   SIDEBAR OVERLAY (Mobile)
+   SIDEBAR OVERLAY (Mobile) - SUPPORTS BASE.HTML
    ============================================================ */
 .sidebar-overlay {
     display: none;
@@ -801,8 +645,27 @@ body.dark-theme .theme-option.bg-amber-50 {
     display: block;
 }
 
-@media (max-width: 768px) {
-    .sidebar-overlay.active {
-        display: block;
-    }
+/* ============================================================
+   STOCK BREAKDOWN COMPONENT
+   ============================================================ */
+.stock-breakdown {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
+    gap: 0.25rem;
 }
+
+.stock-item {
+    padding: 0.125rem 0.25rem;
+    border-radius: 0.25rem;
+    text-align: center;
+    font-size: 0.65rem;
+}
+
+.stock-total { background: #f3f4f6; }
+.stock-sold { background: #dbeafe; }
+.stock-claimed { background: #fee2e2; }
+.stock-good { background: #d1fae5; }
+
+.batch-faulty { border-left: 3px solid #ef4444; background: #fef2f2; }
+.batch-good { border-left: 3px solid #22c55e; background: #f0fdf4; }
+.batch-warning { border-left: 3px solid #f59e0b; background: #fffbeb; }
