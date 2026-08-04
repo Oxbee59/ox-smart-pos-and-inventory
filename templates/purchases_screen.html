@@ -81,8 +81,11 @@
 <!-- SEARCH & FILTER BAR -->
 <div class="bg-white rounded-xl shadow-md p-4 mb-6 flex flex-wrap gap-4 items-end">
     <div class="flex-1 min-w-[200px]">
-        <label class="block text-sm font-medium text-gray-700">Search (name/brand/category/source)</label>
-        <input type="text" id="searchInput" placeholder="🔍 Type to filter screens..." class="w-full border border-gray-300 rounded-lg px-3 py-2">
+        <label class="block text-sm font-medium text-gray-700">Search (name/brand/category/source/batch #)</label>
+        <input type="text" id="searchInput" placeholder="🔍 Type to filter or enter batch # (e.g. #94)..." class="w-full border border-gray-300 rounded-lg px-3 py-2">
+        <div class="text-xs text-gray-400 mt-1">
+            💡 Tip: Search by batch number (e.g., <span class="font-mono bg-gray-100 px-1 rounded">#94</span> or <span class="font-mono bg-gray-100 px-1 rounded">94</span>)
+        </div>
     </div>
     <div>
         <label class="block text-sm font-medium text-gray-700">From Date</label>
@@ -362,6 +365,45 @@
         }
     }
 
+    // ---------- BATCH NUMBER SEARCH ----------
+    function searchByBatchNumber(keyword) {
+        // Check if search looks like a batch number (starts with # or is numeric)
+        const isBatchSearch = /^#?\d+$/.test(keyword);
+        
+        if (isBatchSearch) {
+            // Extract the number
+            const batchNum = parseInt(keyword.replace('#', ''));
+            
+            // Find matching batch
+            const matched = currentPurchases.filter(p => p.batch_id === batchNum);
+            
+            if (matched.length > 0) {
+                currentFilteredData = matched;
+                renderList(matched, !isDataFresh);
+                
+                // Highlight the matching batch
+                setTimeout(() => {
+                    const items = document.querySelectorAll('#purchasesList .border');
+                    items.forEach(item => {
+                        if (item.textContent.includes(`Batch #${batchNum}`)) {
+                            item.style.border = '3px solid #f59e0b';
+                            item.style.backgroundColor = '#fffbeb';
+                            item.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            setTimeout(() => {
+                                item.style.border = '1px solid #e5e7eb';
+                                item.style.backgroundColor = '';
+                            }, 4000);
+                        }
+                    });
+                }, 100);
+                
+                document.getElementById('clearSearchBtn').classList.remove('hidden');
+                return true;
+            }
+        }
+        return false;
+    }
+
     function applyAdvancedSearch() {
         const keyword = document.getElementById('searchInput').value.trim();
         searchMode = document.getElementById('searchMode').value;
@@ -371,6 +413,39 @@
         let filtered = currentPurchases;
         
         if (keyword) {
+            // Check if it's a batch number search first
+            const isBatchSearch = /^#?\d+$/.test(keyword);
+            
+            if (isBatchSearch) {
+                const batchNum = parseInt(keyword.replace('#', ''));
+                filtered = currentPurchases.filter(p => p.batch_id === batchNum);
+                
+                if (filtered.length > 0) {
+                    currentFilteredData = filtered;
+                    renderList(filtered, !isDataFresh);
+                    
+                    // Highlight the matching batch
+                    setTimeout(() => {
+                        const items = document.querySelectorAll('#purchasesList .border');
+                        items.forEach(item => {
+                            if (item.textContent.includes(`Batch #${batchNum}`)) {
+                                item.style.border = '3px solid #f59e0b';
+                                item.style.backgroundColor = '#fffbeb';
+                                item.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                setTimeout(() => {
+                                    item.style.border = '1px solid #e5e7eb';
+                                    item.style.backgroundColor = '';
+                                }, 4000);
+                            }
+                        });
+                    }, 100);
+                    
+                    document.getElementById('clearSearchBtn').classList.remove('hidden');
+                    return;
+                }
+            }
+            
+            // Regular search
             filtered = currentPurchases.filter(p => {
                 const searchableText = getSearchableText(p, searchField);
                 return matchesSearch(searchableText, keyword, searchMode, caseSensitive);
@@ -970,7 +1045,7 @@
         console.log('💾 Saved pending screen purchase:', payload);
     }
 
-    // ---------- Submit / Update ----------
+    // ---------- Submit / Update with Validation ----------
     async function submitPurchase() {
         const payload = {
             name: document.getElementById('name').value.trim(),
@@ -986,6 +1061,40 @@
         if (!payload.name || !payload.brand || !payload.quantity || !payload.cost_price || !payload.selling_price) {
             alert('Please fill required fields: Name, Brand, Quantity, Cost Price, Selling Price');
             return;
+        }
+
+        // ✅ VALIDATION: Check if editing and reducing quantity below sold items
+        if (editMode && editBatchId) {
+            const purchase = currentPurchases.find(p => p.batch_id === editBatchId);
+            if (purchase) {
+                const soldQty = (purchase.quantity || 0) - (purchase.remaining_quantity || 0);
+                const newQty = payload.quantity;
+                
+                // Check if reducing quantity below sold amount
+                if (newQty < soldQty) {
+                    if (!confirm(`⚠️⚠️ WARNING: This batch has ${soldQty} items already sold.\n\n` +
+                                 `You are trying to reduce total quantity to ${newQty}.\n` +
+                                 `This will make ${soldQty - newQty} items "oversold".\n\n` +
+                                 `The remaining quantity will be set to 0 (zero).\n` +
+                                 `Total: ${newQty} | Sold: ${soldQty} | Remaining: 0\n\n` +
+                                 `Continue?`)) {
+                        return;
+                    }
+                }
+                
+                // Show warning if reducing quantity
+                if (newQty < purchase.quantity && newQty >= soldQty) {
+                    const reduction = purchase.quantity - newQty;
+                    if (!confirm(`⚠️ You are reducing the total quantity by ${reduction} units.\n\n` +
+                                 `Current: ${purchase.quantity}\n` +
+                                 `New: ${newQty}\n` +
+                                 `Sold: ${soldQty}\n` +
+                                 `New Remaining: ${newQty - soldQty}\n\n` +
+                                 `This will NOT affect sold items. Continue?`)) {
+                        return;
+                    }
+                }
+            }
         }
 
         let url = '/api/purchases';
@@ -1049,6 +1158,7 @@
         const purchase = currentPurchases.find(p => p.batch_id === batchId);
         if (!purchase) {
             console.warn('Purchase not found:', batchId);
+            alert(`❌ Batch #${batchId} not found. It may have been deleted.`);
             return;
         }
         
@@ -1243,7 +1353,7 @@
         }
     }
 
-    // ---------- Autocomplete ----------
+    // ---------- Autocomplete with Batch ID Support ----------
     let nameTimeout, catTimeout, sourceTimeout;
 
     async function fetchNameSuggestions() {
@@ -1259,7 +1369,12 @@
             const suggestions = await res.json();
             const box = document.getElementById('nameSuggestions');
             if (!suggestions || suggestions.length === 0) { box.classList.add('hidden'); return; }
-            box.innerHTML = suggestions.map(s => `<div class="px-3 py-1 hover:bg-gray-100 cursor-pointer" onclick="selectNameSuggestion('${escapeHtml(s.name)}', '${escapeHtml(s.brand)}', '${escapeHtml(s.category)}')">${escapeHtml(s.name)} (${escapeHtml(s.brand)})</div>`).join('');
+            box.innerHTML = suggestions.map(s => {
+                const batchDisplay = s.batch_id ? ` (Batch #${s.batch_id})` : '';
+                return `<div class="px-3 py-1 hover:bg-gray-100 cursor-pointer" onclick="selectNameSuggestion('${escapeHtml(s.name)}', '${escapeHtml(s.brand)}', '${escapeHtml(s.category)}')">
+                    ${escapeHtml(s.name)} (${escapeHtml(s.brand)})${batchDisplay}
+                </div>`;
+            }).join('');
             box.classList.remove('hidden');
             const rect = document.getElementById('name').getBoundingClientRect();
             box.style.top = rect.bottom + window.scrollY + 'px';

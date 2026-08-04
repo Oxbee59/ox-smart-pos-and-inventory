@@ -97,6 +97,7 @@
         .app-container {
             display: flex;
             height: 100vh;
+            width: 100vw;
             overflow: hidden;
         }
 
@@ -131,7 +132,7 @@
             transform: translateX(0);
         }
 
-        /* Desktop: sidebar always visible, full height */
+        /* ===== DESKTOP LAYOUT (FIXED) ===== */
         @media (min-width: 768px) {
             .sidebar {
                 position: relative;
@@ -140,6 +141,7 @@
                 min-height: 100vh;
                 height: 100%;
                 border-radius: 0 1.5rem 1.5rem 0;
+                flex-shrink: 0;
             }
             .sidebar-overlay {
                 display: none !important;
@@ -153,20 +155,35 @@
             .app-container {
                 flex-direction: row;
                 align-items: stretch;
+                width: 100vw;
+                height: 100vh;
+                overflow: hidden;
             }
             .main-content-wrapper {
                 flex: 1;
                 display: flex;
                 flex-direction: column;
                 height: 100vh;
-                width: 0;
+                width: 100%;
+                min-width: 0;
+                overflow: hidden;
+            }
+            .main-content {
+                flex: 1;
+                overflow-y: auto;
+                overflow-x: hidden;
+                padding: 1.5rem;
+                min-height: 0;
+                width: 100%;
             }
         }
 
-        /* Mobile: sidebar slides in from left */
+        /* ===== MOBILE LAYOUT ===== */
         @media (max-width: 767px) {
             .app-container {
                 flex-direction: column;
+                width: 100vw;
+                height: 100vh;
             }
             .sidebar {
                 border-radius: 0 1.5rem 1.5rem 0;
@@ -185,6 +202,23 @@
             }
             .hamburger-btn {
                 display: block !important;
+            }
+            .main-content-wrapper {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                height: 100vh;
+                width: 100%;
+                min-width: 0;
+                overflow: hidden;
+            }
+            .main-content {
+                flex: 1;
+                overflow-y: auto;
+                overflow-x: hidden;
+                padding: 0.75rem;
+                min-height: 0;
+                width: 100%;
             }
             
             /* Mobile font & spacing reductions */
@@ -336,6 +370,14 @@
             .border.rounded-lg.p-4 .text-lg {
                 font-size: 0.85rem !important;
             }
+            
+            /* Fix for two-column layouts on mobile */
+            .flex-wrap.-mx-4 {
+                width: 100% !important;
+            }
+            .w-full.lg\:w-1\/2 {
+                width: 100% !important;
+            }
         }
 
         /* Hamburger button */
@@ -411,13 +453,14 @@
             }
         }
 
-        /* Main content wrapper */
+        /* Main content wrapper - base styles */
         .main-content-wrapper {
             flex: 1;
             display: flex;
             flex-direction: column;
             height: 100vh;
             width: 100%;
+            min-width: 0;
             overflow: hidden;
         }
 
@@ -427,6 +470,7 @@
             overflow-y: auto;
             overflow-x: hidden;
             min-height: 0;
+            width: 100%;
         }
 
         @media (min-width: 768px) {

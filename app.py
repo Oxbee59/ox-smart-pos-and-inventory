@@ -1165,6 +1165,9 @@ def api_add_purchase():
 def api_update_purchase(batch_id):
     data = request.json
     try:
+        # Log the update attempt
+        print(f"🔄 Updating batch #{batch_id}: {data}")
+        
         update_product(
             batch_id=batch_id,
             name=data['name'],
@@ -1177,8 +1180,13 @@ def api_update_purchase(batch_id):
             source=data.get('source', 'Unknown')
         )
         return jsonify({'success': True})
-    except Exception as e:
+    except ValueError as e:
         return jsonify({'success': False, 'error': str(e)}), 400
+    except Exception as e:
+        print(f"❌ Error updating batch #{batch_id}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/purchases/suggestions/source', methods=['GET'])
 @login_required
@@ -1785,20 +1793,38 @@ def api_today_sales_pdf():
     seen_sales = set()
     total_sales = 0.0
     total_discount = 0.0
-    total_profit = 0.0  # This will be net profit (after discount)
+    total_profit = 0.0
     total_items = 0
     total_subtotal = 0.0
     gross_profit = 0.0
     
+    # ✅ Initialize payment totals
+    cash_total = 0.0
+    momo_total = 0.0
+    cheque_total = 0.0
+    
     for sale in sales_data:
         sale_id = sale['sale_id']
+        
+        # ✅ Count each sale only once for payment totals
         if sale_id not in seen_sales:
             total_sales += sale['total']
             total_discount += sale['discount']
             seen_sales.add(sale_id)
+            
+            # ✅ Calculate payment totals per sale (not per item)
+            payment_method = sale.get('payment_method', 'cash').lower()
+            if payment_method == 'cash' or payment_method == '':
+                cash_total += sale['total']
+            elif payment_method == 'momo':
+                momo_total += sale['total']
+            elif payment_method == 'cheque':
+                cheque_total += sale['total']
+            else:
+                # Default to cash if unknown
+                cash_total += sale['total']
         
-        # ✅ Calculate item profit correctly
-        # Gross profit = (selling_price - cost_price) * quantity
+        # ✅ Calculate item profit correctly (always per item)
         item_gross_profit = (sale['selling_price'] - sale['cost_price']) * sale['quantity']
         gross_profit += item_gross_profit
         total_items += sale['quantity']
@@ -1806,8 +1832,6 @@ def api_today_sales_pdf():
     
     # ✅ Net profit = Gross profit - Total discount
     net_profit = gross_profit - total_discount
-    
-    # ✅ Use net_profit for display (matches UI)
     total_profit = net_profit
     
     elements.append(Paragraph(
@@ -1857,7 +1881,7 @@ def api_today_sales_pdf():
     ]))
     elements.append(table)
     
-    # ✅ Add summary section
+    # ✅ Add summary section with corrected payment totals
     elements.append(Spacer(1, 0.5*cm))
     elements.append(Paragraph("📊 Summary", styles["Heading2"]))
     elements.append(Spacer(1, 0.2*cm))
@@ -1868,9 +1892,9 @@ def api_today_sales_pdf():
         ["📦 Total Items", str(total_items)],
         ["📉 Total Discount", f"₵{total_discount:.2f}"],
         ["📈 Net Profit", f"₵{net_profit:.2f}"],
-        ["💵 Cash Payments", f"₵{sum(s['total'] for s in sales_data if s.get('payment_method', 'cash') == 'cash') if sales_data else 0:.2f}"],
-        ["📱 MoMo Payments", f"₵{sum(s['total'] for s in sales_data if s.get('payment_method') == 'momo') if sales_data else 0:.2f}"],
-        ["📝 Cheque Payments", f"₵{sum(s['total'] for s in sales_data if s.get('payment_method') == 'cheque') if sales_data else 0:.2f}"]
+        ["💵 Cash Payments", f"₵{cash_total:.2f}"],
+        ["📱 MoMo Payments", f"₵{momo_total:.2f}"],
+        ["📝 Cheque Payments", f"₵{cheque_total:.2f}"]
     ]
     
     summary_table = Table(summary_data, colWidths=[6*cm, 6*cm], hAlign='CENTER')

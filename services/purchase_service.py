@@ -89,13 +89,15 @@ def add_purchase(name, brand, category, quantity, cost_price, discount, selling_
         conn.close()
 
 
-# --------------------------- UPDATE BATCH (FIXED - NO DUPLICATES, NO CROSS-BATCH EFFECTS) ---------------------------
+# --------------------------- UPDATE BATCH (FIXED - PRESERVES SALES HISTORY) ---------------------------
 def update_product(batch_id, name, brand, category, quantity, cost_price, discount, selling_price, source=None):
     """
     Update a batch and its associated product.
-    ✅ FIXED: Updates ONLY the specific batch, not other batches of the same product
+    ✅ FIXED: Preserves sales history - remaining_quantity is calculated from sales
+    ✅ FIXED: Updates ONLY the specific batch, not other batches
     ✅ FIXED: Product-level prices are NOT updated (they come from batches)
     ✅ FIXED: Handles name/brand changes without creating duplicates
+    ✅ FIXED: Batch number search support
     """
     quantity = int(quantity)
     cost_price = float(cost_price)
@@ -109,7 +111,8 @@ def update_product(batch_id, name, brand, category, quantity, cost_price, discou
 
         # Get linked product_id and current product data
         cursor.execute("""
-            SELECT pb.product_id, p.name, p.brand, p.category, p.cost_price, p.selling_price, p.discount, pb.source
+            SELECT pb.product_id, p.name, p.brand, p.category, p.cost_price, p.selling_price, p.discount, 
+                   pb.source, pb.remaining_quantity, pb.quantity
             FROM purchase_batches pb
             JOIN products p ON p.id = pb.product_id
             WHERE pb.id = %s
@@ -127,8 +130,24 @@ def update_product(batch_id, name, brand, category, quantity, cost_price, discou
         old_selling_price = result[5]
         old_discount = result[6]
         old_source = result[7] if len(result) > 7 else 'Unknown'
+        current_remaining = result[8] if len(result) > 8 else 0
+        current_total = result[9] if len(result) > 9 else 0
 
-        # ✅ CRITICAL: Check if we're changing the product name/brand
+        # ✅ Calculate total sold from sales_items
+        cursor.execute("""
+            SELECT COALESCE(SUM(quantity), 0) 
+            FROM sales_items 
+            WHERE batch_id = %s
+        """, (batch_id,))
+        total_sold = cursor.fetchone()[0]
+
+        # ✅ Calculate correct remaining quantity
+        # Remaining = New Total Quantity - Total Sold
+        correct_remaining = max(quantity - total_sold, 0)
+
+        print(f"📊 Batch #{batch_id}: Total={quantity}, Sold={total_sold}, Remaining={correct_remaining}")
+
+        # ✅ Check if we're changing the product name/brand
         name_changed = (old_product_name.lower() != name.lower() or old_product_brand.lower() != brand.lower())
 
         # Archive old batch data
@@ -168,10 +187,10 @@ def update_product(batch_id, name, brand, category, quantity, cost_price, discou
                         cost_price = %s, selling_price = %s, discount = %s, 
                         date = %s, action = %s, source = %s
                     WHERE id = %s
-                """, (new_product_id, quantity, quantity, cost_price, selling_price, 
+                """, (new_product_id, quantity, correct_remaining, cost_price, selling_price, 
                       discount, datetime.now(), "updated", source, batch_id))
                 
-                # ✅ ONLY update the existing product's category (NOT prices)
+                # Update the existing product's category
                 cursor.execute("""
                     UPDATE products
                     SET category = %s
@@ -182,7 +201,7 @@ def update_product(batch_id, name, brand, category, quantity, cost_price, discou
                 update_product_stock(cursor, new_product_id)
                 update_product_stock(cursor, product_id)
                 
-                # ✅ Check if old product has any other batches
+                # Check if old product has any other batches
                 cursor.execute("""
                     SELECT COUNT(*) FROM purchase_batches WHERE product_id = %s
                 """, (product_id,))
@@ -204,30 +223,33 @@ def update_product(batch_id, name, brand, category, quantity, cost_price, discou
                 """, (name, brand, category, product_id))
 
         else:
-            # ✅ Name/brand didn't change - ONLY update category, NOT prices
+            # ✅ Name/brand didn't change - only update category
             cursor.execute("""
                 UPDATE products
                 SET category = %s
                 WHERE id = %s
             """, (category, product_id))
 
-        # ✅ Update ONLY the batch record with the new prices (not the product)
+        # ✅ Update ONLY the batch record with the new values
+        # ✅ CRITICAL: remaining_quantity is calculated from sales, not just set to quantity
         cursor.execute("""
             UPDATE purchase_batches
             SET quantity = %s, remaining_quantity = %s, cost_price = %s, selling_price = %s, 
                 discount = %s, date = %s, action = %s, source = %s
             WHERE id = %s
-        """, (quantity, quantity, cost_price, selling_price, discount, 
+        """, (quantity, correct_remaining, cost_price, selling_price, discount, 
               datetime.now(), "updated", source, batch_id))
 
         # Recalculate stock for the product
         update_product_stock(cursor, product_id)
 
         conn.commit()
+        print(f"✅ Batch #{batch_id} updated successfully!")
         return batch_id
         
     except Exception as e:
         conn.rollback()
+        print(f"❌ Error updating batch #{batch_id}: {str(e)}")
         raise e
     finally:
         conn.close()
@@ -332,27 +354,58 @@ def get_purchases_by_date_range(start_date, end_date):
         conn.close()
 
 
-# --------------------------- AUTOCOMPLETE SUGGESTIONS ---------------------------
+# --------------------------- AUTOCOMPLETE SUGGESTIONS (with batch ID support) ---------------------------
 def get_product_suggestions(keyword):
+    """
+    Get product suggestions with batch ID support.
+    If keyword is numeric, search by batch ID as well.
+    """
     conn = get_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("""
-            SELECT DISTINCT p.name, p.brand, p.category
-            FROM products p
-            WHERE p.name ILIKE %s 
-            AND NOT EXISTS (
-                SELECT 1 FROM deleted_products dp 
-                WHERE dp.product_id = p.id 
-                AND dp.action = 'PERMANENTLY DELETED' 
-                AND dp.source = 'product'
-            )
-            ORDER BY p.name ASC
-            LIMIT 5
-        """, (f"%{keyword}%",))
+        
+        # Try to parse as batch ID if it's numeric
+        is_batch_id = False
+        try:
+            batch_id = int(keyword)
+            is_batch_id = True
+        except:
+            pass
+        
+        if is_batch_id:
+            # Search by batch ID
+            cursor.execute("""
+                SELECT DISTINCT p.name, p.brand, p.category, pb.id as batch_id
+                FROM products p
+                JOIN purchase_batches pb ON pb.product_id = p.id
+                WHERE pb.id = %s 
+                AND NOT EXISTS (
+                    SELECT 1 FROM deleted_products dp 
+                    WHERE dp.product_id = p.id 
+                    AND dp.action = 'PERMANENTLY DELETED' 
+                    AND dp.source = 'product'
+                )
+                LIMIT 5
+            """, (batch_id,))
+        else:
+            # Search by name
+            cursor.execute("""
+                SELECT DISTINCT p.name, p.brand, p.category, NULL as batch_id
+                FROM products p
+                WHERE p.name ILIKE %s 
+                AND NOT EXISTS (
+                    SELECT 1 FROM deleted_products dp 
+                    WHERE dp.product_id = p.id 
+                    AND dp.action = 'PERMANENTLY DELETED' 
+                    AND dp.source = 'product'
+                )
+                ORDER BY p.name ASC
+                LIMIT 5
+            """, (f"%{keyword}%",))
+            
         results = cursor.fetchall()
         return [
-            {"name": r[0], "brand": r[1], "category": r[2] or ""}
+            {"name": r[0], "brand": r[1], "category": r[2] or "", "batch_id": r[3] if len(r) > 3 else None}
             for r in results
         ]
     except Exception as e:
@@ -412,5 +465,73 @@ def get_source_suggestions(keyword):
     except Exception as e:
         print(f"❌ Error in get_source_suggestions: {str(e)}")
         return []
+    finally:
+        conn.close()
+
+
+# --------------------------- GET BATCH BY ID (for reference) ---------------------------
+def get_batch_by_id(batch_id):
+    """Get a single batch by its ID"""
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT b.id, p.name, p.brand, p.category,
+                   b.quantity, b.remaining_quantity,
+                   b.cost_price, b.discount, b.selling_price,
+                   (b.cost_price * b.quantity - b.discount) AS total,
+                   b.date, b.action, b.source,
+                   COALESCE(b.claimed_quantity, 0) as claimed_quantity
+            FROM purchase_batches b
+            JOIN products p ON p.id = b.product_id
+            WHERE b.id = %s
+            AND NOT EXISTS (
+                SELECT 1 FROM deleted_products dp 
+                WHERE dp.product_id = p.id 
+                AND dp.action = 'PERMANENTLY DELETED' 
+                AND dp.source = 'product'
+            )
+        """, (batch_id,))
+        row = cursor.fetchone()
+        if row:
+            return {
+                "batch_id": row[0],
+                "name": row[1],
+                "brand": row[2],
+                "category": row[3],
+                "quantity": row[4],
+                "remaining_quantity": row[5],
+                "cost_price": row[6],
+                "discount": row[7],
+                "selling_price": row[8],
+                "total_cost": row[9],
+                "date": row[10],
+                "action": row[11],
+                "source": row[12] if len(row) > 12 else 'Unknown',
+                "claimed_quantity": row[13] if len(row) > 13 else 0
+            }
+        return None
+    except Exception as e:
+        print(f"❌ Error in get_batch_by_id: {str(e)}")
+        return None
+    finally:
+        conn.close()
+
+
+# --------------------------- GET TOTAL SOLD FOR BATCH ---------------------------
+def get_batch_sold_quantity(batch_id):
+    """Get total sold quantity for a specific batch"""
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT COALESCE(SUM(quantity), 0) 
+            FROM sales_items 
+            WHERE batch_id = %s
+        """, (batch_id,))
+        return cursor.fetchone()[0]
+    except Exception as e:
+        print(f"❌ Error in get_batch_sold_quantity: {str(e)}")
+        return 0
     finally:
         conn.close()
