@@ -1029,7 +1029,7 @@ def api_purchases_pdf():
 
     # ✅ Updated table with Claimed and Sold columns
     table_data = [["ID", "Name", "Brand", "Qty", "Remaining", "Sold", "Claimed", "Cost", "Discount", "Total", "Selling", "Source", "Date/Time"]]
-    total_qty = total_cost = total_discount = total_selling = total_claimed = total_claimed_cost = 0
+    total_qty = total_cost = total_discount = total_selling = total_claimed = total_claimed_cost = total_sold_summary = 0
     row_colors = [colors.whitesmoke, colors.lightgrey]
 
     for p in purchases:
@@ -1044,7 +1044,12 @@ def api_purchases_pdf():
         qty = p.get("quantity", 0)
         remaining = p.get("remaining_quantity", 0)
         claimed = p.get("claimed_quantity", 0)
-        sold = qty - remaining
+        
+        # ✅ Calculate sold from the data (using the correct formula)
+        # The sold should be the preserved sales history
+        # If totals has total_sold, use it, otherwise calculate from qty - remaining
+        sold = totals.get('total_sold', qty - remaining) if totals else qty - remaining
+        
         cost = p.get("cost_price", 0)
         claimed_cost = claimed * cost
 
@@ -1069,6 +1074,7 @@ def api_purchases_pdf():
         total_selling += p.get("selling_price", 0) * qty
         total_claimed += claimed
         total_claimed_cost += claimed_cost
+        total_sold_summary += sold
 
     table = Table(table_data, repeatRows=1, hAlign='LEFT',
                   colWidths=[1.5*cm, 4*cm, 3*cm, 1.5*cm, 1.5*cm, 1.5*cm, 1.5*cm, 2*cm, 2*cm, 2.5*cm, 2.5*cm, 2.5*cm, 3*cm])
@@ -1089,20 +1095,23 @@ def api_purchases_pdf():
     elements.append(Paragraph("📊 Summary", styles["Heading2"]))
     elements.append(Spacer(1, 6))
     
-    # ✅ Updated summary with all metrics
+    # ✅ Updated summary with all metrics including sold percentage
     total_batches = len(purchases)
-    total_remaining = total_qty - (totals.get('total_sold', 0) if totals else 0)
-    total_sold = totals.get('total_sold', total_qty - total_remaining) if totals else 0
+    total_remaining = total_qty - total_sold_summary
+    total_sold = total_sold_summary
     adjusted_capital = totals.get('adjusted_capital', total_cost - total_claimed_cost) if totals else total_cost - total_claimed_cost
     total_profit = totals.get('total_profit', total_selling - (total_cost - total_discount)) if totals else total_selling - (total_cost - total_discount)
     total_good = total_remaining - total_claimed
+    
+    # ✅ Calculate sold percentage
+    sold_percentage = (total_sold / total_qty * 100) if total_qty > 0 else 0
     
     summary_data = [
         ["Metric", "Value"],
         ["📦 Total Batches", str(total_batches)],
         ["🧾 Total Quantity", str(total_qty)],
         ["📦 Remaining Stock", str(total_remaining)],
-        ["📦 Sold", str(total_sold)],
+        ["📊 Sold", str(total_sold)],
         ["⚠️ Claimed", str(total_claimed)],
         ["✅ Good Stock", str(max(total_good, 0))],
         ["💰 Total Cost", f"₵{total_cost:.2f}"],
@@ -1110,7 +1119,8 @@ def api_purchases_pdf():
         ["💰 Capital (Adjusted)", f"₵{adjusted_capital:.2f}"],
         ["📈 Total Selling Price", f"₵{total_selling:.2f}"],
         ["📉 Total Discount", f"₵{total_discount:.2f}"],
-        ["💎 Total Profit", f"₵{total_profit:.2f}"]
+        ["💎 Total Profit", f"₵{total_profit:.2f}"],
+        ["📊 Sold %", f"{sold_percentage:.1f}%"]
     ]
     
     summary_table = Table(summary_data, colWidths=[6*cm, 6*cm], hAlign='CENTER')

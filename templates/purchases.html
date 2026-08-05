@@ -1136,6 +1136,27 @@
             actionType = 'update';
             batchId = editBatchId;
             console.log('✏️ Updating batch:', editBatchId, payload);
+            
+            // ✅ Show warning if price is changing (will create new batch)
+            const purchase = currentPurchases.find(p => p.batch_id === editBatchId);
+            if (purchase) {
+                const costChanged = Math.abs(purchase.cost_price - payload.cost_price) > 0.001;
+                const sellingChanged = Math.abs(purchase.selling_price - payload.selling_price) > 0.001;
+                const discountChanged = Math.abs((purchase.discount || 0) - payload.discount) > 0.001;
+                
+                if (costChanged || sellingChanged || discountChanged) {
+                    if (!confirm(`⚠️ You are changing the price of this batch.\n\n` +
+                                 `This will create a NEW batch with the updated prices.\n` +
+                                 `The old batch will remain with its original prices.\n\n` +
+                                 `Current Cost: ₵${purchase.cost_price.toFixed(2)}\n` +
+                                 `New Cost: ₵${payload.cost_price.toFixed(2)}\n` +
+                                 `Current Selling: ₵${purchase.selling_price.toFixed(2)}\n` +
+                                 `New Selling: ₵${payload.selling_price.toFixed(2)}\n\n` +
+                                 `Continue?`)) {
+                        return;
+                    }
+                }
+            }
         } else {
             console.log('➕ Adding new purchase:', payload);
         }
