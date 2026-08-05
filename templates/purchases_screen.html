@@ -367,21 +367,16 @@
 
     // ---------- BATCH NUMBER SEARCH ----------
     function searchByBatchNumber(keyword) {
-        // Check if search looks like a batch number (starts with # or is numeric)
         const isBatchSearch = /^#?\d+$/.test(keyword);
         
         if (isBatchSearch) {
-            // Extract the number
             const batchNum = parseInt(keyword.replace('#', ''));
-            
-            // Find matching batch
             const matched = currentPurchases.filter(p => p.batch_id === batchNum);
             
             if (matched.length > 0) {
                 currentFilteredData = matched;
                 renderList(matched, !isDataFresh);
                 
-                // Highlight the matching batch
                 setTimeout(() => {
                     const items = document.querySelectorAll('#purchasesList .border');
                     items.forEach(item => {
@@ -413,7 +408,6 @@
         let filtered = currentPurchases;
         
         if (keyword) {
-            // Check if it's a batch number search first
             const isBatchSearch = /^#?\d+$/.test(keyword);
             
             if (isBatchSearch) {
@@ -424,7 +418,6 @@
                     currentFilteredData = filtered;
                     renderList(filtered, !isDataFresh);
                     
-                    // Highlight the matching batch
                     setTimeout(() => {
                         const items = document.querySelectorAll('#purchasesList .border');
                         items.forEach(item => {
@@ -445,7 +438,6 @@
                 }
             }
             
-            // Regular search
             filtered = currentPurchases.filter(p => {
                 const searchableText = getSearchableText(p, searchField);
                 return matchesSearch(searchableText, keyword, searchMode, caseSensitive);
@@ -455,7 +447,6 @@
         currentFilteredData = filtered;
         renderList(filtered, !isDataFresh);
         
-        // Show/hide clear button
         const clearBtn = document.getElementById('clearSearchBtn');
         if (keyword) {
             clearBtn.classList.remove('hidden');
@@ -874,7 +865,7 @@
         }
     }
 
-    // ---------- Render list with Profit and Stock ----------
+    // ---------- Render list with Enhanced Sold History ----------
     function renderList(purchases, fromCache = false) {
         const container = document.getElementById('purchasesList');
         if (!purchases || purchases.length === 0) {
@@ -891,6 +882,14 @@
             const soldQty = (p.quantity || 0) - (p.remaining_quantity || 0);
             const claimedCost = claimedQty * (p.cost_price || 0);
             
+            // ✅ Show sold history badge if batch has sold items
+            const soldBadge = soldQty > 0 ? 
+                `<span class="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded ml-2">📊 ${soldQty} Sold</span>` : '';
+            
+            // ✅ Show sold history info
+            const soldInfo = soldQty > 0 ? 
+                `<p class="text-xs text-blue-500 mt-1">📊 ${soldQty} units sold across all time (preserved in sales history)</p>` : '';
+            
             return `
             <div class="border rounded-lg p-4 hover:shadow transition">
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
@@ -898,6 +897,7 @@
                         <div class="flex items-center gap-2 flex-wrap">
                             <h3 class="font-bold text-lg">${escapeHtml(p.name)} (${escapeHtml(p.brand)})</h3>
                             ${claimedQty > 0 ? `<span class="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">⚠️ ${claimedQty} Claimed (₵${claimedCost.toFixed(2)})</span>` : ''}
+                            ${soldBadge}
                         </div>
                         <p class="text-sm text-gray-600">Batch #${p.batch_id}</p>
                         <div class="grid grid-cols-2 md:grid-cols-4 gap-1 mt-1 text-xs">
@@ -911,6 +911,7 @@
                         <p class="text-sm text-gray-500"><span class="font-medium">Source:</span> ${escapeHtml(p.source || 'Unknown')}</p>
                         <p class="text-sm font-bold ${profitColor}">💎 Profit: ${formatMoney(batchProfit)}</p>
                         ${claimedQty > 0 ? `<p class="text-xs text-red-500">⚠️ ${claimedQty} units claimed as faulty (Cost: ₵${claimedCost.toFixed(2)})</p>` : ''}
+                        ${soldInfo}
                     </div>
                     <button onclick="editPurchase(${p.batch_id})" class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-1 rounded text-sm whitespace-nowrap">✏️ Update</button>
                 </div>
@@ -919,7 +920,7 @@
         updateSummary(purchases);
     }
 
-    // ---------- Update summary with Financial Metrics ----------
+    // ---------- Update summary with Enhanced Sold History ----------
     function updateSummary(purchases) {
         let totalQty = 0;
         let totalRemaining = 0;
@@ -931,6 +932,7 @@
         let totalClaimed = 0;
         let totalGood = 0;
         let totalClaimedCost = 0;
+        let totalSold = 0;
         const totalBatches = purchases ? purchases.length : 0;
         
         if (purchases && purchases.length > 0) {
@@ -941,9 +943,11 @@
                 const itemSelling = p.selling_price || 0;
                 const itemDiscount = p.discount || 0;
                 const claimed = p.claimed_quantity || 0;
+                const sold = itemQty - remainingQty;
                 
                 totalQty += itemQty;
                 totalRemaining += remainingQty;
+                totalSold += sold;
                 totalCost += p.total_cost || (itemCost * itemQty);
                 totalDiscount += itemDiscount;
                 totalSelling += itemSelling * itemQty;
@@ -964,8 +968,12 @@
         const isOffline = !navigator.onLine;
         const isCached = !isDataFresh && !isOffline;
         
+        // ✅ Calculate sold percentage
+        const soldPercentage = totalQty > 0 ? ((totalSold / totalQty) * 100) : 0;
+        const soldColor = soldPercentage > 70 ? 'text-green-600' : (soldPercentage > 30 ? 'text-orange-600' : 'text-red-600');
+        
         document.getElementById('summary').innerHTML = `
-            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-9 gap-2 text-sm">
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-10 gap-2 text-sm">
                 <div class="bg-white rounded p-2 shadow">
                     <span class="text-gray-500">📦 Batches</span><br>
                     <span class="text-lg font-bold text-indigo-600">${totalBatches}</span>
@@ -979,8 +987,8 @@
                     <span class="text-lg font-bold text-blue-600">${totalRemaining}</span>
                 </div>
                 <div class="bg-white rounded p-2 shadow">
-                    <span class="text-gray-500">📦 Sold</span><br>
-                    <span class="text-lg font-bold text-purple-600">${totalSoldQty}</span>
+                    <span class="text-gray-500">📊 Sold</span><br>
+                    <span class="text-lg font-bold text-purple-600">${totalSold}</span>
                 </div>
                 <div class="bg-white rounded p-2 shadow">
                     <span class="text-gray-500">⚠️ Claimed</span><br>
@@ -1002,6 +1010,10 @@
                     <span class="text-gray-500">💰 Capital</span><br>
                     <span class="text-lg font-bold text-purple-600">${formatMoney(adjustedCapital)}</span>
                 </div>
+                <div class="bg-white rounded p-2 shadow">
+                    <span class="text-gray-500">📊 Sold %</span><br>
+                    <span class="text-lg font-bold ${soldColor}">${soldPercentage.toFixed(0)}%</span>
+                </div>
             </div>
             <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm mt-2">
                 <div class="bg-white rounded p-2 shadow">
@@ -1022,10 +1034,11 @@
                 </div>
             </div>
             <div class="mt-2 text-xs text-gray-400">
-                💡 Total: ${totalQty} | Remaining: ${totalRemaining} | Sold: ${totalSoldQty} | Claimed: ${totalClaimed} | Good: ${Math.max(totalGood, 0)} | Capital: ${formatMoney(adjustedCapital)} (${formatMoney(totalCost)} - ${formatMoney(totalClaimedCost)} claimed cost)
+                💡 Total: ${totalQty} | Remaining: ${totalRemaining} | Sold: ${totalSold} | Claimed: ${totalClaimed} | Good: ${Math.max(totalGood, 0)} | Capital: ${formatMoney(adjustedCapital)} (${formatMoney(totalCost)} - ${formatMoney(totalClaimedCost)} claimed cost)
                 ${isOffline ? ' | ⚠️ Offline mode' : ''}
                 ${isCached ? ' | 📦 Showing cached data' : ''}
                 ${!isOffline && !isCached ? ' | ✅ Live data' : ''}
+                ${totalQty > 0 ? ` | 📊 ${soldPercentage.toFixed(0)}% sold` : ''}
             </div>
         `;
     }
@@ -1085,12 +1098,27 @@
                 // Show warning if reducing quantity
                 if (newQty < purchase.quantity && newQty >= soldQty) {
                     const reduction = purchase.quantity - newQty;
+                    const newRemaining = newQty - soldQty;
                     if (!confirm(`⚠️ You are reducing the total quantity by ${reduction} units.\n\n` +
                                  `Current: ${purchase.quantity}\n` +
                                  `New: ${newQty}\n` +
-                                 `Sold: ${soldQty}\n` +
-                                 `New Remaining: ${newQty - soldQty}\n\n` +
+                                 `Sold: ${soldQty} (preserved)\n` +
+                                 `New Remaining: ${newRemaining}\n\n` +
                                  `This will NOT affect sold items. Continue?`)) {
+                        return;
+                    }
+                }
+                
+                // Show info if increasing quantity
+                if (newQty > purchase.quantity) {
+                    const increase = newQty - purchase.quantity;
+                    const newRemaining = newQty - soldQty;
+                    if (!confirm(`ℹ️ You are increasing the total quantity by ${increase} units.\n\n` +
+                                 `Current: ${purchase.quantity}\n` +
+                                 `New: ${newQty}\n` +
+                                 `Sold: ${soldQty} (preserved)\n` +
+                                 `New Remaining: ${newRemaining}\n\n` +
+                                 `Sold history will be preserved. Continue?`)) {
                         return;
                     }
                 }
@@ -1164,6 +1192,12 @@
         
         console.log('📦 Purchase data:', purchase);
         
+        // ✅ Show sold info when editing
+        const soldQty = (purchase.quantity || 0) - (purchase.remaining_quantity || 0);
+        if (soldQty > 0) {
+            console.log(`📊 This batch has ${soldQty} units sold. Sold history will be preserved.`);
+        }
+        
         document.getElementById('name').value = purchase.name || '';
         document.getElementById('brand').value = purchase.brand || '';
         document.getElementById('category').value = purchase.category || 'Screen';
@@ -1176,7 +1210,7 @@
         editMode = true;
         editBatchId = batchId;
         
-        document.getElementById('formTitle').innerHTML = '✏️ Update Screen Purchase <span class="bg-purple-100 text-purple-800 text-xs font-semibold px-2.5 py-0.5 rounded">Screens Only</span>';
+        document.getElementById('formTitle').innerHTML = `✏️ Update Screen Purchase <span class="bg-purple-100 text-purple-800 text-xs font-semibold px-2.5 py-0.5 rounded">Screens Only</span> ${soldQty > 0 ? `<span class="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded ml-2">📊 ${soldQty} Sold</span>` : ''}`;
         document.getElementById('submitBtn').innerHTML = '✏️ Update Screen Purchase';
         document.getElementById('cancelBtn').classList.remove('hidden');
         
@@ -1289,6 +1323,7 @@
         let totalClaimed = 0;
         let totalClaimedCost = 0;
         let totalRemaining = 0;
+        let totalSold = 0;
         
         purchasesToExport.forEach(p => {
             const itemQty = p.quantity || 0;
@@ -1297,9 +1332,11 @@
             const itemSelling = p.selling_price || 0;
             const itemDiscount = p.discount || 0;
             const claimed = p.claimed_quantity || 0;
+            const sold = itemQty - remainingQty;
             
             totalQty += itemQty;
             totalRemaining += remainingQty;
+            totalSold += sold;
             totalCost += p.total_cost || (itemCost * itemQty);
             totalDiscount += itemDiscount;
             totalSelling += itemSelling * itemQty;
@@ -1313,6 +1350,7 @@
 
         const adjustedCapital = totalCost - totalClaimedCost;
         const totalSoldQty = totalQty - totalRemaining;
+        const soldPercentage = totalQty > 0 ? ((totalSold / totalQty) * 100) : 0;
 
         try {
             const res = await fetch('/api/purchases/pdf', {
@@ -1325,7 +1363,7 @@
                     totals: {
                         total_qty: totalQty,
                         total_remaining: totalRemaining,
-                        total_sold: totalSoldQty,
+                        total_sold: totalSold,
                         total_cost: totalCost,
                         total_discount: totalDiscount,
                         total_selling: totalSelling,
@@ -1334,7 +1372,8 @@
                         adjusted_capital: adjustedCapital,
                         total_claimed: totalClaimed,
                         total_claimed_cost: totalClaimedCost,
-                        total_batches: purchasesToExport.length
+                        total_batches: purchasesToExport.length,
+                        sold_percentage: soldPercentage
                     }
                 })
             });
