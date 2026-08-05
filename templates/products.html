@@ -36,8 +36,11 @@
 <div class="mb-4 bg-white rounded-xl shadow-md p-3 md:p-4">
     <div class="flex flex-col md:flex-row gap-3">
         <div class="flex-1">
-            <input type="text" id="searchInput" placeholder="🔍 Search accessory by name, brand or category..." 
+            <input type="text" id="searchInput" placeholder="🔍 Search by name, brand, category or batch # (e.g. #94)..." 
                    class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm md:text-base">
+            <div class="text-xs text-gray-400 mt-1">
+                💡 Tip: Search by batch number (e.g., <span class="font-mono bg-gray-100 px-1 rounded">#94</span> or <span class="font-mono bg-gray-100 px-1 rounded">94</span>)
+            </div>
         </div>
         <div class="flex flex-wrap gap-2 items-center">
             <button id="advancedToggle" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1.5 rounded-lg text-sm">
@@ -198,6 +201,18 @@
     .stock-total { background: #f3f4f6; }
     .stock-sold { background: #dbeafe; }
     .stock-good { background: #d1fae5; }
+    
+    /* Highlight for batch search results */
+    .highlight-match {
+        background-color: #fef08a;
+        padding: 0 2px;
+        border-radius: 2px;
+    }
+    .batch-highlight {
+        border: 3px solid #f59e0b !important;
+        background-color: #fffbeb !important;
+        transition: all 0.3s ease;
+    }
 </style>
 
 <script>
@@ -373,6 +388,54 @@
         }
     }
 
+    // ---------- BATCH NUMBER SEARCH IN MAIN SEARCH ----------
+    function searchByBatchNumber(keyword) {
+        // Check if search looks like a batch number (starts with # or is numeric)
+        const isBatchSearch = /^#?\d+$/.test(keyword);
+        
+        if (isBatchSearch) {
+            // Extract the number
+            const batchNum = parseInt(keyword.replace('#', ''));
+            
+            // Find products that have this batch
+            const matchedProducts = currentProducts.filter(product => {
+                if (product.batches && product.batches.length > 0) {
+                    return product.batches.some(batch => batch.batch_id === batchNum);
+                }
+                return false;
+            });
+            
+            if (matchedProducts.length > 0) {
+                renderProducts(matchedProducts, keyword);
+                document.getElementById('clearSearchBtn').classList.remove('hidden');
+                
+                // Auto-open the batch modal for the first matching product
+                setTimeout(() => {
+                    const product = matchedProducts[0];
+                    if (product) {
+                        viewBatches(product.product_id, product.name, product.batches || []);
+                        // Highlight the matching batch inside the modal
+                        setTimeout(() => {
+                            const batchItems = document.querySelectorAll('#batchList .border');
+                            batchItems.forEach(item => {
+                                if (item.textContent.includes(`Batch #${batchNum}`)) {
+                                    item.classList.add('batch-highlight');
+                                    item.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                    setTimeout(() => {
+                                        item.classList.remove('batch-highlight');
+                                    }, 4000);
+                                }
+                            });
+                        }, 300);
+                    }
+                }, 500);
+                
+                return true;
+            }
+        }
+        return false;
+    }
+
     function applyAdvancedSearch() {
         const keyword = document.getElementById('searchInput').value.trim();
         searchMode = document.getElementById('searchMode').value;
@@ -382,6 +445,46 @@
         let filtered = currentProducts;
         
         if (keyword) {
+            // First check if it's a batch number search
+            const isBatchSearch = /^#?\d+$/.test(keyword);
+            
+            if (isBatchSearch) {
+                const batchNum = parseInt(keyword.replace('#', ''));
+                filtered = currentProducts.filter(product => {
+                    if (product.batches && product.batches.length > 0) {
+                        return product.batches.some(batch => batch.batch_id === batchNum);
+                    }
+                    return false;
+                });
+                
+                if (filtered.length > 0) {
+                    renderProducts(filtered, keyword);
+                    document.getElementById('clearSearchBtn').classList.remove('hidden');
+                    
+                    // Auto-open the batch modal for the first matching product
+                    setTimeout(() => {
+                        const product = filtered[0];
+                        if (product) {
+                            viewBatches(product.product_id, product.name, product.batches || []);
+                            setTimeout(() => {
+                                const batchItems = document.querySelectorAll('#batchList .border');
+                                batchItems.forEach(item => {
+                                    if (item.textContent.includes(`Batch #${batchNum}`)) {
+                                        item.classList.add('batch-highlight');
+                                        item.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                        setTimeout(() => {
+                                            item.classList.remove('batch-highlight');
+                                        }, 4000);
+                                    }
+                                });
+                            }, 300);
+                        }
+                    }, 500);
+                    return;
+                }
+            }
+            
+            // Regular search
             filtered = currentProducts.filter(p => {
                 const searchableText = getSearchableText(p, searchField);
                 return matchesSearch(searchableText, keyword, searchMode, caseSensitive);
@@ -399,6 +502,297 @@
         }
     }
 
+    // ---------- Enhanced renderProducts with batch search highlighting ----------
+    function renderProducts(products, batchKeyword = null) {
+        const container = document.getElementById('productsList');
+        if (!products || products.length === 0) {
+            const msg = batchKeyword ? 
+                `No products found with batch #${batchKeyword.replace('#', '')}` : 
+                'No accessory products found.';
+            container.innerHTML = `<div class="text-center text-gray-400 py-8">${msg}</div>`;
+            return;
+        }
+        
+        container.innerHTML = products.map(p => {
+            // Calculate totals for this product
+            let totalStock = p.stock || 0;
+            let totalClaimed = 0;
+            let hasFaulty = false;
+            
+            // Check if this product has the searched batch
+            let hasSearchedBatch = false;
+            if (batchKeyword) {
+                const batchNum = parseInt(batchKeyword.replace('#', ''));
+                if (p.batches && p.batches.length > 0) {
+                    hasSearchedBatch = p.batches.some(b => b.batch_id === batchNum);
+                }
+            }
+            
+            if (p.batches && p.batches.length > 0) {
+                p.batches.forEach(batch => {
+                    const claimed = batch.claimed_quantity || 0;
+                    if (claimed > 0) {
+                        hasFaulty = true;
+                        totalClaimed += claimed;
+                    }
+                });
+            }
+            
+            // ✅ Good stock = totalStock - totalClaimed
+            const displayGood = totalStock - totalClaimed;
+            
+            const status = totalStock > 0 ? "In Stock" : "Out of Stock";
+            const statusColor = totalStock > 0 ? "text-green-600" : "text-red-600";
+            
+            const faultyBadge = hasFaulty ? 
+                `<span class="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded ml-2">⚠️ ${totalClaimed} Claimed</span>` : '';
+            
+            const batchMatchBadge = hasSearchedBatch ? 
+                `<span class="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded ml-2 border border-yellow-400">🔍 Batch Match</span>` : '';
+
+            return `
+                <div class="bg-white rounded-xl shadow-md p-4 border hover:shadow-lg transition-shadow duration-200 ${hasSearchedBatch ? 'border-yellow-400 border-2' : ''}">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                        <div class="flex-1 w-full sm:w-auto">
+                            <div class="flex items-center flex-wrap gap-2">
+                                <h3 class="text-lg md:text-xl font-bold text-indigo-700">${escapeHtml(p.name)} (${escapeHtml(p.brand)})</h3>
+                                ${faultyBadge}
+                                ${batchMatchBadge}
+                            </div>
+                            <p class="text-gray-600 text-sm">Category: ${escapeHtml(p.category)} | Total Stock: ${totalStock}</p>
+                            <p class="text-xs md:text-sm">Cost: ₵${(p.cost_price || 0).toFixed(2)} | Selling: ₵${(p.selling_price || 0).toFixed(2)} | Discount: ₵${(p.discount || 0).toFixed(2)}</p>
+                            ${hasFaulty ? `<p class="text-xs text-red-500 mt-1">⚠️ ${totalClaimed} units claimed as faulty</p>` : ''}
+                            <p class="text-xs text-green-600 font-bold mt-1">✅ ${displayGood} good units available</p>
+                            ${hasSearchedBatch ? `<p class="text-xs text-yellow-600 mt-1">🔍 Contains batch #${batchKeyword.replace('#', '')}</p>` : ''}
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="font-semibold ${statusColor} text-sm">● ${status}</span>
+                        </div>
+                    </div>
+                    <div class="mt-3 flex flex-wrap justify-end gap-2">
+                        <button onclick="viewBatches(${p.product_id}, '${escapeHtml(p.name)}', ${JSON.stringify(p.batches || []).replace(/"/g, '&quot;')})" 
+                                class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm">View Batches</button>
+                        <button onclick="confirmDeleteProduct(${p.product_id}, '${escapeHtml(p.name)}')" 
+                                class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">Delete Product</button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function viewBatches(productId, productName, batches) {
+        currentBatches = batches || [];
+        currentBatchModalProductName = productName;
+        const totalBatches = batches ? batches.length : 0;
+        document.getElementById('modalTitle').innerHTML = `Batches for ${productName} (${totalBatches})`;
+        
+        document.getElementById('batchSearchInput').value = '';
+        document.getElementById('clearBatchSearchBtn').classList.add('hidden');
+        
+        renderBatchList(batches || []);
+        updateBatchCount(batches ? batches.length : 0, totalBatches);
+        
+        document.getElementById('batchModal').classList.remove('hidden');
+    }
+
+    function renderBatchList(batches) {
+        const container = document.getElementById('batchList');
+        container.innerHTML = '';
+        currentBatchSelections = [];
+        
+        if (!batches || batches.length === 0) {
+            container.innerHTML = '<div class="text-center text-gray-400 py-8">No batches available for this product.</div>';
+            return;
+        }
+        
+        batches.forEach((batch, idx) => {
+            const div = document.createElement('div');
+            div.className = 'border rounded-lg p-3 hover:bg-gray-50';
+            
+            const flexDiv = document.createElement('div');
+            flexDiv.className = 'flex flex-col sm:flex-row items-start sm:items-center gap-2';
+            
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.className = 'mt-1 sm:mt-0';
+            cb.dataset.batchId = batch.batch_id;
+            cb.dataset.batchData = JSON.stringify(batch);
+            
+            const info = document.createElement('div');
+            info.className = 'flex-1 text-sm w-full';
+            
+            const hasClaims = batch.claimed_quantity && batch.claimed_quantity > 0;
+            const claimBadge = hasClaims ? 
+                `<span class="text-xs bg-red-100 text-red-800 px-1.5 py-0.5 rounded ml-1">⚠️ ${batch.claimed_quantity} Claimed</span>` : '';
+            
+            const statusText = batch.remaining_quantity > 0 ? '● In Stock' : '● Depleted';
+            const statusColor = batch.remaining_quantity > 0 ? 'text-green-600' : 'text-red-600';
+            
+            // Calculate stock breakdown for this batch
+            const totalQty = batch.quantity || 0;
+            const remainingQty = batch.remaining_quantity || 0;
+            const claimedQty = batch.claimed_quantity || 0;
+            const goodQty = remainingQty - claimedQty;
+            const soldQty = totalQty - remainingQty;
+            
+            info.innerHTML = `
+                <div class="flex flex-wrap justify-between items-start gap-1">
+                    <div class="flex flex-wrap items-center gap-1">
+                        <strong class="text-indigo-600">Batch #${batch.batch_id}</strong>
+                        ${claimBadge}
+                        <span class="text-xs text-gray-400">${batch.date ? new Date(batch.date).toLocaleString() : 'No date'}</span>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-1">
+                        <span class="text-xs font-semibold ${statusColor}">${statusText}</span>
+                        ${hasClaims ? `<button onclick="event.stopPropagation(); viewBatchClaims(${batch.batch_id}, '${escapeHtml(currentBatchModalProductName)}', ${JSON.stringify(batch).replace(/"/g, '&quot;')})" 
+                                class="bg-red-500 hover:bg-red-600 text-white text-xs px-2 py-1 rounded transition-colors flex items-center gap-1">
+                            📋 Claims
+                        </button>` : ''}
+                        <button onclick="event.stopPropagation(); navigateToPurchase(${batch.batch_id})" 
+                                class="bg-yellow-500 hover:bg-yellow-600 text-white text-xs px-2 py-1 rounded transition-colors flex items-center gap-1">
+                            ✏️ Update
+                        </button>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-1 mt-1 text-xs">
+                    <span>Total: <strong>${totalQty}</strong></span>
+                    <span>Sold: <strong class="text-blue-600">${soldQty}</strong></span>
+                    <span>Remaining: <strong>${remainingQty}</strong></span>
+                    <span>Claimed: <strong class="text-red-600">${claimedQty}</strong></span>
+                    <span>✅ Good: <strong class="text-green-600">${Math.max(goodQty, 0)}</strong></span>
+                </div>
+                <div class="grid grid-cols-3 gap-2 mt-1 text-xs">
+                    <span>Cost: ₵${(batch.cost_price || 0).toFixed(2)}</span>
+                    <span>Selling: ₵${(batch.selling_price || 0).toFixed(2)}</span>
+                    ${batch.discount > 0 ? `<span>Discount: ₵${batch.discount.toFixed(2)}</span>` : ''}
+                </div>
+                ${hasClaims ? `<div class="text-xs text-red-500 mt-1">⚠️ ${claimedQty} units claimed as faulty</div>` : ''}
+            `;
+            
+            flexDiv.appendChild(cb);
+            flexDiv.appendChild(info);
+            div.appendChild(flexDiv);
+            container.appendChild(div);
+            currentBatchSelections.push({ cb, batchId: batch.batch_id, batch });
+        });
+    }
+
+    function updateBatchCount(shown, total) {
+        const countDisplay = document.getElementById('batchCountDisplay');
+        if (shown === total) {
+            countDisplay.textContent = `${total} batch${total !== 1 ? 'es' : ''}`;
+        } else {
+            countDisplay.textContent = `${shown} of ${total} batch${total !== 1 ? 'es' : ''}`;
+        }
+    }
+
+    document.getElementById('batchSearchInput').addEventListener('input', function() {
+        const keyword = this.value.trim().toLowerCase();
+        const clearBtn = document.getElementById('clearBatchSearchBtn');
+        
+        if (keyword) {
+            clearBtn.classList.remove('hidden');
+            const filtered = currentBatches.filter(batch => 
+                batch.batch_id && batch.batch_id.toString().includes(keyword)
+            );
+            renderBatchList(filtered);
+            updateBatchCount(filtered.length, currentBatches.length);
+        } else {
+            clearBtn.classList.add('hidden');
+            renderBatchList(currentBatches);
+            updateBatchCount(currentBatches.length, currentBatches.length);
+        }
+    });
+
+    function clearBatchSearch() {
+        document.getElementById('batchSearchInput').value = '';
+        document.getElementById('clearBatchSearchBtn').classList.add('hidden');
+        renderBatchList(currentBatches);
+        updateBatchCount(currentBatches.length, currentBatches.length);
+    }
+
+    function closeBatchModal() {
+        document.getElementById('batchModal').classList.add('hidden');
+        document.getElementById('batchSearchInput').value = '';
+        document.getElementById('clearBatchSearchBtn').classList.add('hidden');
+    }
+
+    function selectAllBatches() {
+        currentBatchSelections.forEach(item => item.cb.checked = true);
+    }
+    function deselectAllBatches() {
+        currentBatchSelections.forEach(item => item.cb.checked = false);
+    }
+
+    async function deleteSelectedBatches() {
+        const selected = currentBatchSelections.filter(item => item.cb.checked);
+        if (selected.length === 0) {
+            alert('Please select at least one batch.');
+            return;
+        }
+        const choice = confirm(`Delete ${selected.length} batch(es)?\n\n- Click OK to KEEP history (recommended, can restore)\n- Click Cancel for PERMANENT deletion (cannot restore)`);
+        const deleteType = choice ? 'keep' : 'clean';
+        
+        let successCount = 0;
+        for (const item of selected) {
+            try {
+                const res = await fetch(`/api/batches/${item.batchId}?type=${deleteType}`, { method: 'DELETE' });
+                if (res.ok) {
+                    successCount++;
+                } else {
+                    const data = await res.json();
+                    throw new Error(data.error || 'Unknown error');
+                }
+            } catch (err) {
+                console.warn(`Batch deletion failed (offline): ${item.batchId}`, err);
+                savePendingBatchDeletion(item.batchId, deleteType);
+            }
+        }
+
+        if (successCount > 0) {
+            alert(`${successCount} batch(es) deleted online.`);
+        }
+        const pending = JSON.parse(localStorage.getItem('pendingBatchDeletions') || '[]');
+        if (pending.length > 0) {
+            alert(`⚠️ ${pending.length} batch deletion(s) saved offline. They will be applied when you reconnect.`);
+        }
+        closeBatchModal();
+        loadProducts(true);
+    }
+
+    function confirmDeleteProduct(productId, productName) {
+        currentProductIdForDelete = productId;
+        document.getElementById('deleteProductName').innerHTML = `Accessory Product: ${productName}`;
+        document.getElementById('deleteProductModal').classList.remove('hidden');
+    }
+
+    function closeDeleteProductModal() {
+        document.getElementById('deleteProductModal').classList.add('hidden');
+        currentProductIdForDelete = null;
+    }
+
+    async function deleteProduct(deleteType) {
+        if (!currentProductIdForDelete) return;
+        try {
+            const res = await fetch(`/api/products/${currentProductIdForDelete}?type=${deleteType}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (data.success) {
+                alert(`Accessory product ${deleteType === 'clean' ? 'permanently deleted' : 'deleted (history kept)'}.`);
+                closeDeleteProductModal();
+                loadProducts(true);
+            } else {
+                alert('Error: ' + data.error);
+            }
+        } catch (err) {
+            console.warn('Product deletion failed (offline), saving for later:', err);
+            savePendingProductDeletion(currentProductIdForDelete, deleteType);
+            alert(`Accessory product deletion saved offline. It will be applied when you reconnect.`);
+            closeDeleteProductModal();
+            loadProducts();
+        }
+    }
+
+    // ---------- View Batch Claims ----------
     async function viewBatchClaims(batchId, productName, batchData) {
         try {
             const res = await fetch('/api/claims');
@@ -698,279 +1092,14 @@
         }
     }
 
-    function renderProducts(products) {
-        const container = document.getElementById('productsList');
-        if (!products || products.length === 0) {
-            container.innerHTML = '<div class="text-center text-gray-400 py-8">No accessory products found.</div>';
-            return;
-        }
-        container.innerHTML = products.map(p => {
-            // Calculate totals for this product
-            let totalStock = p.stock || 0;
-            let totalClaimed = 0;
-            let hasFaulty = false;
-            
-            if (p.batches && p.batches.length > 0) {
-                p.batches.forEach(batch => {
-                    const claimed = batch.claimed_quantity || 0;
-                    if (claimed > 0) {
-                        hasFaulty = true;
-                        totalClaimed += claimed;
-                    }
-                });
-            }
-            
-            // ✅ Good stock = totalStock - totalClaimed
-            const displayGood = totalStock - totalClaimed;
-            
-            const status = totalStock > 0 ? "In Stock" : "Out of Stock";
-            const statusColor = totalStock > 0 ? "text-green-600" : "text-red-600";
-            
-            const faultyBadge = hasFaulty ? 
-                `<span class="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded ml-2">⚠️ ${totalClaimed} Claimed</span>` : '';
-
-            return `
-                <div class="bg-white rounded-xl shadow-md p-4 border hover:shadow-lg transition-shadow duration-200">
-                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-                        <div class="flex-1 w-full sm:w-auto">
-                            <div class="flex items-center flex-wrap gap-2">
-                                <h3 class="text-lg md:text-xl font-bold text-indigo-700">${escapeHtml(p.name)} (${escapeHtml(p.brand)})</h3>
-                                ${faultyBadge}
-                            </div>
-                            <p class="text-gray-600 text-sm">Category: ${escapeHtml(p.category)} | Total Stock: ${totalStock}</p>
-                            <p class="text-xs md:text-sm">Cost: ₵${(p.cost_price || 0).toFixed(2)} | Selling: ₵${(p.selling_price || 0).toFixed(2)} | Discount: ₵${(p.discount || 0).toFixed(2)}</p>
-                            ${hasFaulty ? `<p class="text-xs text-red-500 mt-1">⚠️ ${totalClaimed} units claimed as faulty</p>` : ''}
-                            <p class="text-xs text-green-600 font-bold mt-1">✅ ${displayGood} good units available</p>
-                        </div>
-                        <div class="flex flex-wrap items-center gap-2">
-                            <span class="font-semibold ${statusColor} text-sm">● ${status}</span>
-                        </div>
-                    </div>
-                    <div class="mt-3 flex flex-wrap justify-end gap-2">
-                        <button onclick="viewBatches(${p.product_id}, '${escapeHtml(p.name)}', ${JSON.stringify(p.batches || []).replace(/"/g, '&quot;')})" 
-                                class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm">View Batches</button>
-                        <button onclick="confirmDeleteProduct(${p.product_id}, '${escapeHtml(p.name)}')" 
-                                class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">Delete Product</button>
-                    </div>
-                </div>
-            `;
-        }).join('');
-    }
-
-    function viewBatches(productId, productName, batches) {
-        currentBatches = batches || [];
-        currentBatchModalProductName = productName;
-        const totalBatches = batches ? batches.length : 0;
-        document.getElementById('modalTitle').innerHTML = `Batches for ${productName} (${totalBatches})`;
-        
-        document.getElementById('batchSearchInput').value = '';
-        document.getElementById('clearBatchSearchBtn').classList.add('hidden');
-        
-        renderBatchList(batches || []);
-        updateBatchCount(batches ? batches.length : 0, totalBatches);
-        
-        document.getElementById('batchModal').classList.remove('hidden');
-    }
-
-    function renderBatchList(batches) {
-        const container = document.getElementById('batchList');
-        container.innerHTML = '';
-        currentBatchSelections = [];
-        
-        if (!batches || batches.length === 0) {
-            container.innerHTML = '<div class="text-center text-gray-400 py-8">No batches available for this product.</div>';
-            return;
-        }
-        
-        batches.forEach((batch, idx) => {
-            const div = document.createElement('div');
-            div.className = 'border rounded-lg p-3 hover:bg-gray-50';
-            
-            const flexDiv = document.createElement('div');
-            flexDiv.className = 'flex flex-col sm:flex-row items-start sm:items-center gap-2';
-            
-            const cb = document.createElement('input');
-            cb.type = 'checkbox';
-            cb.className = 'mt-1 sm:mt-0';
-            cb.dataset.batchId = batch.batch_id;
-            cb.dataset.batchData = JSON.stringify(batch);
-            
-            const info = document.createElement('div');
-            info.className = 'flex-1 text-sm w-full';
-            
-            const hasClaims = batch.claimed_quantity && batch.claimed_quantity > 0;
-            const claimBadge = hasClaims ? 
-                `<span class="text-xs bg-red-100 text-red-800 px-1.5 py-0.5 rounded ml-1">⚠️ ${batch.claimed_quantity} Claimed</span>` : '';
-            
-            const statusText = batch.remaining_quantity > 0 ? '● In Stock' : '● Depleted';
-            const statusColor = batch.remaining_quantity > 0 ? 'text-green-600' : 'text-red-600';
-            
-            // Calculate stock breakdown for this batch
-            const totalQty = batch.quantity || 0;
-            const remainingQty = batch.remaining_quantity || 0;
-            const claimedQty = batch.claimed_quantity || 0;
-            const goodQty = remainingQty - claimedQty;
-            const soldQty = totalQty - remainingQty;
-            
-            info.innerHTML = `
-                <div class="flex flex-wrap justify-between items-start gap-1">
-                    <div class="flex flex-wrap items-center gap-1">
-                        <strong class="text-indigo-600">Batch #${batch.batch_id}</strong>
-                        ${claimBadge}
-                        <span class="text-xs text-gray-400">${batch.date ? new Date(batch.date).toLocaleString() : 'No date'}</span>
-                    </div>
-                    <div class="flex flex-wrap items-center gap-1">
-                        <span class="text-xs font-semibold ${statusColor}">${statusText}</span>
-                        ${hasClaims ? `<button onclick="event.stopPropagation(); viewBatchClaims(${batch.batch_id}, '${escapeHtml(currentBatchModalProductName)}', ${JSON.stringify(batch).replace(/"/g, '&quot;')})" 
-                                class="bg-red-500 hover:bg-red-600 text-white text-xs px-2 py-1 rounded transition-colors flex items-center gap-1">
-                            📋 Claims
-                        </button>` : ''}
-                        <button onclick="event.stopPropagation(); navigateToPurchase(${batch.batch_id})" 
-                                class="bg-yellow-500 hover:bg-yellow-600 text-white text-xs px-2 py-1 rounded transition-colors flex items-center gap-1">
-                            ✏️ Update
-                        </button>
-                    </div>
-                </div>
-                <div class="grid grid-cols-2 md:grid-cols-5 gap-1 mt-1 text-xs">
-                    <span>Total: <strong>${totalQty}</strong></span>
-                    <span>Sold: <strong class="text-blue-600">${soldQty}</strong></span>
-                    <span>Remaining: <strong>${remainingQty}</strong></span>
-                    <span>Claimed: <strong class="text-red-600">${claimedQty}</strong></span>
-                    <span>✅ Good: <strong class="text-green-600">${Math.max(goodQty, 0)}</strong></span>
-                </div>
-                <div class="grid grid-cols-3 gap-2 mt-1 text-xs">
-                    <span>Cost: ₵${(batch.cost_price || 0).toFixed(2)}</span>
-                    <span>Selling: ₵${(batch.selling_price || 0).toFixed(2)}</span>
-                    ${batch.discount > 0 ? `<span>Discount: ₵${batch.discount.toFixed(2)}</span>` : ''}
-                </div>
-                ${hasClaims ? `<div class="text-xs text-red-500 mt-1">⚠️ ${claimedQty} units claimed as faulty</div>` : ''}
-            `;
-            
-            flexDiv.appendChild(cb);
-            flexDiv.appendChild(info);
-            div.appendChild(flexDiv);
-            container.appendChild(div);
-            currentBatchSelections.push({ cb, batchId: batch.batch_id, batch });
-        });
-    }
-
-    function updateBatchCount(shown, total) {
-        const countDisplay = document.getElementById('batchCountDisplay');
-        if (shown === total) {
-            countDisplay.textContent = `${total} batch${total !== 1 ? 'es' : ''}`;
-        } else {
-            countDisplay.textContent = `${shown} of ${total} batch${total !== 1 ? 'es' : ''}`;
-        }
-    }
-
-    document.getElementById('batchSearchInput').addEventListener('input', function() {
-        const keyword = this.value.trim().toLowerCase();
-        const clearBtn = document.getElementById('clearBatchSearchBtn');
-        
-        if (keyword) {
-            clearBtn.classList.remove('hidden');
-            const filtered = currentBatches.filter(batch => 
-                batch.batch_id && batch.batch_id.toString().includes(keyword)
-            );
-            renderBatchList(filtered);
-            updateBatchCount(filtered.length, currentBatches.length);
-        } else {
-            clearBtn.classList.add('hidden');
-            renderBatchList(currentBatches);
-            updateBatchCount(currentBatches.length, currentBatches.length);
-        }
-    });
-
-    function clearBatchSearch() {
-        document.getElementById('batchSearchInput').value = '';
-        document.getElementById('clearBatchSearchBtn').classList.add('hidden');
-        renderBatchList(currentBatches);
-        updateBatchCount(currentBatches.length, currentBatches.length);
-    }
-
-    function closeBatchModal() {
-        document.getElementById('batchModal').classList.add('hidden');
-        document.getElementById('batchSearchInput').value = '';
-        document.getElementById('clearBatchSearchBtn').classList.add('hidden');
-    }
-
-    function selectAllBatches() {
-        currentBatchSelections.forEach(item => item.cb.checked = true);
-    }
-    function deselectAllBatches() {
-        currentBatchSelections.forEach(item => item.cb.checked = false);
-    }
-
-    async function deleteSelectedBatches() {
-        const selected = currentBatchSelections.filter(item => item.cb.checked);
-        if (selected.length === 0) {
-            alert('Please select at least one batch.');
-            return;
-        }
-        const choice = confirm(`Delete ${selected.length} batch(es)?\n\n- Click OK to KEEP history (recommended, can restore)\n- Click Cancel for PERMANENT deletion (cannot restore)`);
-        const deleteType = choice ? 'keep' : 'clean';
-        
-        let successCount = 0;
-        for (const item of selected) {
-            try {
-                const res = await fetch(`/api/batches/${item.batchId}?type=${deleteType}`, { method: 'DELETE' });
-                if (res.ok) {
-                    successCount++;
-                } else {
-                    const data = await res.json();
-                    throw new Error(data.error || 'Unknown error');
-                }
-            } catch (err) {
-                console.warn(`Batch deletion failed (offline): ${item.batchId}`, err);
-                savePendingBatchDeletion(item.batchId, deleteType);
-            }
-        }
-
-        if (successCount > 0) {
-            alert(`${successCount} batch(es) deleted online.`);
-        }
-        const pending = JSON.parse(localStorage.getItem('pendingBatchDeletions') || '[]');
-        if (pending.length > 0) {
-            alert(`⚠️ ${pending.length} batch deletion(s) saved offline. They will be applied when you reconnect.`);
-        }
-        closeBatchModal();
-        loadProducts(true);
-    }
-
-    function confirmDeleteProduct(productId, productName) {
-        currentProductIdForDelete = productId;
-        document.getElementById('deleteProductName').innerHTML = `Accessory Product: ${productName}`;
-        document.getElementById('deleteProductModal').classList.remove('hidden');
-    }
-
-    function closeDeleteProductModal() {
-        document.getElementById('deleteProductModal').classList.add('hidden');
-        currentProductIdForDelete = null;
-    }
-
-    async function deleteProduct(deleteType) {
-        if (!currentProductIdForDelete) return;
-        try {
-            const res = await fetch(`/api/products/${currentProductIdForDelete}?type=${deleteType}`, { method: 'DELETE' });
-            const data = await res.json();
-            if (data.success) {
-                alert(`Accessory product ${deleteType === 'clean' ? 'permanently deleted' : 'deleted (history kept)'}.`);
-                closeDeleteProductModal();
-                loadProducts(true);
-            } else {
-                alert('Error: ' + data.error);
-            }
-        } catch (err) {
-            console.warn('Product deletion failed (offline), saving for later:', err);
-            savePendingProductDeletion(currentProductIdForDelete, deleteType);
-            alert(`Accessory product deletion saved offline. It will be applied when you reconnect.`);
-            closeDeleteProductModal();
-            loadProducts();
-        }
-    }
-
     // Event listeners
     document.getElementById('searchInput').addEventListener('input', applyAdvancedSearch);
+    document.getElementById('searchInput').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            applyAdvancedSearch();
+        }
+    });
+    
     document.getElementById('clearSearchBtn').addEventListener('click', function() {
         document.getElementById('searchInput').value = '';
         this.classList.add('hidden');
@@ -994,6 +1123,19 @@
     window.addEventListener('online', function() {
         loadProducts(true);
     });
+
+    // Expose functions for inline onclick
+    window.viewBatchClaims = viewBatchClaims;
+    window.closeClaimModal = closeClaimModal;
+    window.viewBatches = viewBatches;
+    window.closeBatchModal = closeBatchModal;
+    window.selectAllBatches = selectAllBatches;
+    window.deselectAllBatches = deselectAllBatches;
+    window.deleteSelectedBatches = deleteSelectedBatches;
+    window.confirmDeleteProduct = confirmDeleteProduct;
+    window.closeDeleteProductModal = closeDeleteProductModal;
+    window.navigateToPurchase = navigateToPurchase;
+    window.clearBatchSearch = clearBatchSearch;
 
 </script>
 {% endblock %}
