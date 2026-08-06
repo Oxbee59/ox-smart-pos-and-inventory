@@ -187,6 +187,22 @@
     </div>
 </div>
 
+<!-- ========== PURCHASE HISTORY MODAL ========== -->
+<div id="historyModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+        <div class="sticky top-0 bg-white p-4 border-b flex justify-between items-center">
+            <h3 class="text-xl font-bold" id="historyModalTitle">📋 Batch History</h3>
+            <button onclick="closeHistoryModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+        </div>
+        <div id="historyContent" class="p-4 space-y-4">
+            <!-- dynamically loaded -->
+        </div>
+        <div class="sticky bottom-0 bg-white p-4 border-t text-right">
+            <button onclick="closeHistoryModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">Close</button>
+        </div>
+    </div>
+</div>
+
 <script>
     // ---------- Offline banner helpers ----------
     function updateOfflineBanner() {
@@ -741,6 +757,113 @@
         }
     }
 
+    // ============ VIEW PURCHASE HISTORY ============
+    async function viewPurchaseHistory(batchId) {
+        try {
+            const res = await fetch(`/api/purchases/${batchId}/history`);
+            if (!res.ok) throw new Error('Failed to fetch history');
+            const data = await res.json();
+            
+            if (!data.success) {
+                alert('Error: ' + data.error);
+                return;
+            }
+            
+            const purchase = data.purchase;
+            const soldItems = data.sold_items || [];
+            const totalSold = data.total_sold || 0;
+            
+            // Build the modal content
+            let html = `
+                <!-- Purchase Info -->
+                <div class="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                    <h4 class="font-bold text-blue-700 mb-2">📦 Original Purchase</h4>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                        <div><span class="text-gray-500">Date:</span> <strong>${formatDate(purchase.original_date)}</strong></div>
+                        <div><span class="text-gray-500">Quantity:</span> <strong>${purchase.original_quantity}</strong></div>
+                        <div><span class="text-gray-500">Cost:</span> <strong>₵${(purchase.original_cost_price || 0).toFixed(2)}</strong></div>
+                        <div><span class="text-gray-500">Selling:</span> <strong>₵${(purchase.original_selling_price || 0).toFixed(2)}</strong></div>
+                    </div>
+                    ${purchase.current_quantity !== purchase.original_quantity ? `
+                        <div class="mt-2 text-xs text-blue-600">
+                            📝 Updated: Qty ${purchase.current_quantity} | Cost ₵${(purchase.current_cost_price || 0).toFixed(2)} | Selling ₵${(purchase.current_selling_price || 0).toFixed(2)}
+                        </div>
+                    ` : ''}
+                    <div class="mt-2 text-xs text-gray-500">Source: ${escapeHtml(purchase.source)} | Category: ${escapeHtml(purchase.category)}</div>
+                    <div class="mt-1 text-xs text-gray-400">Batch #${purchase.batch_id} | ${escapeHtml(purchase.name)} (${escapeHtml(purchase.brand)})</div>
+                </div>
+                
+                <!-- Sold History -->
+                <div class="bg-green-50 rounded-lg p-4 border border-green-200">
+                    <div class="flex justify-between items-center mb-2">
+                        <h4 class="font-bold text-green-700">📊 Sold History (${totalSold} units)</h4>
+                    </div>
+                    ${soldItems.length === 0 ? `
+                        <div class="text-center text-gray-400 py-4">No sales recorded for this batch yet.</div>
+                    ` : `
+                        <div class="space-y-2 max-h-60 overflow-y-auto">
+                            ${soldItems.map(item => `
+                                <div class="bg-white rounded-lg p-3 border border-gray-200 flex flex-wrap justify-between items-center">
+                                    <div>
+                                        <span class="font-medium">${item.quantity} units</span>
+                                        <span class="text-sm text-gray-500 ml-2">@ ₵${(item.selling_price || 0).toFixed(2)}</span>
+                                        <span class="text-xs text-gray-400 block">Profit: ₵${(item.profit || 0).toFixed(2)}</span>
+                                    </div>
+                                    <div class="text-right text-xs">
+                                        <div class="text-gray-600">${formatDate(item.sale_date)}</div>
+                                        <div class="text-gray-400">Sale #${item.sale_id}</div>
+                                        ${item.username ? `<div class="text-gray-400">👤 ${escapeHtml(item.username)}</div>` : ''}
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `}
+                </div>
+                
+                <!-- Summary -->
+                <div class="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                    <div class="grid grid-cols-3 md:grid-cols-5 gap-2 text-sm text-center">
+                        <div>
+                            <span class="text-gray-500 block">Original</span>
+                            <span class="font-bold">${purchase.original_quantity}</span>
+                        </div>
+                        <div>
+                            <span class="text-gray-500 block">Sold</span>
+                            <span class="font-bold text-blue-600">${totalSold}</span>
+                        </div>
+                        <div>
+                            <span class="text-gray-500 block">Remaining</span>
+                            <span class="font-bold text-green-600">${purchase.remaining_quantity || 0}</span>
+                        </div>
+                        <div>
+                            <span class="text-gray-500 block">Current</span>
+                            <span class="font-bold">${purchase.current_quantity}</span>
+                        </div>
+                        <div>
+                            <span class="text-gray-500 block">Status</span>
+                            <span class="font-bold ${purchase.remaining_quantity > 0 ? 'text-green-600' : 'text-red-600'}">
+                                ${purchase.remaining_quantity > 0 ? '✅ In Stock' : '❌ Depleted'}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('historyContent').innerHTML = html;
+            document.getElementById('historyModalTitle').textContent = `📋 Batch #${batchId} - ${escapeHtml(purchase.name)}`;
+            document.getElementById('historyModal').classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+            
+        } catch (error) {
+            alert('Error loading history: ' + error.message);
+        }
+    }
+
+    function closeHistoryModal() {
+        document.getElementById('historyModal').classList.add('hidden');
+        document.body.style.overflow = '';
+    }
+
     // ---------- Load purchases (EXCLUDE screens) ----------
     async function loadPurchases(forceRefresh = false) {
         if (isLoading) return;
@@ -865,7 +988,7 @@
         }
     }
 
-    // ---------- Render list with Enhanced Sold History ----------
+    // ---------- Render list with Enhanced Sold History and History Button ----------
     function renderList(purchases, fromCache = false) {
         const container = document.getElementById('purchasesList');
         if (!purchases || purchases.length === 0) {
@@ -886,9 +1009,9 @@
             const soldBadge = soldQty > 0 ? 
                 `<span class="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded ml-2">📊 ${soldQty} Sold</span>` : '';
             
-            // ✅ Show sold history info
-            const soldInfo = soldQty > 0 ? 
-                `<p class="text-xs text-blue-500 mt-1">📊 ${soldQty} units sold across all time (preserved in sales history)</p>` : '';
+            // ✅ Show if quantity was updated
+            const updatedBadge = (p.quantity !== p.original_quantity) ? 
+                `<span class="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded ml-2">🔄 Updated</span>` : '';
             
             return `
             <div class="border rounded-lg p-4 hover:shadow transition">
@@ -898,6 +1021,7 @@
                             <h3 class="font-bold text-lg">${escapeHtml(p.name)} (${escapeHtml(p.brand)})</h3>
                             ${claimedQty > 0 ? `<span class="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">⚠️ ${claimedQty} Claimed (₵${claimedCost.toFixed(2)})</span>` : ''}
                             ${soldBadge}
+                            ${updatedBadge}
                         </div>
                         <p class="text-sm text-gray-600">Batch #${p.batch_id}</p>
                         <div class="grid grid-cols-2 md:grid-cols-4 gap-1 mt-1 text-xs">
@@ -911,9 +1035,18 @@
                         <p class="text-sm text-gray-500"><span class="font-medium">Source:</span> ${escapeHtml(p.source || 'Unknown')}</p>
                         <p class="text-sm font-bold ${profitColor}">💎 Profit: ${formatMoney(batchProfit)}</p>
                         ${claimedQty > 0 ? `<p class="text-xs text-red-500">⚠️ ${claimedQty} units claimed as faulty (Cost: ₵${claimedCost.toFixed(2)})</p>` : ''}
-                        ${soldInfo}
+                        ${p.original_date ? `<p class="text-xs text-gray-400">📅 Originally purchased: ${formatDate(p.original_date)}</p>` : ''}
                     </div>
-                    <button onclick="editPurchase(${p.batch_id})" class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-1 rounded text-sm whitespace-nowrap">✏️ Update</button>
+                    <div class="flex flex-wrap gap-1">
+                        <button onclick="viewPurchaseHistory(${p.batch_id})" 
+                                class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm flex items-center gap-1">
+                            📋 View History
+                        </button>
+                        <button onclick="editPurchase(${p.batch_id})" 
+                                class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-sm flex items-center gap-1">
+                            ✏️ Update
+                        </button>
+                    </div>
                 </div>
             </div>
         `}).join('');
@@ -1582,6 +1715,10 @@
     window.addEventListener('online', function() {
         loadPurchases(true);
     });
+
+    // Expose functions for inline onclick
+    window.viewPurchaseHistory = viewPurchaseHistory;
+    window.closeHistoryModal = closeHistoryModal;
 
 </script>
 {% endblock %}

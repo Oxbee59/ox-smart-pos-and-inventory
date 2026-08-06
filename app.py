@@ -1151,6 +1151,29 @@ def api_purchases_pdf():
     return send_file(buffer, as_attachment=True,
                      download_name=f"Purchases_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
                      mimetype='application/pdf')
+
+# ===================== PURCHASE HISTORY API =====================
+@app.route('/api/purchases/<int:batch_id>/history', methods=['GET'])
+@login_required
+def api_purchase_history(batch_id):
+    """Get purchase history for a batch"""
+    try:
+        from services.purchase_service import get_purchase_history, get_sold_history
+        history = get_purchase_history(batch_id)
+        sold_history = get_sold_history(batch_id)
+        
+        if not history:
+            return jsonify({'success': False, 'error': 'Batch not found'}), 404
+        
+        return jsonify({
+            'success': True,
+            'purchase': history,
+            'sold_items': sold_history,
+            'total_sold': sum(item['quantity'] for item in sold_history)
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/api/purchases', methods=['POST'])
 @login_required
 def api_add_purchase():
