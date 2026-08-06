@@ -1045,10 +1045,8 @@ def api_purchases_pdf():
         remaining = p.get("remaining_quantity", 0)
         claimed = p.get("claimed_quantity", 0)
         
-        # ✅ Calculate sold from the data (using the correct formula)
-        # The sold should be the preserved sales history
-        # If totals has total_sold, use it, otherwise calculate from qty - remaining
-        sold = totals.get('total_sold', qty - remaining) if totals else qty - remaining
+        # ✅ FIXED: Per‑batch sold = total quantity - remaining quantity
+        sold = qty - remaining
         
         cost = p.get("cost_price", 0)
         claimed_cost = claimed * cost
@@ -1068,13 +1066,14 @@ def api_purchases_pdf():
             p.get('source', 'Unknown'),
             date_str
         ])
+        # Aggregate totals for summary
         total_qty += qty
         total_cost += p.get("total_cost", 0)
         total_discount += p.get("discount", 0)
         total_selling += p.get("selling_price", 0) * qty
         total_claimed += claimed
         total_claimed_cost += claimed_cost
-        total_sold_summary += sold
+        total_sold_summary += sold   # sum of per‑batch sold
 
     table = Table(table_data, repeatRows=1, hAlign='LEFT',
                   colWidths=[1.5*cm, 4*cm, 3*cm, 1.5*cm, 1.5*cm, 1.5*cm, 1.5*cm, 2*cm, 2*cm, 2.5*cm, 2.5*cm, 2.5*cm, 3*cm])
@@ -1095,7 +1094,7 @@ def api_purchases_pdf():
     elements.append(Paragraph("📊 Summary", styles["Heading2"]))
     elements.append(Spacer(1, 6))
     
-    # ✅ Updated summary with all metrics including sold percentage
+    # Summary metrics – using the computed aggregates (and fallbacks from totals if provided)
     total_batches = len(purchases)
     total_remaining = total_qty - total_sold_summary
     total_sold = total_sold_summary
@@ -1103,7 +1102,6 @@ def api_purchases_pdf():
     total_profit = totals.get('total_profit', total_selling - (total_cost - total_discount)) if totals else total_selling - (total_cost - total_discount)
     total_good = total_remaining - total_claimed
     
-    # ✅ Calculate sold percentage
     sold_percentage = (total_sold / total_qty * 100) if total_qty > 0 else 0
     
     summary_data = [

@@ -204,6 +204,12 @@
 </div>
 
 <script>
+    // ---------- Safe number formatting helper ----------
+    function safeToFixed(val, decimals = 2) {
+        const num = parseFloat(val);
+        return isNaN(num) ? '0.00' : num.toFixed(decimals);
+    }
+
     // ---------- Offline banner helpers ----------
     function updateOfflineBanner() {
         const banner = document.getElementById('offlineBanner');
@@ -329,7 +335,7 @@
     }
 
     function formatMoney(amount) {
-        return '₵' + (parseFloat(amount) || 0).toFixed(2);
+        return '₵' + safeToFixed(amount);
     }
 
     // ---------- Advanced Search Functions ----------
@@ -582,9 +588,9 @@
                             <h3 class="font-bold text-lg mt-1">${escapeHtml(p.data.name)} (${escapeHtml(p.data.brand)})</h3>
                             <p class="text-sm text-gray-600">
                                 Qty: ${p.data.quantity} | 
-                                Cost: ₵${p.data.cost_price.toFixed(2)} | 
-                                Selling: ₵${p.data.selling_price.toFixed(2)}
-                                ${p.data.discount ? `| Discount: ₵${p.data.discount.toFixed(2)}` : ''}
+                                Cost: ₵${safeToFixed(p.data.cost_price)} | 
+                                Selling: ₵${safeToFixed(p.data.selling_price)}
+                                ${p.data.discount ? `| Discount: ₵${safeToFixed(p.data.discount)}` : ''}
                             </p>
                             <p class="text-sm text-gray-500">Category: ${p.data.category || 'Accessory'}</p>
                             <p class="text-sm text-gray-500">Source: ${p.data.source || 'Unknown'}</p>
@@ -781,12 +787,12 @@
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
                         <div><span class="text-gray-500">Date:</span> <strong>${formatDate(purchase.original_date)}</strong></div>
                         <div><span class="text-gray-500">Quantity:</span> <strong>${purchase.original_quantity}</strong></div>
-                        <div><span class="text-gray-500">Cost:</span> <strong>₵${(purchase.original_cost_price || 0).toFixed(2)}</strong></div>
-                        <div><span class="text-gray-500">Selling:</span> <strong>₵${(purchase.original_selling_price || 0).toFixed(2)}</strong></div>
+                        <div><span class="text-gray-500">Cost:</span> <strong>₵${safeToFixed(purchase.original_cost_price)}</strong></div>
+                        <div><span class="text-gray-500">Selling:</span> <strong>₵${safeToFixed(purchase.original_selling_price)}</strong></div>
                     </div>
                     ${purchase.current_quantity !== purchase.original_quantity ? `
                         <div class="mt-2 text-xs text-blue-600">
-                            📝 Updated: Qty ${purchase.current_quantity} | Cost ₵${(purchase.current_cost_price || 0).toFixed(2)} | Selling ₵${(purchase.current_selling_price || 0).toFixed(2)}
+                            📝 Updated: Qty ${purchase.current_quantity} | Cost ₵${safeToFixed(purchase.current_cost_price)} | Selling ₵${safeToFixed(purchase.current_selling_price)}
                         </div>
                     ` : ''}
                     <div class="mt-2 text-xs text-gray-500">Source: ${escapeHtml(purchase.source)} | Category: ${escapeHtml(purchase.category)}</div>
@@ -806,8 +812,8 @@
                                 <div class="bg-white rounded-lg p-3 border border-gray-200 flex flex-wrap justify-between items-center">
                                     <div>
                                         <span class="font-medium">${item.quantity} units</span>
-                                        <span class="text-sm text-gray-500 ml-2">@ ₵${(item.selling_price || 0).toFixed(2)}</span>
-                                        <span class="text-xs text-gray-400 block">Profit: ₵${(item.profit || 0).toFixed(2)}</span>
+                                        <span class="text-sm text-gray-500 ml-2">@ ₵${safeToFixed(item.selling_price)}</span>
+                                        <span class="text-xs text-gray-400 block">Profit: ₵${safeToFixed(item.profit)}</span>
                                     </div>
                                     <div class="text-right text-xs">
                                         <div class="text-gray-600">${formatDate(item.sale_date)}</div>
@@ -1019,7 +1025,7 @@
                     <div class="flex-1 w-full">
                         <div class="flex items-center gap-2 flex-wrap">
                             <h3 class="font-bold text-lg">${escapeHtml(p.name)} (${escapeHtml(p.brand)})</h3>
-                            ${claimedQty > 0 ? `<span class="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">⚠️ ${claimedQty} Claimed (₵${claimedCost.toFixed(2)})</span>` : ''}
+                            ${claimedQty > 0 ? `<span class="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">⚠️ ${claimedQty} Claimed (₵${safeToFixed(claimedCost)})</span>` : ''}
                             ${soldBadge}
                             ${updatedBadge}
                         </div>
@@ -1030,11 +1036,11 @@
                             <span>Remaining: <strong>${p.remaining_quantity || 0}</strong></span>
                             <span>✅ Good: <strong class="text-green-600">${Math.max(goodStock, 0)}</strong></span>
                         </div>
-                        <p class="text-sm mt-1">Cost: ₵${(p.cost_price || 0).toFixed(2)} | Discount: ₵${(p.discount || 0).toFixed(2)} | Selling: ₵${(p.selling_price || 0).toFixed(2)}</p>
-                        <p class="text-sm">Total: ₵${(p.total_cost || 0).toFixed(2)} | Date: ${formatDate(p.date)}</p>
+                        <p class="text-sm mt-1">Cost: ₵${safeToFixed(p.cost_price)} | Discount: ₵${safeToFixed(p.discount)} | Selling: ₵${safeToFixed(p.selling_price)}</p>
+                        <p class="text-sm">Total: ₵${safeToFixed(p.total_cost)} | Date: ${formatDate(p.date)}</p>
                         <p class="text-sm text-gray-500"><span class="font-medium">Source:</span> ${escapeHtml(p.source || 'Unknown')}</p>
                         <p class="text-sm font-bold ${profitColor}">💎 Profit: ${formatMoney(batchProfit)}</p>
-                        ${claimedQty > 0 ? `<p class="text-xs text-red-500">⚠️ ${claimedQty} units claimed as faulty (Cost: ₵${claimedCost.toFixed(2)})</p>` : ''}
+                        ${claimedQty > 0 ? `<p class="text-xs text-red-500">⚠️ ${claimedQty} units claimed as faulty (Cost: ₵${safeToFixed(claimedCost)})</p>` : ''}
                         ${p.original_date ? `<p class="text-xs text-gray-400">📅 Originally purchased: ${formatDate(p.original_date)}</p>` : ''}
                     </div>
                     <div class="flex flex-wrap gap-1">
@@ -1281,10 +1287,10 @@
                     if (!confirm(`⚠️ You are changing the price of this batch.\n\n` +
                                  `This will create a NEW batch with the updated prices.\n` +
                                  `The old batch will remain with its original prices.\n\n` +
-                                 `Current Cost: ₵${purchase.cost_price.toFixed(2)}\n` +
-                                 `New Cost: ₵${payload.cost_price.toFixed(2)}\n` +
-                                 `Current Selling: ₵${purchase.selling_price.toFixed(2)}\n` +
-                                 `New Selling: ₵${payload.selling_price.toFixed(2)}\n\n` +
+                                 `Current Cost: ₵${safeToFixed(purchase.cost_price)}\n` +
+                                 `New Cost: ₵${safeToFixed(payload.cost_price)}\n` +
+                                 `Current Selling: ₵${safeToFixed(purchase.selling_price)}\n` +
+                                 `New Selling: ₵${safeToFixed(payload.selling_price)}\n\n` +
                                  `Continue?`)) {
                         return;
                     }
