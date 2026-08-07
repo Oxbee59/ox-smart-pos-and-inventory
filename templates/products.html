@@ -923,7 +923,7 @@
         try {
             let lowStockUrl = `/api/products/low_stock?threshold=10`;
             // The page is Accessory, so filter by category
-            lowStockUrl += '&category=Accessory';
+            lowStockUrl += '&exclude_category=Screen';
             const lowRes = await fetch(lowStockUrl);
             if (lowRes.ok) {
                 lowStockProducts = await lowRes.json();

@@ -1367,27 +1367,31 @@ def api_delete_product(product_id):
 @app.route('/api/products/low_stock', methods=['GET'])
 @login_required
 def api_low_stock():
-    """Get low stock products, optionally filtered by category."""
     category = request.args.get('category')
+    exclude_category = request.args.get('exclude_category')
     threshold = int(request.args.get('threshold', 10))
     
     low_stock = get_low_stock_products(threshold)
     
-    # Filter by category if provided
-    if category:
-        low_stock = [p for p in low_stock if p[2].lower() == category.lower()]
-    
-    # Convert to list of dicts for frontend
-    result = []
+    filtered = []
     for p in low_stock:
-        result.append({
+        cat = p[2] or ''          # handle None / empty
+        if category and cat.lower() != category.lower():
+            continue
+        if exclude_category and cat.lower() == exclude_category.lower():
+            continue
+        filtered.append(p)
+    
+    result = [
+        {
             'name': p[0],
             'brand': p[1],
-            'category': p[2],
+            'category': p[2] or '',
             'stock': p[3],
             'batch_ids': p[4]
-        })
-    
+        }
+        for p in filtered
+    ]
     return jsonify(result)
 
 @app.route('/api/batches/<int:batch_id>', methods=['DELETE'])
