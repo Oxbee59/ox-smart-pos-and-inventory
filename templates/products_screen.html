@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block content %}
-<!-- Offline banner (updated for screens) -->
+<!-- Offline banner -->
 <div id="offlineBanner" class="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded hidden">
     ⚠️ You are offline – showing cached screen products. Deletions will be saved and applied when you reconnect.
 </div>
@@ -23,7 +23,7 @@
     </div>
 </div>
 
-<!-- Header with screen indicator -->
+<!-- Header -->
 <div class="bg-white rounded-xl shadow-md p-6 mb-6">
     <div class="flex items-center gap-2">
         <h2 class="text-2xl font-bold text-indigo-600 mb-0">📦 Product Manager</h2>
@@ -93,9 +93,9 @@
     </div>
 </div>
 
-<!-- Summary - Fixed Calculations -->
+<!-- Summary -->
 <div id="summary" class="mb-4">
-    <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+    <div class="grid grid-cols-2 md:grid-cols-6 gap-3">
         <div class="bg-white rounded-xl shadow-md p-3 text-center border border-gray-100">
             <p class="text-xs text-gray-500">📦 Products</p>
             <p id="totalProductsCount" class="text-xl md:text-2xl font-bold text-indigo-600">0</p>
@@ -116,8 +116,28 @@
             <p class="text-xs text-gray-500">✅ Good Stock</p>
             <p id="totalGoodCount" class="text-xl md:text-2xl font-bold text-green-600">0</p>
         </div>
+        <!-- NEW: Low Stock Items -->
+        <div class="bg-white rounded-xl shadow-md p-3 text-center border border-gray-100">
+            <p class="text-xs text-gray-500">⚠️ Low Stock Items</p>
+            <p id="lowStockCount" class="text-xl md:text-2xl font-bold text-red-600">0</p>
+        </div>
     </div>
     <div id="cacheStatus" class="text-xs text-gray-400 mt-2 text-center"></div>
+</div>
+
+<!-- Low Stock Items List -->
+<div class="bg-white rounded-xl shadow-md p-4 mb-4">
+    <div class="flex justify-between items-center mb-3">
+        <h2 class="text-base md:text-xl font-semibold">⚠️ Low Stock Items</h2>
+        <span id="lowStockCountBadge" class="bg-red-100 text-red-800 text-xs px-2 py-1 rounded">0 items</span>
+    </div>
+    <div class="mb-3">
+        <input type="text" id="lowStockSearch" placeholder="🔍 Search by name, brand, category, or batch #..." 
+               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+    </div>
+    <div id="lowStockList" class="max-h-60 overflow-y-auto space-y-2 pr-2">
+        <!-- dynamically loaded -->
+    </div>
 </div>
 
 <!-- Products List (cards) -->
@@ -125,6 +145,7 @@
     <!-- dynamic content -->
 </div>
 
+<!-- ===== MODALS ===== -->
 <!-- Modal: View Batches -->
 <div id="batchModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-60 flex items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -187,9 +208,7 @@
 </div>
 
 <style>
-    /* Ensure modals appear above sidebar */
     .z-60 { z-index: 60; }
-    
     .stock-breakdown {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
@@ -204,7 +223,6 @@
     .stock-total { background: #f3f4f6; }
     .stock-sold { background: #dbeafe; }
     .stock-good { background: #d1fae5; }
-    
     .highlight-match {
         background-color: #fef08a;
         padding: 0 2px;
@@ -309,6 +327,9 @@
     let searchField = 'all';
     let caseSensitive = false;
 
+    // Low stock variables
+    let lowStockProducts = [];
+
     const PRODUCTS_CACHE_KEY = 'cached_products_screen';
 
     // ---------- Utilities ----------
@@ -350,6 +371,73 @@
             case 'category': return product.category || '';
             default: return [product.name || '', product.brand || '', product.category || ''].join(' ');
         }
+    }
+
+    // ---------- Render low stock list ----------
+    function renderLowStockList(products) {
+        const container = document.getElementById('lowStockList');
+        container.innerHTML = '';
+        if (!products || products.length === 0) {
+            container.innerHTML = '<div class="text-gray-400 text-center py-4 text-sm">✅ No low stock items found.</div>';
+            document.getElementById('lowStockCountBadge').textContent = '0 items';
+            return;
+        }
+
+        products.forEach(item => {
+            const name = item.name || '';
+            const brand = item.brand || '';
+            const category = item.category || '';
+            const stock = item.stock || 0;
+            const batchIds = item.batch_ids || [];
+
+            let batchDisplay = '';
+            let statusClass = '';
+            let categoryBadge = '';
+
+            if (category.toLowerCase() === 'screen') {
+                categoryBadge = `<span class="bg-purple-100 text-purple-800 text-[8px] md:text-xs px-1 md:px-1.5 py-0.5 rounded ml-0.5 md:ml-1">Screen</span>`;
+            } else if (category.toLowerCase() === 'accessory') {
+                categoryBadge = `<span class="bg-green-100 text-green-800 text-[8px] md:text-xs px-1 md:px-1.5 py-0.5 rounded ml-0.5 md:ml-1">Accessory</span>`;
+            }
+
+            if (batchIds && batchIds.length > 0) {
+                const batchList = batchIds.slice(0, 5).join(', #');
+                const more = batchIds.length > 5 ? ` +${batchIds.length - 5} more` : '';
+                batchDisplay = ` | Batch${batchIds.length > 1 ? 'es' : ''}: #${batchList}${more}`;
+                statusClass = 'text-green-600';
+            } else if (stock === 0) {
+                batchDisplay = ' | ⚠️ DEPLETED - No active batches';
+                statusClass = 'text-orange-500';
+            } else {
+                batchDisplay = ' | ⚠️ WARNING: Stock without batches!';
+                statusClass = 'text-red-500';
+            }
+
+            const div = document.createElement('div');
+            div.className = 'border-b pb-1 flex justify-between items-center hover:bg-blue-50 p-2 rounded transition-colors cursor-pointer text-sm';
+            div.dataset.productName = name;
+            div.dataset.productCategory = category || 'Screen';
+
+            div.addEventListener('click', function(e) {
+                let page = '/products/screens';
+                sessionStorage.setItem('autoOpenProduct', name);
+                sessionStorage.setItem('autoOpenBatches', 'true');
+                window.location.href = page;
+            });
+
+            div.innerHTML = `
+                <span class="truncate">
+                    <strong class="text-indigo-700">${escapeHtml(name)}</strong>
+                    <span class="text-gray-600 text-xs"> (${escapeHtml(brand)} | ${escapeHtml(category)})</span>
+                    ${categoryBadge}
+                    <span class="text-xs ${statusClass} block">${batchDisplay}</span>
+                </span>
+                <span class="${stock === 0 ? 'text-red-600 font-bold' : 'text-red-600'} text-sm whitespace-nowrap">${stock} left</span>
+            `;
+            container.appendChild(div);
+        });
+
+        document.getElementById('lowStockCountBadge').textContent = `${products.length} items`;
     }
 
     // ---------- Render products (with safe batch data) ----------
@@ -447,7 +535,7 @@
         document.getElementById('batchModal').classList.remove('hidden');
     }
 
-    // ---------- Render batch list (fixed layout) ----------
+    // ---------- Render batch list ----------
     function renderBatchList(batches) {
         const container = document.getElementById('batchList');
         container.innerHTML = '';
@@ -495,7 +583,6 @@
                                     </button>
                                 </div>
                             </div>
-                            <!-- Stock breakdown with nice grid -->
                             <div class="grid grid-cols-3 sm:grid-cols-5 gap-1 mt-2 text-xs">
                                 <div class="bg-gray-100 rounded px-2 py-1 text-center">
                                     <span class="text-gray-500 block">Total</span>
@@ -518,7 +605,6 @@
                                     <strong class="text-green-600">${Math.max(goodQty, 0)}</strong>
                                 </div>
                             </div>
-                            <!-- Price info with correct formatting -->
                             <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2 text-xs">
                                 <span class="bg-gray-50 rounded px-2 py-1">Cost: <strong>₵${safeToFixed(batch.cost_price)}</strong></span>
                                 <span class="bg-gray-50 rounded px-2 py-1">Selling: <strong>₵${safeToFixed(batch.selling_price)}</strong></span>
@@ -830,6 +916,21 @@
             cacheStatus.className = 'text-xs text-green-500 mt-2 text-center';
         }
 
+        // ---------- Fetch low stock data ----------
+        try {
+            let lowStockUrl = `/api/products/low_stock?threshold=10`;
+            // The page is Screen, so filter by category
+            lowStockUrl += '&category=Screen';
+            const lowRes = await fetch(lowStockUrl);
+            if (lowRes.ok) {
+                lowStockProducts = await lowRes.json();
+                document.getElementById('lowStockCount').textContent = lowStockProducts.length;
+                renderLowStockList(lowStockProducts);
+            }
+        } catch (e) {
+            console.warn('Could not load low stock data:', e);
+        }
+
         applyAdvancedSearch();
         autoOpenBatches();
         isLoading = false;
@@ -884,6 +985,26 @@
         if (keyword) clearBtn.classList.remove('hidden');
         else clearBtn.classList.add('hidden');
     }
+
+    // ---------- Low stock search ----------
+    document.getElementById('lowStockSearch').addEventListener('input', function() {
+        const keyword = this.value.toLowerCase().trim();
+        if (!keyword) {
+            renderLowStockList(lowStockProducts);
+            return;
+        }
+        const filtered = lowStockProducts.filter(item => {
+            const name = item.name || '';
+            const brand = item.brand || '';
+            const category = item.category || '';
+            const batchIds = item.batch_ids || [];
+            return name.toLowerCase().includes(keyword) ||
+                   brand.toLowerCase().includes(keyword) ||
+                   category.toLowerCase().includes(keyword) ||
+                   batchIds.some(b => b.toString().includes(keyword));
+        });
+        renderLowStockList(filtered);
+    });
 
     // ---------- Auto-open batches (from session) ----------
     function autoOpenBatches() {

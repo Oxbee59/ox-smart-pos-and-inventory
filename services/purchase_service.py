@@ -109,7 +109,7 @@ def add_purchase(name, brand, category, quantity, cost_price, discount, selling_
 
 
 # ============================================================
-#  UPDATE BATCH (WITH MODE AND HISTORY)
+#  UPDATE BATCH (WITH MODE, HISTORY, AND KEEP_SOLD_WITH_OLD)
 # ============================================================
 
 def update_product(
@@ -122,15 +122,20 @@ def update_product(
     discount,
     selling_price,
     source=None,
-    update_mode='auto'          # 'auto', 'create', 'update'
+    update_mode='auto',          # 'auto', 'create', 'update'
+    keep_sold_with_old=True      # NEW: controls how sold items are handled when creating a new batch
 ):
     """
-    Smart batch update with explicit mode.
+    Smart batch update with explicit mode and sold‑item handling.
 
     Modes:
       - 'auto': original behaviour (create new batch on price/identity change)
       - 'create': force creation of a new batch if price/identity changes
       - 'update': force update of the same batch, even if price/identity changes
+
+    keep_sold_with_old:
+      - If True (default): the new batch inherits the remaining stock from the old batch.
+      - If False: the new batch gets the full new quantity (fresh stock), and the old batch is depleted.
     """
     quantity = int(quantity)
     cost_price = float(cost_price)
@@ -179,13 +184,12 @@ def update_product(
             WHERE batch_id = %s
         """, (batch_id,))
         total_sold = cursor.fetchone()[0]
-        correct_remaining = max(quantity - total_sold, 0)
 
-        # Determine changes
+        # Determine changes – now case‑sensitive so even case changes trigger the modal
         identity_changed = (
-            old_product_name.lower() != name.lower() or
-            old_product_brand.lower() != brand.lower() or
-            old_category.lower() != category.lower()
+            old_product_name != name or
+            old_product_brand != brand or
+            old_category != category
         )
 
         price_changed = (
@@ -197,13 +201,8 @@ def update_product(
         print(f"📊 Batch #{batch_id}: Identity: {identity_changed}, Price: {price_changed}, Mode: {update_mode}")
 
         # ============ DECIDE ACTION ============
-        # If mode is 'update', we will modify the same batch (even if price/identity changed)
-        # If mode is 'create', we will always create a new batch if price or identity changed
-        # If mode is 'auto', use original logic
-
         if update_mode == 'update':
             # Force update of this batch – preserve original data
-            # Update product if identity changed
             if identity_changed:
                 # Check if another product with new identity exists
                 cursor.execute("""
@@ -214,7 +213,6 @@ def update_product(
                 """, (name, brand, category, product_id))
                 existing = cursor.fetchone()
                 if existing:
-                    # Move batch to existing product
                     new_product_id = existing[0]
                     cursor.execute("""
                         UPDATE purchase_batches
@@ -222,43 +220,38 @@ def update_product(
                             cost_price = %s, selling_price = %s, discount = %s,
                             date = %s, action = %s, source = %s
                         WHERE id = %s
-                    """, (new_product_id, quantity, correct_remaining, cost_price, selling_price,
+                    """, (new_product_id, quantity, max(quantity - total_sold, 0), cost_price, selling_price,
                           discount, datetime.now(), "moved_forced", source, batch_id))
                     update_product_stock(cursor, new_product_id)
                     update_product_stock(cursor, product_id)
-                    # Delete old product if empty
                     cursor.execute("SELECT COUNT(*) FROM purchase_batches WHERE product_id = %s", (product_id,))
                     if cursor.fetchone()[0] == 0:
                         cursor.execute("DELETE FROM products WHERE id = %s", (product_id,))
                     product_id = new_product_id
                 else:
-                    # Just rename the product
                     cursor.execute("""
                         UPDATE products
                         SET name = %s, brand = %s, category = %s
                         WHERE id = %s
                     """, (name, brand, category, product_id))
-                    # Update batch with new data
                     cursor.execute("""
                         UPDATE purchase_batches
                         SET quantity = %s, remaining_quantity = %s,
                             cost_price = %s, selling_price = %s, discount = %s,
                             date = %s, action = %s, source = %s
                         WHERE id = %s
-                    """, (quantity, correct_remaining, cost_price, selling_price, discount,
+                    """, (quantity, max(quantity - total_sold, 0), cost_price, selling_price, discount,
                           datetime.now(), "updated_forced", source, batch_id))
             else:
-                # No identity change – update batch with new values (including price if changed)
                 cursor.execute("""
                     UPDATE purchase_batches
                     SET quantity = %s, remaining_quantity = %s,
                         cost_price = %s, selling_price = %s, discount = %s,
                         date = %s, action = %s, source = %s
                     WHERE id = %s
-                """, (quantity, correct_remaining, cost_price, selling_price, discount,
+                """, (quantity, max(quantity - total_sold, 0), cost_price, selling_price, discount,
                       datetime.now(), "updated_forced", source, batch_id))
 
-            # Log changes (capture old vs new)
             old_data = {
                 "quantity": current_total,
                 "remaining": current_remaining,
@@ -272,7 +265,7 @@ def update_product(
             }
             new_data = {
                 "quantity": quantity,
-                "remaining": correct_remaining,
+                "remaining": max(quantity - total_sold, 0),
                 "cost_price": cost_price,
                 "selling_price": selling_price,
                 "discount": discount,
@@ -282,13 +275,12 @@ def update_product(
                 "category": category
             }
             log_batch_update(cursor, batch_id, old_data, new_data)
-
             update_product_stock(cursor, product_id)
             conn.commit()
             return batch_id
 
         # ============ MODE == 'create' OR 'auto' ============
-        # Archive old batch (for history) – common for both create and auto
+        # Archive the old batch (for history) – common for both create and auto
         cursor.execute("""
             SELECT quantity, remaining_quantity, cost_price, selling_price, discount, date, action, source
             FROM purchase_batches
@@ -308,7 +300,6 @@ def update_product(
         # ============ CASE 1: Identity changed ============
         if identity_changed:
             if update_mode == 'create' or update_mode == 'auto':
-                # Always create a new product or move to existing, then new batch
                 cursor.execute("""
                     SELECT p.id
                     FROM products p
@@ -319,7 +310,20 @@ def update_product(
 
                 if existing_product:
                     new_product_id = existing_product[0]
-                    # Create new batch on existing product
+                    # Determine new batch quantity and remaining based on keep_sold_with_old
+                    if keep_sold_with_old:
+                        new_batch_qty = current_remaining
+                        new_batch_remaining = current_remaining
+                    else:
+                        new_batch_qty = quantity
+                        new_batch_remaining = quantity
+                        # Deplete old batch
+                        cursor.execute("""
+                            UPDATE purchase_batches
+                            SET remaining_quantity = 0, action = 'depleted_by_update'
+                            WHERE id = %s
+                        """, (batch_id,))
+
                     cursor.execute("""
                         INSERT INTO purchase_batches
                         (product_id, quantity, remaining_quantity, cost_price, selling_price, discount,
@@ -327,32 +331,35 @@ def update_product(
                          original_quantity, original_cost_price, original_selling_price, original_discount, original_date)
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         RETURNING id
-                    """, (new_product_id, quantity, correct_remaining, cost_price, selling_price, discount,
+                    """, (new_product_id, new_batch_qty, new_batch_remaining, cost_price, selling_price, discount,
                           datetime.now(), "moved_new", source,
-                          quantity, cost_price, selling_price, discount, datetime.now()))
+                          new_batch_qty, cost_price, selling_price, discount, datetime.now()))
                     new_batch_id = cursor.fetchone()[0]
                     update_product_stock(cursor, new_product_id)
                     update_product_stock(cursor, product_id)
-                    # Remove old product if empty
                     cursor.execute("SELECT COUNT(*) FROM purchase_batches WHERE product_id = %s", (product_id,))
                     if cursor.fetchone()[0] == 0:
                         cursor.execute("DELETE FROM products WHERE id = %s", (product_id,))
                     conn.commit()
                     return new_batch_id
                 else:
-                    # Rename product and update batch (or create new? we need to create new batch with new identity)
-                    # Actually, if identity changed and we are creating a new batch, we can either:
-                    #   - Keep the old product and rename it, then create a new batch on it.
-                    #   - Or create a completely new product and move sales? That is complex.
-                    # We'll follow original logic: rename existing product and create new batch on it.
-                    # But we need to preserve original product for old batches.
-                    # So we rename the current product to the new identity and create a new batch on it.
+                    # Rename existing product and create new batch on it
                     cursor.execute("""
                         UPDATE products
                         SET name = %s, brand = %s, category = %s
                         WHERE id = %s
                     """, (name, brand, category, product_id))
-                    # Now create a new batch on this same product
+                    if keep_sold_with_old:
+                        new_batch_qty = current_remaining
+                        new_batch_remaining = current_remaining
+                    else:
+                        new_batch_qty = quantity
+                        new_batch_remaining = quantity
+                        cursor.execute("""
+                            UPDATE purchase_batches
+                            SET remaining_quantity = 0, action = 'depleted_by_update'
+                            WHERE id = %s
+                        """, (batch_id,))
                     cursor.execute("""
                         INSERT INTO purchase_batches
                         (product_id, quantity, remaining_quantity, cost_price, selling_price, discount,
@@ -360,9 +367,9 @@ def update_product(
                          original_quantity, original_cost_price, original_selling_price, original_discount, original_date)
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         RETURNING id
-                    """, (product_id, quantity, correct_remaining, cost_price, selling_price, discount,
+                    """, (product_id, new_batch_qty, new_batch_remaining, cost_price, selling_price, discount,
                           datetime.now(), "identity_changed", source,
-                          quantity, cost_price, selling_price, discount, datetime.now()))
+                          new_batch_qty, cost_price, selling_price, discount, datetime.now()))
                     new_batch_id = cursor.fetchone()[0]
                     update_product_stock(cursor, product_id)
                     conn.commit()
@@ -371,7 +378,17 @@ def update_product(
         # ============ CASE 2: Price changed, but identity same ============
         elif price_changed and not identity_changed:
             if update_mode == 'create' or update_mode == 'auto':
-                # Create new batch with new prices
+                if keep_sold_with_old:
+                    new_batch_qty = current_remaining
+                    new_batch_remaining = current_remaining
+                else:
+                    new_batch_qty = quantity
+                    new_batch_remaining = quantity
+                    cursor.execute("""
+                        UPDATE purchase_batches
+                        SET remaining_quantity = 0, action = 'depleted_by_update'
+                        WHERE id = %s
+                    """, (batch_id,))
                 cursor.execute("""
                     INSERT INTO purchase_batches
                     (product_id, quantity, remaining_quantity, cost_price, selling_price, discount,
@@ -379,34 +396,29 @@ def update_product(
                      original_quantity, original_cost_price, original_selling_price, original_discount, original_date)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING id
-                """, (product_id, quantity, correct_remaining, cost_price, selling_price, discount,
+                """, (product_id, new_batch_qty, new_batch_remaining, cost_price, selling_price, discount,
                       datetime.now(), "price_changed", source,
-                      quantity, cost_price, selling_price, discount, datetime.now()))
+                      new_batch_qty, cost_price, selling_price, discount, datetime.now()))
                 new_batch_id = cursor.fetchone()[0]
-
-                # Mark old batch as price_updated_original
                 cursor.execute("""
                     UPDATE purchase_batches
                     SET action = %s
                     WHERE id = %s
                 """, ("price_updated_original", batch_id))
-
                 update_product_stock(cursor, product_id)
                 conn.commit()
                 return new_batch_id
 
         # ============ CASE 3: Quantity/Source only (or no change) ============
-        # If we reach here, either mode is 'auto' and no price/identity change, or mode is 'create' but no price/identity change
-        # In 'auto', we update same batch.
-        # In 'create', we also update same batch (because no price/identity change, no new batch needed).
-        # So we update the same batch.
+        # If we reach here, either mode is 'auto' and no price/identity change, or mode is 'create' but no price/identity change.
+        # In both cases, we update the same batch.
         cursor.execute("""
             UPDATE purchase_batches
             SET quantity = %s, remaining_quantity = %s,
                 cost_price = %s, selling_price = %s, discount = %s,
                 date = %s, action = %s, source = %s
             WHERE id = %s
-        """, (quantity, correct_remaining, cost_price, selling_price, discount,
+        """, (quantity, max(quantity - total_sold, 0), cost_price, selling_price, discount,
               datetime.now(), "updated_qty", source, batch_id))
 
         update_product_stock(cursor, product_id)

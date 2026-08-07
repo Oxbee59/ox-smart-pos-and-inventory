@@ -223,6 +223,36 @@
     </div>
 </div>
 
+<!-- ========== CREATE NEW BATCH OPTIONS MODAL ========== -->
+<div id="createBatchModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-70 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+        <h3 class="text-xl font-bold mb-2">📦 Create New Batch</h3>
+        <p class="text-gray-600 text-sm mb-4">
+            You are creating a new batch with the updated data. How would you like to handle sold items?
+        </p>
+        <div class="mb-4">
+            <label class="flex items-start gap-2 cursor-pointer">
+                <input type="checkbox" id="keepSoldWithOld" checked class="mt-1 h-4 w-4 text-blue-600 rounded">
+                <span class="text-sm text-gray-700">
+                    <span class="font-medium">Keep sold items with original batch</span><br>
+                    <span class="text-xs text-gray-500">New batch will contain only unsold stock (remaining quantity).</span>
+                </span>
+            </label>
+            <div class="mt-2 text-xs text-gray-400 border-t pt-2">
+                <span class="font-medium">If unchecked:</span> New batch will have the full new quantity (fresh stock), and the original batch will be depleted.
+            </div>
+        </div>
+        <div class="flex gap-2">
+            <button id="createBatchProceedBtn" class="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded text-sm">
+                ✅ Proceed
+            </button>
+            <button id="createBatchCancelBtn" class="flex-1 bg-gray-400 hover:bg-gray-500 text-white py-2 rounded text-sm">
+                Cancel
+            </button>
+        </div>
+    </div>
+</div>
+
 <script>
     // ---------- Safe number formatting helper ----------
     function safeToFixed(val, decimals = 2) {
@@ -304,6 +334,9 @@
     let caseSensitive = false;
     let pendingUpdatePayload = null;
     let pendingUpdateBatchId = null;
+    // New variables for second modal
+    let pendingCreatePayload = null;
+    let pendingCreateBatchId = null;
 
     // ---------- Helper functions ----------
     function escapeHtml(str) {
@@ -1016,10 +1049,11 @@
                 const costChanged = Math.abs(purchase.cost_price - payload.cost_price) > 0.001;
                 const sellingChanged = Math.abs(purchase.selling_price - payload.selling_price) > 0.001;
                 const discountChanged = Math.abs((purchase.discount || 0) - payload.discount) > 0.001;
+                // 🔥 Identity changed: case-sensitive comparison now
                 const identityChanged = (
-                    purchase.name.toLowerCase() !== payload.name.toLowerCase() ||
-                    purchase.brand.toLowerCase() !== payload.brand.toLowerCase() ||
-                    purchase.category.toLowerCase() !== payload.category.toLowerCase()
+                    purchase.name !== payload.name ||
+                    purchase.brand !== payload.brand ||
+                    purchase.category !== payload.category
                 );
 
                 if (costChanged || sellingChanged || discountChanged || identityChanged) {
@@ -1041,6 +1075,10 @@
             url = `/api/purchases/${batchId}`;
             method = 'PUT';
             payload.update_mode = actionType === 'create' ? 'create' : 'update';
+            // If we have a keep_sold_with_old flag in the payload, pass it
+            if (typeof payload.keep_sold_with_old !== 'undefined') {
+                // It's already set; we'll include it
+            }
         }
         try {
             const res = await fetch(url, {
@@ -1076,6 +1114,8 @@
         }
     }
 
+    // ====== MODAL EVENT LISTENERS ======
+    // Update Mode – Update button
     document.getElementById('updateModeUpdateBtn').addEventListener('click', function() {
         document.getElementById('updateModeModal').classList.add('hidden');
         if (pendingUpdatePayload && pendingUpdateBatchId) {
@@ -1084,18 +1124,43 @@
             pendingUpdateBatchId = null;
         }
     });
+
+    // Update Mode – Create new batch button → show second modal
     document.getElementById('updateModeCreateBtn').addEventListener('click', function() {
         document.getElementById('updateModeModal').classList.add('hidden');
         if (pendingUpdatePayload && pendingUpdateBatchId) {
-            doSubmitPurchase(pendingUpdatePayload, 'create', pendingUpdateBatchId);
-            pendingUpdatePayload = null;
-            pendingUpdateBatchId = null;
+            pendingCreatePayload = pendingUpdatePayload;
+            pendingCreateBatchId = pendingUpdateBatchId;
+            document.getElementById('createBatchModal').classList.remove('hidden');
         }
     });
+
+    // Update Mode – Cancel button
     document.getElementById('updateModeCancelBtn').addEventListener('click', function() {
         document.getElementById('updateModeModal').classList.add('hidden');
         pendingUpdatePayload = null;
         pendingUpdateBatchId = null;
+    });
+
+    // Create Batch Modal – Proceed
+    document.getElementById('createBatchProceedBtn').addEventListener('click', function() {
+        const keepSold = document.getElementById('keepSoldWithOld').checked;
+        document.getElementById('createBatchModal').classList.add('hidden');
+        if (pendingCreatePayload && pendingCreateBatchId) {
+            pendingCreatePayload.keep_sold_with_old = keepSold;
+            doSubmitPurchase(pendingCreatePayload, 'create', pendingCreateBatchId);
+            pendingCreatePayload = null;
+            pendingCreateBatchId = null;
+        }
+    });
+
+    // Create Batch Modal – Cancel
+    document.getElementById('createBatchCancelBtn').addEventListener('click', function() {
+        document.getElementById('createBatchModal').classList.add('hidden');
+        pendingCreatePayload = null;
+        pendingCreateBatchId = null;
+        // Re-open first modal so user can choose again
+        document.getElementById('updateModeModal').classList.remove('hidden');
     });
 
     // ---------- Edit / Reset ----------

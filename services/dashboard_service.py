@@ -133,20 +133,23 @@ def get_today_profit(selected_date=None, start_datetime=None, end_datetime=None)
     return profit
 
 
-# ----------------- TOTAL PRODUCTS (ALL unique products, including stock 0 and without batches) -----------------
+# ----------------- TOTAL PRODUCTS (only those with at least one batch) -----------------
 def get_total_products():
     """
-    Count ALL unique products (grouped by name + brand) 
-    including those with stock = 0 and those without any batches.
+    Count products that have at least one purchase batch.
+    This matches the behaviour of the product pages (Accessories and Screens).
     Excludes permanently deleted products.
-    FIXED: Uses COUNT(*) instead of COUNT(DISTINCT CONCAT) to get accurate product count.
     """
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT COUNT(*) as total_products
+        SELECT COUNT(DISTINCT p.id) as total_products
         FROM products p
-        WHERE NOT EXISTS (
+        WHERE EXISTS (
+            SELECT 1 FROM purchase_batches pb
+            WHERE pb.product_id = p.id
+        )
+        AND NOT EXISTS (
             SELECT 1 FROM deleted_products dp 
             WHERE dp.product_id = p.id 
             AND dp.action IN ('PERMANENTLY DELETED', 'PRODUCT DELETED')
@@ -186,8 +189,7 @@ def get_total_batches():
 def get_low_stock_products(threshold=10):
     """
     Return products with stock <= threshold (including 0).
-    FIXED: Now includes ALL products with low stock, even those without batches.
-    NEW: Includes ALL batch IDs for each product (including depleted batches) so you can trace them.
+    Includes ALL batch IDs (active & depleted) for traceability.
     """
     conn = get_connection()
     cursor = conn.cursor()
@@ -344,8 +346,7 @@ def get_dashboard_summary(start_datetime=None, end_datetime=None):
     """
     Get all dashboard summary data in one call.
     Returns sales, profit, total_products, total_batches, low_stock_count, and low_stock_products.
-    FIXED: Uses COUNT(*) for total_products instead of COUNT(DISTINCT CONCAT)
-    NEW: Includes ALL batch IDs for low stock products (including depleted batches) so you can trace them.
+    Now total_products counts only products with at least one batch (consistent with product pages).
     """
     conn = get_connection()
     cursor = conn.cursor()
@@ -396,18 +397,9 @@ def get_dashboard_summary(start_datetime=None, end_datetime=None):
     total_sales = sales_data[0] or 0
     total_profit = sales_data[1] or 0
     
-    # Get total products (ALL products, including those without batches)
-    cursor.execute("""
-        SELECT COUNT(*) as total_products
-        FROM products p
-        WHERE NOT EXISTS (
-            SELECT 1 FROM deleted_products dp 
-            WHERE dp.product_id = p.id 
-            AND dp.action IN ('PERMANENTLY DELETED', 'PRODUCT DELETED')
-            AND dp.source = 'product'
-        )
-    """)
-    total_products = cursor.fetchone()[0] or 0
+    # Get total products – now only those with at least one batch
+    # (reuse the function to keep logic in one place)
+    total_products = get_total_products()
     
     # Get total batches
     cursor.execute("""

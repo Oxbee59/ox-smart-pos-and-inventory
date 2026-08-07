@@ -1222,6 +1222,8 @@ def api_update_purchase(batch_id):
 
         # Extract update_mode (default 'auto')
         update_mode = data.get('update_mode', 'auto')
+        # Extract keep_sold_with_old (default True)
+        keep_sold_with_old = data.get('keep_sold_with_old', True)
 
         new_batch_id = update_product(
             batch_id=batch_id,
@@ -1233,7 +1235,8 @@ def api_update_purchase(batch_id):
             discount=float(data.get('discount', 0)),
             selling_price=float(data['selling_price']),
             source=data.get('source', 'Unknown'),
-            update_mode=update_mode          # <-- PASS IT
+            update_mode=update_mode,
+            keep_sold_with_old=keep_sold_with_old
         )
         return jsonify({'success': True, 'new_batch_id': new_batch_id})
     except ValueError as e:
@@ -1243,7 +1246,6 @@ def api_update_purchase(batch_id):
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
-
 @app.route('/api/purchases/suggestions/source', methods=['GET'])
 @login_required
 def api_suggest_source():
@@ -1361,6 +1363,32 @@ def api_delete_product(product_id):
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 400
+
+@app.route('/api/products/low_stock', methods=['GET'])
+@login_required
+def api_low_stock():
+    """Get low stock products, optionally filtered by category."""
+    category = request.args.get('category')
+    threshold = int(request.args.get('threshold', 10))
+    
+    low_stock = get_low_stock_products(threshold)
+    
+    # Filter by category if provided
+    if category:
+        low_stock = [p for p in low_stock if p[2].lower() == category.lower()]
+    
+    # Convert to list of dicts for frontend
+    result = []
+    for p in low_stock:
+        result.append({
+            'name': p[0],
+            'brand': p[1],
+            'category': p[2],
+            'stock': p[3],
+            'batch_ids': p[4]
+        })
+    
+    return jsonify(result)
 
 @app.route('/api/batches/<int:batch_id>', methods=['DELETE'])
 @login_required
