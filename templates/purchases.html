@@ -38,7 +38,6 @@
     <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-8 gap-3">
         <div>
             <label class="block text-sm font-medium text-gray-700">Product Name</label>
-            <!-- added max-h-60 overflow-y-auto w-full -->
             <input type="text" id="name" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" autocomplete="off">
             <div id="nameSuggestions" class="absolute z-10 bg-white border rounded-lg shadow-lg hidden max-h-60 overflow-y-auto w-full"></div>
         </div>
@@ -1164,7 +1163,7 @@
         }
     }
 
-    // ---------- Filter with date type ----------
+    // ---------- ✅ FIXED: Filter with date type – now explicitly re‑renders ----------
     async function filterPurchases() {
         const fromDate = document.getElementById('fromDate').value;
         const toDate = document.getElementById('toDate').value;
@@ -1177,12 +1176,24 @@
                 const res = await fetch(url);
                 if (!res.ok) throw new Error();
                 const data = await res.json();
+                
+                // 🔍 Log the API response – helps debug
+                console.log('🔍 Filter API returned:', data);
+
                 if (Array.isArray(data)) {
                     currentPurchases = data;
                     currentFilteredData = data;
                     cachePurchases(currentPurchases);
                     isDataFresh = true;
                     updateCacheBanner();
+
+                    // ✅ Explicitly render the list and summary
+                    renderList(currentFilteredData, !isDataFresh);
+                    updateSummary(currentFilteredData);
+
+                    // Clear the search box to avoid confusion
+                    document.getElementById('searchInput').value = '';
+                    document.getElementById('clearSearchBtn').classList.add('hidden');
                 } else {
                     throw new Error('Invalid data format');
                 }
@@ -1192,15 +1203,20 @@
                 if (cached && Array.isArray(cached)) {
                     currentPurchases = cached;
                     currentFilteredData = cached;
+                    isDataFresh = false;
+                    updateCacheBanner();
+                    renderList(currentFilteredData, true);
+                    updateSummary(currentFilteredData);
                 }
-                isDataFresh = false;
-                updateCacheBanner();
             }
         } else {
             await loadPurchases();
             currentFilteredData = currentPurchases;
+            renderList(currentFilteredData, !isDataFresh);
+            updateSummary(currentFilteredData);
+            document.getElementById('searchInput').value = '';
+            document.getElementById('clearSearchBtn').classList.add('hidden');
         }
-        applyAdvancedSearch();
     }
 
     function clearFilters() {
