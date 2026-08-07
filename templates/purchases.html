@@ -38,8 +38,9 @@
     <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-8 gap-3">
         <div>
             <label class="block text-sm font-medium text-gray-700">Product Name</label>
+            <!-- added max-h-60 overflow-y-auto w-full -->
             <input type="text" id="name" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" autocomplete="off">
-            <div id="nameSuggestions" class="absolute z-10 bg-white border rounded-lg shadow-lg hidden"></div>
+            <div id="nameSuggestions" class="absolute z-10 bg-white border rounded-lg shadow-lg hidden max-h-60 overflow-y-auto w-full"></div>
         </div>
         <div>
             <label class="block text-sm font-medium text-gray-700">Brand</label>
@@ -94,6 +95,17 @@
     <div>
         <label class="block text-sm font-medium text-gray-700">To Date</label>
         <input type="date" id="toDate" class="border border-gray-300 rounded-lg px-3 py-2">
+    </div>
+    <div>
+        <label class="block text-sm font-medium text-gray-700">Date Type</label>
+        <select id="dateType" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+            <option value="original">Original Purchase Date</option>
+            <option value="updated">Last Update Date</option>
+        </select>
+    </div>
+    <div class="flex items-center gap-2">
+        <input type="checkbox" id="showUpdatedOnly" class="h-4 w-4 text-blue-600 rounded">
+        <label for="showUpdatedOnly" class="text-sm text-gray-700 whitespace-nowrap">Show only updated</label>
     </div>
     <button id="filterBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg">🔍 Filter</button>
     <button id="clearFilterBtn" class="bg-gray-400 hover:bg-gray-500 text-white px-5 py-2 rounded-lg">✕ Clear</button>
@@ -170,17 +182,11 @@
             <h3 class="text-xl font-bold">⏳ Pending Purchases</h3>
             <button onclick="closePendingModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
         </div>
-        <div id="pendingList" class="p-4 space-y-3">
-            <!-- dynamically loaded -->
-        </div>
+        <div id="pendingList" class="p-4 space-y-3"><!-- dynamically loaded --></div>
         <div class="sticky bottom-0 bg-white p-4 border-t flex justify-between">
             <div>
-                <button onclick="syncAllPending()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">
-                    🔄 Sync All
-                </button>
-                <button onclick="clearAllPending()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded ml-2">
-                    🗑️ Clear All
-                </button>
+                <button onclick="syncAllPending()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">🔄 Sync All</button>
+                <button onclick="clearAllPending()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded ml-2">🗑️ Clear All</button>
             </div>
             <button onclick="closePendingModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded">Close</button>
         </div>
@@ -194,12 +200,27 @@
             <h3 class="text-xl font-bold" id="historyModalTitle">📋 Batch History</h3>
             <button onclick="closeHistoryModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
         </div>
-        <div id="historyContent" class="p-4 space-y-4">
-            <!-- dynamically loaded -->
-        </div>
+        <div id="historyContent" class="p-4 space-y-4"><!-- dynamically loaded --></div>
         <div class="sticky bottom-0 bg-white p-4 border-t text-right">
             <button onclick="closeHistoryModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">Close</button>
         </div>
+    </div>
+</div>
+
+<!-- ========== UPDATE MODE CONFIRM MODAL ========== -->
+<div id="updateModeModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-60 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+        <h3 class="text-xl font-bold mb-2">🔄 Update Mode</h3>
+        <p class="text-gray-600 text-sm mb-4">You are changing the price or identity of this batch. How would you like to proceed?</p>
+        <button id="updateModeUpdateBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded mb-2 text-sm">
+            ✏️ Update this batch (keep same batch ID)
+        </button>
+        <p class="text-xs text-gray-500 mb-3">✓ Existing sales history stays linked to this batch<br>✓ Batch ID remains the same</p>
+        <button id="updateModeCreateBtn" class="w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded mb-2 text-sm">
+            ➕ Create new batch (with new values)
+        </button>
+        <p class="text-xs text-gray-500 mb-3">✓ Old batch is preserved with original data<br>✓ A new batch ID is created for the new values</p>
+        <button id="updateModeCancelBtn" class="w-full bg-gray-400 hover:bg-gray-500 text-white py-2 rounded text-sm">Cancel</button>
     </div>
 </div>
 
@@ -213,25 +234,18 @@
     // ---------- Offline banner helpers ----------
     function updateOfflineBanner() {
         const banner = document.getElementById('offlineBanner');
-        if (!navigator.onLine) {
-            banner.classList.remove('hidden');
-        } else {
-            banner.classList.add('hidden');
-        }
+        if (!navigator.onLine) banner.classList.remove('hidden');
+        else banner.classList.add('hidden');
     }
     window.addEventListener('online', updateOfflineBanner);
     window.addEventListener('offline', updateOfflineBanner);
 
     // ---------- FORCE REFRESH & CLEAR CACHE ----------
     function forceRefresh() {
-        if (!confirm('⚠️ This will clear your local cache and reload all data from the server.\n\nContinue?')) {
-            return;
-        }
-        
+        if (!confirm('⚠️ This will clear your local cache and reload all data from the server.\n\nContinue?')) return;
         try {
             localStorage.removeItem(CACHE_KEY);
             localStorage.removeItem(CACHE_TIMESTAMP_KEY);
-            
             const allKeys = Object.keys(localStorage);
             allKeys.forEach(key => {
                 if (key.startsWith('batches_')) {
@@ -239,7 +253,6 @@
                     console.log('🗑️ Cleared batch cache:', key);
                 }
             });
-            
             console.log('✅ Cache cleared successfully');
             loadPurchases(true);
             alert('✅ Cache cleared. Data reloaded from server.');
@@ -251,46 +264,22 @@
 
     function clearAllLocalData() {
         if (!confirm('⚠️⚠️⚠️ WARNING: This will delete ALL locally stored data including:\n\n' +
-                     '- Cached products\n' +
-                     '- Cached purchases\n' +
-                     '- Pending sales\n' +
-                     '- Pending purchases\n' +
-                     '- Pending deletions\n\n' +
-                     'Are you sure you want to continue?')) {
-            return;
-        }
-        
+                     '- Cached products\n- Cached purchases\n- Pending sales\n- Pending purchases\n- Pending deletions\n\n' +
+                     'Are you sure you want to continue?')) return;
         try {
             const keysToClear = [
-                'cached_products_accessories',
-                'cached_products_screen',
-                'cached_purchases_accessories',
-                'cached_purchases_screen',
-                'pending_sales',
-                'pendingPurchases',
-                'pendingBatchDeletions',
-                'pendingProductDeletions',
-                'sales_products_cache_accessories',
-                'sales_products_cache_screens',
-                'sales_license_cache',
-                'offline_sales'
+                'cached_products_accessories', 'cached_products_screen',
+                'cached_purchases_accessories', 'cached_purchases_screen',
+                'pending_sales', 'pendingPurchases',
+                'pendingBatchDeletions', 'pendingProductDeletions',
+                'sales_products_cache_accessories', 'sales_products_cache_screens',
+                'sales_license_cache', 'offline_sales'
             ];
-            
-            keysToClear.forEach(key => {
-                try {
-                    localStorage.removeItem(key);
-                    console.log('🗑️ Cleared:', key);
-                } catch(e) {}
-            });
-            
+            keysToClear.forEach(key => { try { localStorage.removeItem(key); } catch(e) {} });
             const allKeys = Object.keys(localStorage);
             allKeys.forEach(key => {
-                if (key.startsWith('batches_')) {
-                    localStorage.removeItem(key);
-                    console.log('🗑️ Cleared batch cache:', key);
-                }
+                if (key.startsWith('batches_')) localStorage.removeItem(key);
             });
-            
             alert('✅ All local data cleared. Refreshing page...');
             location.reload();
         } catch (e) {
@@ -311,11 +300,11 @@
     let isLoading = false;
     const CACHE_KEY = 'cached_purchases_accessories';
     const CACHE_TIMESTAMP_KEY = 'cached_purchases_accessories_timestamp';
-
-    // Advanced search settings
     let searchMode = 'contains';
     let searchField = 'all';
     let caseSensitive = false;
+    let pendingUpdatePayload = null;  // store payload for update mode modal
+    let pendingUpdateBatchId = null;
 
     // ---------- Helper functions ----------
     function escapeHtml(str) {
@@ -338,87 +327,31 @@
         return '₵' + safeToFixed(amount);
     }
 
-    // ---------- Advanced Search Functions ----------
+    // ---------- Advanced Search ----------
     function matchesSearch(value, searchTerm, mode, caseSensitive) {
         if (!value) return false;
-        
-        let searchValue = value;
-        let term = searchTerm;
-        
-        if (!caseSensitive) {
-            searchValue = searchValue.toLowerCase();
-            term = term.toLowerCase();
-        }
-        
+        let searchValue = value, term = searchTerm;
+        if (!caseSensitive) { searchValue = searchValue.toLowerCase(); term = term.toLowerCase(); }
         switch(mode) {
-            case 'exact':
-                return searchValue === term;
-            case 'starts':
-                return searchValue.startsWith(term);
-            case 'ends':
-                return searchValue.endsWith(term);
-            case 'words':
+            case 'exact': return searchValue === term;
+            case 'starts': return searchValue.startsWith(term);
+            case 'ends': return searchValue.endsWith(term);
+            case 'words': {
                 const words = term.split(/\s+/).filter(w => w.length > 0);
                 return words.every(word => searchValue.includes(word));
-            case 'contains':
-            default:
-                return searchValue.includes(term);
+            }
+            default: return searchValue.includes(term);
         }
     }
 
     function getSearchableText(purchase, field) {
         switch(field) {
-            case 'name':
-                return purchase.name || '';
-            case 'brand':
-                return purchase.brand || '';
-            case 'category':
-                return purchase.category || '';
-            case 'source':
-                return purchase.source || '';
-            case 'all':
-            default:
-                return [
-                    purchase.name || '',
-                    purchase.brand || '',
-                    purchase.category || '',
-                    purchase.source || ''
-                ].join(' ');
+            case 'name': return purchase.name || '';
+            case 'brand': return purchase.brand || '';
+            case 'category': return purchase.category || '';
+            case 'source': return purchase.source || '';
+            default: return [purchase.name, purchase.brand, purchase.category, purchase.source].filter(Boolean).join(' ');
         }
-    }
-
-    // ---------- BATCH NUMBER SEARCH ----------
-    function searchByBatchNumber(keyword) {
-        const isBatchSearch = /^#?\d+$/.test(keyword);
-        
-        if (isBatchSearch) {
-            const batchNum = parseInt(keyword.replace('#', ''));
-            const matched = currentPurchases.filter(p => p.batch_id === batchNum);
-            
-            if (matched.length > 0) {
-                currentFilteredData = matched;
-                renderList(matched, !isDataFresh);
-                
-                setTimeout(() => {
-                    const items = document.querySelectorAll('#purchasesList .border');
-                    items.forEach(item => {
-                        if (item.textContent.includes(`Batch #${batchNum}`)) {
-                            item.style.border = '3px solid #f59e0b';
-                            item.style.backgroundColor = '#fffbeb';
-                            item.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            setTimeout(() => {
-                                item.style.border = '1px solid #e5e7eb';
-                                item.style.backgroundColor = '';
-                            }, 4000);
-                        }
-                    });
-                }, 100);
-                
-                document.getElementById('clearSearchBtn').classList.remove('hidden');
-                return true;
-            }
-        }
-        return false;
     }
 
     function applyAdvancedSearch() {
@@ -426,20 +359,15 @@
         searchMode = document.getElementById('searchMode').value;
         searchField = document.getElementById('searchField').value;
         caseSensitive = document.getElementById('caseSensitive').value === 'true';
-        
         let filtered = currentPurchases;
-        
         if (keyword) {
             const isBatchSearch = /^#?\d+$/.test(keyword);
-            
             if (isBatchSearch) {
                 const batchNum = parseInt(keyword.replace('#', ''));
                 filtered = currentPurchases.filter(p => p.batch_id === batchNum);
-                
                 if (filtered.length > 0) {
                     currentFilteredData = filtered;
                     renderList(filtered, !isDataFresh);
-                    
                     setTimeout(() => {
                         const items = document.querySelectorAll('#purchasesList .border');
                         items.forEach(item => {
@@ -454,60 +382,39 @@
                             }
                         });
                     }, 100);
-                    
                     document.getElementById('clearSearchBtn').classList.remove('hidden');
                     return;
                 }
             }
-            
             filtered = currentPurchases.filter(p => {
                 const searchableText = getSearchableText(p, searchField);
                 return matchesSearch(searchableText, keyword, searchMode, caseSensitive);
             });
         }
-        
         currentFilteredData = filtered;
         renderList(filtered, !isDataFresh);
-        
         const clearBtn = document.getElementById('clearSearchBtn');
-        if (keyword) {
-            clearBtn.classList.remove('hidden');
-        } else {
-            clearBtn.classList.add('hidden');
-        }
+        if (keyword) clearBtn.classList.remove('hidden');
+        else clearBtn.classList.add('hidden');
     }
 
     // ---------- Caching ----------
     function getCacheTimestamp() {
-        try {
-            return localStorage.getItem(CACHE_TIMESTAMP_KEY);
-        } catch (e) {
-            return null;
-        }
+        try { return localStorage.getItem(CACHE_TIMESTAMP_KEY); } catch(e) { return null; }
     }
-
     function cachePurchases(purchases) {
         try {
             localStorage.setItem(CACHE_KEY, JSON.stringify(purchases));
             localStorage.setItem(CACHE_TIMESTAMP_KEY, new Date().toISOString());
             isDataFresh = true;
-        } catch (e) {}
+        } catch(e) {}
     }
-
     function loadCachedPurchases() {
-        try {
-            const raw = localStorage.getItem(CACHE_KEY);
-            if (!raw) return null;
-            return JSON.parse(raw);
-        } catch (e) {
-            return null;
-        }
+        try { const raw = localStorage.getItem(CACHE_KEY); if (!raw) return null; return JSON.parse(raw); } catch(e) { return null; }
     }
-
     function updateCacheBanner() {
         const cacheBanner = document.getElementById('cacheBanner');
         const timestampSpan = document.getElementById('cacheTimestamp');
-        
         if (navigator.onLine && !isDataFresh) {
             const cached = loadCachedPurchases();
             if (cached && cached.length > 0) {
@@ -515,64 +422,36 @@
                 if (ts) {
                     const date = new Date(ts);
                     timestampSpan.innerText = date.toLocaleString();
-                } else {
-                    timestampSpan.innerText = 'unknown time';
-                }
+                } else { timestampSpan.innerText = 'unknown time'; }
                 cacheBanner.classList.remove('hidden');
-            } else {
-                cacheBanner.classList.add('hidden');
-            }
-        } else {
-            cacheBanner.classList.add('hidden');
-        }
+            } else { cacheBanner.classList.add('hidden'); }
+        } else { cacheBanner.classList.add('hidden'); }
     }
+    window.refreshData = function() { loadPurchases(true); };
 
-    window.refreshData = function() {
-        loadPurchases(true);
-    };
-
-    // ---------- PENDING PURCHASES MANAGEMENT ----------
+    // ---------- PENDING PURCHASES ----------
     function getPendingPurchases() {
-        try {
-            return JSON.parse(localStorage.getItem('pendingPurchases') || '[]');
-        } catch (e) {
-            return [];
-        }
+        try { return JSON.parse(localStorage.getItem('pendingPurchases') || '[]'); } catch(e) { return []; }
     }
-
     function savePendingPurchases(pending) {
-        try {
-            localStorage.setItem('pendingPurchases', JSON.stringify(pending));
-        } catch (e) {}
+        try { localStorage.setItem('pendingPurchases', JSON.stringify(pending)); } catch(e) {}
     }
-
     function updatePendingBadge() {
         const pending = getPendingPurchases();
         const count = pending.length;
         const badge = document.getElementById('pendingCount');
         if (badge) {
             badge.textContent = count;
-            if (count === 0) {
-                badge.classList.add('hidden');
-            } else {
-                badge.classList.remove('hidden');
-            }
+            if (count === 0) badge.classList.add('hidden');
+            else badge.classList.remove('hidden');
         }
     }
-
     function viewPendingPurchases() {
         const pending = getPendingPurchases();
         const container = document.getElementById('pendingList');
         const modal = document.getElementById('pendingModal');
-        
         if (pending.length === 0) {
-            container.innerHTML = `
-                <div class="text-center text-gray-400 py-8">
-                    <p class="text-2xl mb-2">📭</p>
-                    <p>No pending purchases.</p>
-                    <p class="text-sm">All purchases have been synced to the server.</p>
-                </div>
-            `;
+            container.innerHTML = `<div class="text-center text-gray-400 py-8"><p class="text-2xl mb-2">📭</p><p>No pending purchases.</p><p class="text-sm">All purchases have been synced to the server.</p></div>`;
         } else {
             container.innerHTML = pending.map((p, index) => `
                 <div class="border rounded-lg p-4 hover:shadow transition">
@@ -587,61 +466,45 @@
                             </div>
                             <h3 class="font-bold text-lg mt-1">${escapeHtml(p.data.name)} (${escapeHtml(p.data.brand)})</h3>
                             <p class="text-sm text-gray-600">
-                                Qty: ${p.data.quantity} | 
-                                Cost: ₵${safeToFixed(p.data.cost_price)} | 
-                                Selling: ₵${safeToFixed(p.data.selling_price)}
+                                Qty: ${p.data.quantity} | Cost: ₵${safeToFixed(p.data.cost_price)} | Selling: ₵${safeToFixed(p.data.selling_price)}
                                 ${p.data.discount ? `| Discount: ₵${safeToFixed(p.data.discount)}` : ''}
                             </p>
                             <p class="text-sm text-gray-500">Category: ${p.data.category || 'Accessory'}</p>
                             <p class="text-sm text-gray-500">Source: ${p.data.source || 'Unknown'}</p>
                         </div>
                         <div class="flex flex-col gap-1">
-                            <button onclick="syncPendingItem(${index})" class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm">
-                                🔄 Sync
-                            </button>
-                            <button onclick="removePendingItem(${index})" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">
-                                🗑️ Remove
-                            </button>
+                            <button onclick="syncPendingItem(${index})" class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm">🔄 Sync</button>
+                            <button onclick="removePendingItem(${index})" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">🗑️ Remove</button>
                         </div>
                     </div>
                 </div>
             `).join('');
         }
-        
         updatePendingBadge();
         modal.classList.remove('hidden');
     }
-
     function closePendingModal() {
         document.getElementById('pendingModal').classList.add('hidden');
     }
-
     async function syncPendingItem(index) {
         const pending = getPendingPurchases();
         const item = pending[index];
         if (!item) return;
-        
-        const confirmMsg = `Sync this ${item.type === 'add' ? 'addition' : 'update'} for "${item.data.name}"?`;
-        if (!confirm(confirmMsg)) return;
-        
+        if (!confirm(`Sync this ${item.type === 'add' ? 'addition' : 'update'} for "${item.data.name}"?`)) return;
         try {
             let url = '/api/purchases';
             let method = 'POST';
-            
             if (item.type === 'update' && item.batchId) {
                 url = `/api/purchases/${item.batchId}`;
                 method = 'PUT';
             }
-            
             const res = await fetch(url, {
                 method: method,
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(item.data)
             });
-            
             if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
             const data = await res.json();
-            
             if (data.success) {
                 pending.splice(index, 1);
                 savePendingPurchases(pending);
@@ -656,79 +519,51 @@
             alert('❌ Failed to sync: ' + error.message);
         }
     }
-
     async function syncAllPending() {
         const pending = getPendingPurchases();
-        if (pending.length === 0) {
-            alert('No pending items to sync.');
-            return;
-        }
-        
+        if (pending.length === 0) { alert('No pending items to sync.'); return; }
         if (!confirm(`Sync all ${pending.length} pending purchase(s)?`)) return;
-        
-        let successCount = 0;
-        let failCount = 0;
-        
+        let successCount = 0, failCount = 0;
         for (let i = pending.length - 1; i >= 0; i--) {
             const item = pending[i];
             try {
                 let url = '/api/purchases';
                 let method = 'POST';
-                
                 if (item.type === 'update' && item.batchId) {
                     url = `/api/purchases/${item.batchId}`;
                     method = 'PUT';
                 }
-                
                 const res = await fetch(url, {
                     method: method,
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(item.data)
                 });
-                
                 if (res.ok) {
                     const data = await res.json();
-                    if (data.success) {
-                        pending.splice(i, 1);
-                        successCount++;
-                    } else {
-                        failCount++;
-                    }
-                } else {
-                    failCount++;
-                }
-            } catch (error) {
-                failCount++;
-            }
+                    if (data.success) { pending.splice(i, 1); successCount++; }
+                    else { failCount++; }
+                } else { failCount++; }
+            } catch (error) { failCount++; }
         }
-        
         savePendingPurchases(pending);
         updatePendingBadge();
         viewPendingPurchases();
         loadPurchases(true);
-        
         alert(`✅ Synced: ${successCount} | ❌ Failed: ${failCount}`);
     }
-
     function removePendingItem(index) {
         const pending = getPendingPurchases();
         const item = pending[index];
         if (!confirm(`Remove pending ${item.type === 'add' ? 'addition' : 'update'} for "${item.data.name}"?`)) return;
-        
         pending.splice(index, 1);
         savePendingPurchases(pending);
         updatePendingBadge();
         viewPendingPurchases();
     }
-
     function clearAllPending() {
         const pending = getPendingPurchases();
-        if (pending.length === 0) {
-            alert('No pending items to clear.');
-            return;
-        }
+        if (pending.length === 0) { alert('No pending items to clear.'); return; }
         if (!confirm(`Delete all ${pending.length} pending purchase(s)? This cannot be undone.`)) return;
-        
         savePendingPurchases([]);
         updatePendingBadge();
         viewPendingPurchases();
@@ -740,7 +575,6 @@
         const batchId = urlParams.get('edit_batch');
         if (batchId) {
             console.log('🔍 Batch edit requested for:', batchId);
-            
             setTimeout(function() {
                 const purchase = currentPurchases.find(p => p.batch_id === parseInt(batchId));
                 if (purchase) {
@@ -751,9 +585,7 @@
                         form.scrollIntoView({ behavior: 'smooth', block: 'start' });
                         form.style.border = '3px solid #f59e0b';
                         form.style.transition = 'border-color 0.5s';
-                        setTimeout(() => {
-                            form.style.border = 'none';
-                        }, 3000);
+                        setTimeout(() => { form.style.border = 'none'; }, 3000);
                     }
                 } else {
                     console.warn('⚠️ Batch #' + batchId + ' not found');
@@ -763,23 +595,21 @@
         }
     }
 
-    // ============ VIEW PURCHASE HISTORY ============
+    // ============ VIEW PURCHASE HISTORY (with update history) ============
     async function viewPurchaseHistory(batchId) {
         try {
             const res = await fetch(`/api/purchases/${batchId}/history`);
             if (!res.ok) throw new Error('Failed to fetch history');
             const data = await res.json();
-            
             if (!data.success) {
                 alert('Error: ' + data.error);
                 return;
             }
-            
             const purchase = data.purchase;
             const soldItems = data.sold_items || [];
             const totalSold = data.total_sold || 0;
-            
-            // Build the modal content
+            const updateHistory = data.update_history || [];
+
             let html = `
                 <!-- Purchase Info -->
                 <div class="bg-blue-50 rounded-lg p-4 border border-blue-200">
@@ -797,6 +627,7 @@
                     ` : ''}
                     <div class="mt-2 text-xs text-gray-500">Source: ${escapeHtml(purchase.source)} | Category: ${escapeHtml(purchase.category)}</div>
                     <div class="mt-1 text-xs text-gray-400">Batch #${purchase.batch_id} | ${escapeHtml(purchase.name)} (${escapeHtml(purchase.brand)})</div>
+                    <div class="mt-1 text-xs text-gray-400">Last updated: ${formatDate(purchase.last_updated)}</div>
                 </div>
                 
                 <!-- Sold History -->
@@ -826,25 +657,43 @@
                     `}
                 </div>
                 
+                <!-- Update History -->
+                <div class="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
+                    <div class="flex justify-between items-center mb-2">
+                        <h4 class="font-bold text-yellow-700">📝 Update History (${updateHistory.length})</h4>
+                        ${updateHistory.length > 2 ? `<button onclick="toggleUpdateHistory()" class="text-sm text-blue-600 underline">Show All</button>` : ''}
+                    </div>
+                    <div id="updatesList" class="space-y-2 max-h-40 overflow-y-auto">
+                        ${updateHistory.slice(0, 2).map(u => `
+                            <div class="text-xs text-gray-600 border-b pb-1">
+                                <span class="font-medium">${formatDate(u.date)}</span>
+                                <ul class="ml-2 mt-1">
+                                    ${Object.entries(u.changes).map(([key, val]) => `
+                                        <li>${key}: ${val.old} → ${val.new}</li>
+                                    `).join('')}
+                                </ul>
+                            </div>
+                        `).join('')}
+                        ${updateHistory.length > 2 ? `<div id="moreUpdates" class="hidden">${updateHistory.slice(2).map(u => `
+                            <div class="text-xs text-gray-600 border-b pb-1 mt-1">
+                                <span class="font-medium">${formatDate(u.date)}</span>
+                                <ul class="ml-2 mt-1">
+                                    ${Object.entries(u.changes).map(([key, val]) => `
+                                        <li>${key}: ${val.old} → ${val.new}</li>
+                                    `).join('')}
+                                </ul>
+                            </div>
+                        `).join('')}</div>` : ''}
+                    </div>
+                </div>
+                
                 <!-- Summary -->
                 <div class="bg-gray-50 rounded-lg p-3 border border-gray-200">
                     <div class="grid grid-cols-3 md:grid-cols-5 gap-2 text-sm text-center">
-                        <div>
-                            <span class="text-gray-500 block">Original</span>
-                            <span class="font-bold">${purchase.original_quantity}</span>
-                        </div>
-                        <div>
-                            <span class="text-gray-500 block">Sold</span>
-                            <span class="font-bold text-blue-600">${totalSold}</span>
-                        </div>
-                        <div>
-                            <span class="text-gray-500 block">Remaining</span>
-                            <span class="font-bold text-green-600">${purchase.remaining_quantity || 0}</span>
-                        </div>
-                        <div>
-                            <span class="text-gray-500 block">Current</span>
-                            <span class="font-bold">${purchase.current_quantity}</span>
-                        </div>
+                        <div><span class="text-gray-500 block">Original</span><span class="font-bold">${purchase.original_quantity}</span></div>
+                        <div><span class="text-gray-500 block">Sold</span><span class="font-bold text-blue-600">${totalSold}</span></div>
+                        <div><span class="text-gray-500 block">Remaining</span><span class="font-bold text-green-600">${purchase.remaining_quantity || 0}</span></div>
+                        <div><span class="text-gray-500 block">Current</span><span class="font-bold">${purchase.current_quantity}</span></div>
                         <div>
                             <span class="text-gray-500 block">Status</span>
                             <span class="font-bold ${purchase.remaining_quantity > 0 ? 'text-green-600' : 'text-red-600'}">
@@ -854,14 +703,25 @@
                     </div>
                 </div>
             `;
-            
+
             document.getElementById('historyContent').innerHTML = html;
             document.getElementById('historyModalTitle').textContent = `📋 Batch #${batchId} - ${escapeHtml(purchase.name)}`;
             document.getElementById('historyModal').classList.remove('hidden');
             document.body.style.overflow = 'hidden';
-            
+
+            // Store update history for toggle
+            window._updateHistory = updateHistory;
         } catch (error) {
             alert('Error loading history: ' + error.message);
+        }
+    }
+
+    function toggleUpdateHistory() {
+        const more = document.getElementById('moreUpdates');
+        if (more) {
+            more.classList.toggle('hidden');
+            const btn = document.querySelector('#historyContent .bg-yellow-50 .text-blue-600');
+            if (btn) btn.textContent = more.classList.contains('hidden') ? 'Show All' : 'Show Less';
         }
     }
 
@@ -870,27 +730,30 @@
         document.body.style.overflow = '';
     }
 
-    // ---------- Load purchases (EXCLUDE screens) ----------
+    // ---------- Load purchases (with filter params) ----------
     async function loadPurchases(forceRefresh = false) {
         if (isLoading) return;
         isLoading = true;
-        
         updateOfflineBanner();
-        
         if (forceRefresh) {
             isDataFresh = false;
-            try {
-                localStorage.removeItem(CACHE_KEY);
-                localStorage.removeItem(CACHE_TIMESTAMP_KEY);
-            } catch(e) {}
+            try { localStorage.removeItem(CACHE_KEY); localStorage.removeItem(CACHE_TIMESTAMP_KEY); } catch(e) {}
         }
-        
         let purchases = [];
         let fromCache = false;
 
         if (navigator.onLine) {
             try {
-                const res = await fetch('/api/purchases?exclude_category=Screen');
+                let url = '/api/purchases?exclude_category=Screen';
+                // Add filter parameters if present
+                const fromDate = document.getElementById('fromDate').value;
+                const toDate = document.getElementById('toDate').value;
+                const dateType = document.getElementById('dateType').value;
+                const showUpdatedOnly = document.getElementById('showUpdatedOnly').checked;
+                if (fromDate && toDate) {
+                    url += `&start_date=${fromDate}&end_date=${toDate}&date_type=${dateType}&show_updated_only=${showUpdatedOnly}`;
+                }
+                const res = await fetch(url);
                 if (res.ok) {
                     purchases = await res.json();
                     if (Array.isArray(purchases)) {
@@ -898,7 +761,6 @@
                         isDataFresh = true;
                         currentFilteredData = purchases;
                         console.log('✅ Data loaded from API (fresh)');
-                        
                         const pending = getPendingPurchases();
                         if (pending.length > 0) {
                             console.log(`📦 ${pending.length} pending purchases found - syncing automatically...`);
@@ -942,7 +804,6 @@
         renderList(currentPurchases, fromCache);
         updateCacheBanner();
         updatePendingBadge();
-        
         checkForBatchEdit();
         isLoading = false;
     }
@@ -950,43 +811,28 @@
     async function syncAllPendingSilently() {
         const pending = getPendingPurchases();
         if (pending.length === 0) return;
-        
-        let successCount = 0;
-        let failCount = 0;
-        
+        let successCount = 0, failCount = 0;
         for (let i = pending.length - 1; i >= 0; i--) {
             const item = pending[i];
             try {
                 let url = '/api/purchases';
                 let method = 'POST';
-                
                 if (item.type === 'update' && item.batchId) {
                     url = `/api/purchases/${item.batchId}`;
                     method = 'PUT';
                 }
-                
                 const res = await fetch(url, {
                     method: method,
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(item.data)
                 });
-                
                 if (res.ok) {
                     const data = await res.json();
-                    if (data.success) {
-                        pending.splice(i, 1);
-                        successCount++;
-                    } else {
-                        failCount++;
-                    }
-                } else {
-                    failCount++;
-                }
-            } catch (error) {
-                failCount++;
-            }
+                    if (data.success) { pending.splice(i, 1); successCount++; }
+                    else { failCount++; }
+                } else { failCount++; }
+            } catch (error) { failCount++; }
         }
-        
         if (successCount > 0 || failCount > 0) {
             savePendingPurchases(pending);
             updatePendingBadge();
@@ -994,7 +840,7 @@
         }
     }
 
-    // ---------- Render list with Enhanced Sold History and History Button ----------
+    // ---------- Render list with enhanced badges ----------
     function renderList(purchases, fromCache = false) {
         const container = document.getElementById('purchasesList');
         if (!purchases || purchases.length === 0) {
@@ -1010,15 +856,10 @@
             const goodStock = (p.remaining_quantity || 0) - claimedQty;
             const soldQty = (p.quantity || 0) - (p.remaining_quantity || 0);
             const claimedCost = claimedQty * (p.cost_price || 0);
-            
-            // ✅ Show sold history badge if batch has sold items
-            const soldBadge = soldQty > 0 ? 
-                `<span class="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded ml-2">📊 ${soldQty} Sold</span>` : '';
-            
-            // ✅ Show if quantity was updated
-            const updatedBadge = (p.quantity !== p.original_quantity) ? 
+            const soldBadge = soldQty > 0 ? `<span class="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded ml-2">📊 ${soldQty} Sold</span>` : '';
+            const updatedBadge = (p.quantity !== p.original_quantity || Math.abs(p.cost_price - p.original_cost_price) > 0.001) ?
                 `<span class="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded ml-2">🔄 Updated</span>` : '';
-            
+
             return `
             <div class="border rounded-lg p-4 hover:shadow transition">
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
@@ -1042,16 +883,11 @@
                         <p class="text-sm font-bold ${profitColor}">💎 Profit: ${formatMoney(batchProfit)}</p>
                         ${claimedQty > 0 ? `<p class="text-xs text-red-500">⚠️ ${claimedQty} units claimed as faulty (Cost: ₵${safeToFixed(claimedCost)})</p>` : ''}
                         ${p.original_date ? `<p class="text-xs text-gray-400">📅 Originally purchased: ${formatDate(p.original_date)}</p>` : ''}
+                        ${updatedBadge ? `<p class="text-xs text-gray-400">🔄 Last updated: ${formatDate(p.date)}</p>` : ''}
                     </div>
                     <div class="flex flex-wrap gap-1">
-                        <button onclick="viewPurchaseHistory(${p.batch_id})" 
-                                class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm flex items-center gap-1">
-                            📋 View History
-                        </button>
-                        <button onclick="editPurchase(${p.batch_id})" 
-                                class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-sm flex items-center gap-1">
-                            ✏️ Update
-                        </button>
+                        <button onclick="viewPurchaseHistory(${p.batch_id})" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm flex items-center gap-1">📋 View History</button>
+                        <button onclick="editPurchase(${p.batch_id})" class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-sm flex items-center gap-1">✏️ Update</button>
                     </div>
                 </div>
             </div>
@@ -1059,21 +895,11 @@
         updateSummary(purchases);
     }
 
-    // ---------- Update summary with Enhanced Sold History ----------
+    // ---------- Summary (unchanged) ----------
     function updateSummary(purchases) {
-        let totalQty = 0;
-        let totalRemaining = 0;
-        let totalCost = 0;
-        let totalDiscount = 0;
-        let totalSelling = 0;
-        let totalProfit = 0;
-        let totalCapital = 0;
-        let totalClaimed = 0;
-        let totalGood = 0;
-        let totalClaimedCost = 0;
-        let totalSold = 0;
+        let totalQty = 0, totalRemaining = 0, totalCost = 0, totalDiscount = 0, totalSelling = 0, totalProfit = 0;
+        let totalCapital = 0, totalClaimed = 0, totalGood = 0, totalClaimedCost = 0, totalSold = 0;
         const totalBatches = purchases ? purchases.length : 0;
-        
         if (purchases && purchases.length > 0) {
             purchases.forEach(p => {
                 const itemQty = p.quantity || 0;
@@ -1083,7 +909,6 @@
                 const itemDiscount = p.discount || 0;
                 const claimed = p.claimed_quantity || 0;
                 const sold = itemQty - remainingQty;
-                
                 totalQty += itemQty;
                 totalRemaining += remainingQty;
                 totalSold += sold;
@@ -1093,84 +918,35 @@
                 totalClaimed += claimed;
                 totalGood += remainingQty - claimed;
                 totalClaimedCost += claimed * itemCost;
-                
                 const itemProfit = (itemSelling - itemCost) * itemQty - itemDiscount;
                 totalProfit += itemProfit;
                 totalCapital += (itemCost * itemQty) - itemDiscount;
             });
         }
-        
-        // ✅ Adjusted Capital: Total Cost - Claimed Cost
         const adjustedCapital = totalCost - totalClaimedCost;
-        const totalSoldQty = totalQty - totalRemaining;
-        
         const isOffline = !navigator.onLine;
         const isCached = !isDataFresh && !isOffline;
-        
-        // ✅ Calculate sold percentage
         const soldPercentage = totalQty > 0 ? ((totalSold / totalQty) * 100) : 0;
         const soldColor = soldPercentage > 70 ? 'text-green-600' : (soldPercentage > 30 ? 'text-orange-600' : 'text-red-600');
-        
+
         document.getElementById('summary').innerHTML = `
             <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-10 gap-2 text-sm">
-                <div class="bg-white rounded p-2 shadow">
-                    <span class="text-gray-500">📦 Batches</span><br>
-                    <span class="text-lg font-bold text-indigo-600">${totalBatches}</span>
-                </div>
-                <div class="bg-white rounded p-2 shadow">
-                    <span class="text-gray-500">🧾 Total Qty</span><br>
-                    <span class="text-lg font-bold text-teal-600">${totalQty}</span>
-                </div>
-                <div class="bg-white rounded p-2 shadow">
-                    <span class="text-gray-500">📦 Remaining</span><br>
-                    <span class="text-lg font-bold text-blue-600">${totalRemaining}</span>
-                </div>
-                <div class="bg-white rounded p-2 shadow">
-                    <span class="text-gray-500">📊 Sold</span><br>
-                    <span class="text-lg font-bold text-purple-600">${totalSold}</span>
-                </div>
-                <div class="bg-white rounded p-2 shadow">
-                    <span class="text-gray-500">⚠️ Claimed</span><br>
-                    <span class="text-lg font-bold text-red-600">${totalClaimed}</span>
-                </div>
-                <div class="bg-white rounded p-2 shadow">
-                    <span class="text-gray-500">✅ Good</span><br>
-                    <span class="text-lg font-bold text-green-600">${Math.max(totalGood, 0)}</span>
-                </div>
-                <div class="bg-white rounded p-2 shadow">
-                    <span class="text-gray-500">💰 Total Cost</span><br>
-                    <span class="text-lg font-bold text-gray-700">${formatMoney(totalCost)}</span>
-                </div>
-                <div class="bg-white rounded p-2 shadow">
-                    <span class="text-gray-500">📉 Claimed Cost</span><br>
-                    <span class="text-lg font-bold text-red-600">${formatMoney(totalClaimedCost)}</span>
-                </div>
-                <div class="bg-white rounded p-2 shadow">
-                    <span class="text-gray-500">💰 Capital</span><br>
-                    <span class="text-lg font-bold text-purple-600">${formatMoney(adjustedCapital)}</span>
-                </div>
-                <div class="bg-white rounded p-2 shadow">
-                    <span class="text-gray-500">📊 Sold %</span><br>
-                    <span class="text-lg font-bold ${soldColor}">${soldPercentage.toFixed(0)}%</span>
-                </div>
+                <div class="bg-white rounded p-2 shadow"><span class="text-gray-500">📦 Batches</span><br><span class="text-lg font-bold text-indigo-600">${totalBatches}</span></div>
+                <div class="bg-white rounded p-2 shadow"><span class="text-gray-500">🧾 Total Qty</span><br><span class="text-lg font-bold text-teal-600">${totalQty}</span></div>
+                <div class="bg-white rounded p-2 shadow"><span class="text-gray-500">📦 Remaining</span><br><span class="text-lg font-bold text-blue-600">${totalRemaining}</span></div>
+                <div class="bg-white rounded p-2 shadow"><span class="text-gray-500">📊 Sold</span><br><span class="text-lg font-bold text-purple-600">${totalSold}</span></div>
+                <div class="bg-white rounded p-2 shadow"><span class="text-gray-500">⚠️ Claimed</span><br><span class="text-lg font-bold text-red-600">${totalClaimed}</span></div>
+                <div class="bg-white rounded p-2 shadow"><span class="text-gray-500">✅ Good</span><br><span class="text-lg font-bold text-green-600">${Math.max(totalGood, 0)}</span></div>
+                <div class="bg-white rounded p-2 shadow"><span class="text-gray-500">💰 Total Cost</span><br><span class="text-lg font-bold text-gray-700">${formatMoney(totalCost)}</span></div>
+                <div class="bg-white rounded p-2 shadow"><span class="text-gray-500">📉 Claimed Cost</span><br><span class="text-lg font-bold text-red-600">${formatMoney(totalClaimedCost)}</span></div>
+                <div class="bg-white rounded p-2 shadow"><span class="text-gray-500">💰 Capital</span><br><span class="text-lg font-bold text-purple-600">${formatMoney(adjustedCapital)}</span></div>
+                <div class="bg-white rounded p-2 shadow"><span class="text-gray-500">📊 Sold %</span><br><span class="text-lg font-bold ${soldColor}">${soldPercentage.toFixed(0)}%</span></div>
             </div>
             <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm mt-2">
-                <div class="bg-white rounded p-2 shadow">
-                    <span class="text-gray-500">📈 Total Selling</span><br>
-                    <span class="text-lg font-bold text-green-600">${formatMoney(totalSelling)}</span>
-                </div>
-                <div class="bg-white rounded p-2 shadow">
-                    <span class="text-gray-500">📉 Total Discount</span><br>
-                    <span class="text-lg font-bold text-orange-600">${formatMoney(totalDiscount)}</span>
-                </div>
-                <div class="bg-white rounded p-2 shadow">
-                    <span class="text-gray-500">💎 Gross Profit</span><br>
-                    <span class="text-lg font-bold ${totalProfit >= 0 ? 'text-teal-600' : 'text-red-600'}">${formatMoney(totalProfit)}</span>
-                </div>
-                <div class="bg-white rounded p-2 shadow">
-                    <span class="text-gray-500">📊 Avg Profit/Batch</span><br>
-                    <span class="text-lg font-bold ${totalBatches > 0 && totalProfit / totalBatches >= 0 ? 'text-teal-600' : 'text-red-600'}">${totalBatches > 0 ? formatMoney(totalProfit / totalBatches) : '₵0.00'}</span>
-                </div>
+                <div class="bg-white rounded p-2 shadow"><span class="text-gray-500">📈 Total Selling</span><br><span class="text-lg font-bold text-green-600">${formatMoney(totalSelling)}</span></div>
+                <div class="bg-white rounded p-2 shadow"><span class="text-gray-500">📉 Total Discount</span><br><span class="text-lg font-bold text-orange-600">${formatMoney(totalDiscount)}</span></div>
+                <div class="bg-white rounded p-2 shadow"><span class="text-gray-500">💎 Gross Profit</span><br><span class="text-lg font-bold ${totalProfit >= 0 ? 'text-teal-600' : 'text-red-600'}">${formatMoney(totalProfit)}</span></div>
+                <div class="bg-white rounded p-2 shadow"><span class="text-gray-500">📊 Avg Profit/Batch</span><br><span class="text-lg font-bold ${totalBatches > 0 && totalProfit / totalBatches >= 0 ? 'text-teal-600' : 'text-red-600'}">${totalBatches > 0 ? formatMoney(totalProfit / totalBatches) : '₵0.00'}</span></div>
             </div>
             <div class="mt-2 text-xs text-gray-400">
                 💡 Total: ${totalQty} | Remaining: ${totalRemaining} | Sold: ${totalSold} | Claimed: ${totalClaimed} | Good: ${Math.max(totalGood, 0)} | Capital: ${formatMoney(adjustedCapital)} (${formatMoney(totalCost)} - ${formatMoney(totalClaimedCost)} claimed cost)
@@ -1197,7 +973,7 @@
         console.log('💾 Saved pending purchase:', payload);
     }
 
-    // ---------- Submit / Update with Validation ----------
+    // ---------- Submit / Update with mode selection ----------
     async function submitPurchase() {
         const payload = {
             name: document.getElementById('name').value.trim(),
@@ -1215,130 +991,118 @@
             return;
         }
 
-        // ✅ VALIDATION: Check if editing and reducing quantity below sold items
+        // If editing, check if price or identity changed
+        let updateMode = 'auto';
         if (editMode && editBatchId) {
             const purchase = currentPurchases.find(p => p.batch_id === editBatchId);
             if (purchase) {
                 const soldQty = (purchase.quantity || 0) - (purchase.remaining_quantity || 0);
                 const newQty = payload.quantity;
-                
-                // ✅ Check if reducing quantity below sold amount
                 if (newQty < soldQty) {
-                    if (!confirm(`⚠️⚠️ WARNING: This batch has ${soldQty} items already sold.\n\n` +
-                                 `You are trying to reduce total quantity to ${newQty}.\n` +
-                                 `This will make ${soldQty - newQty} items "oversold".\n\n` +
-                                 `The remaining quantity will be set to 0 (zero).\n` +
-                                 `Total: ${newQty} | Sold: ${soldQty} | Remaining: 0\n\n` +
-                                 `Continue?`)) {
-                        return;
-                    }
+                    if (!confirm(`⚠️⚠️ WARNING: This batch has ${soldQty} items already sold.\n\nYou are trying to reduce total quantity to ${newQty}.\nThis will make ${soldQty - newQty} items "oversold".\n\nThe remaining quantity will be set to 0 (zero).\nTotal: ${newQty} | Sold: ${soldQty} | Remaining: 0\n\nContinue?`)) return;
                 }
-                
-                // ✅ Show warning if reducing quantity but still above sold amount
                 if (newQty < purchase.quantity && newQty >= soldQty) {
                     const reduction = purchase.quantity - newQty;
                     const newRemaining = newQty - soldQty;
-                    if (!confirm(`⚠️ You are reducing the total quantity by ${reduction} units.\n\n` +
-                                 `Current: ${purchase.quantity}\n` +
-                                 `New: ${newQty}\n` +
-                                 `Sold: ${soldQty} (preserved)\n` +
-                                 `New Remaining: ${newRemaining}\n\n` +
-                                 `This will NOT affect sold items. Continue?`)) {
-                        return;
-                    }
+                    if (!confirm(`⚠️ You are reducing the total quantity by ${reduction} units.\n\nCurrent: ${purchase.quantity}\nNew: ${newQty}\nSold: ${soldQty} (preserved)\nNew Remaining: ${newRemaining}\n\nThis will NOT affect sold items. Continue?`)) return;
                 }
-                
-                // ✅ Show info if increasing quantity
                 if (newQty > purchase.quantity) {
                     const increase = newQty - purchase.quantity;
                     const newRemaining = newQty - soldQty;
-                    if (!confirm(`ℹ️ You are increasing the total quantity by ${increase} units.\n\n` +
-                                 `Current: ${purchase.quantity}\n` +
-                                 `New: ${newQty}\n` +
-                                 `Sold: ${soldQty} (preserved)\n` +
-                                 `New Remaining: ${newRemaining}\n\n` +
-                                 `Sold history will be preserved. Continue?`)) {
-                        return;
-                    }
+                    if (!confirm(`ℹ️ You are increasing the total quantity by ${increase} units.\n\nCurrent: ${purchase.quantity}\nNew: ${newQty}\nSold: ${soldQty} (preserved)\nNew Remaining: ${newRemaining}\n\nSold history will be preserved. Continue?`)) return;
                 }
-            }
-        }
 
-        let url = '/api/purchases';
-        let method = 'POST';
-        let actionType = 'add';
-        let batchId = null;
-        
-        if (editMode && editBatchId) {
-            url = `/api/purchases/${editBatchId}`;
-            method = 'PUT';
-            actionType = 'update';
-            batchId = editBatchId;
-            console.log('✏️ Updating batch:', editBatchId, payload);
-            
-            // ✅ Show warning if price is changing (will create new batch)
-            const purchase = currentPurchases.find(p => p.batch_id === editBatchId);
-            if (purchase) {
+                // Check if price or identity changed
                 const costChanged = Math.abs(purchase.cost_price - payload.cost_price) > 0.001;
                 const sellingChanged = Math.abs(purchase.selling_price - payload.selling_price) > 0.001;
                 const discountChanged = Math.abs((purchase.discount || 0) - payload.discount) > 0.001;
-                
-                if (costChanged || sellingChanged || discountChanged) {
-                    if (!confirm(`⚠️ You are changing the price of this batch.\n\n` +
-                                 `This will create a NEW batch with the updated prices.\n` +
-                                 `The old batch will remain with its original prices.\n\n` +
-                                 `Current Cost: ₵${safeToFixed(purchase.cost_price)}\n` +
-                                 `New Cost: ₵${safeToFixed(payload.cost_price)}\n` +
-                                 `Current Selling: ₵${safeToFixed(purchase.selling_price)}\n` +
-                                 `New Selling: ₵${safeToFixed(payload.selling_price)}\n\n` +
-                                 `Continue?`)) {
-                        return;
-                    }
+                const identityChanged = (
+                    purchase.name.toLowerCase() !== payload.name.toLowerCase() ||
+                    purchase.brand.toLowerCase() !== payload.brand.toLowerCase() ||
+                    purchase.category.toLowerCase() !== payload.category.toLowerCase()
+                );
+
+                if (costChanged || sellingChanged || discountChanged || identityChanged) {
+                    // Show update mode modal
+                    pendingUpdatePayload = payload;
+                    pendingUpdateBatchId = editBatchId;
+                    document.getElementById('updateModeModal').classList.remove('hidden');
+                    return; // Wait for user choice
                 }
+                // else: no significant change → proceed with normal update (mode 'auto')
             }
-        } else {
-            console.log('➕ Adding new purchase:', payload);
         }
 
+        // No edit or no significant change → submit with 'auto' mode
+        await doSubmitPurchase(payload, editMode ? 'auto' : 'add', editBatchId);
+    }
+
+    // ---------- Actual submit after mode selection ----------
+    async function doSubmitPurchase(payload, actionType, batchId) {
+        let url = '/api/purchases';
+        let method = 'POST';
+        if (actionType === 'update' || (editMode && batchId)) {
+            url = `/api/purchases/${batchId}`;
+            method = 'PUT';
+            // Add update_mode to payload
+            payload.update_mode = actionType === 'create' ? 'create' : 'update';
+        }
         try {
             const res = await fetch(url, {
                 method: method,
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
-            
             if (!res.ok) {
                 const errorData = await res.json();
                 throw new Error(errorData.error || `HTTP error! status: ${res.status}`);
             }
-            
             const data = await res.json();
-            
             if (data.success) {
                 alert(editMode ? '✅ Accessory purchase updated!' : '✅ Accessory purchase added!');
                 resetForm();
-                
                 if (window.history && window.history.pushState) {
                     const newUrl = window.location.pathname;
                     window.history.pushState({}, '', newUrl);
                 }
-                
                 editMode = false;
                 editBatchId = null;
-                
                 loadPurchases(true);
             } else {
                 alert('Error: ' + data.error);
             }
         } catch (error) {
             console.warn('Network error, saving purchase offline:', error);
-            savePendingPurchase(payload, actionType, batchId);
+            savePendingPurchase(payload, actionType === 'create' ? 'update' : actionType, batchId);
             updatePendingBadge();
             alert('⚠️ You are offline. Purchase saved locally and will be synced later.');
             resetForm();
             loadPurchases();
         }
     }
+
+    // ---------- Update mode modal buttons ----------
+    document.getElementById('updateModeUpdateBtn').addEventListener('click', function() {
+        document.getElementById('updateModeModal').classList.add('hidden');
+        if (pendingUpdatePayload && pendingUpdateBatchId) {
+            doSubmitPurchase(pendingUpdatePayload, 'update', pendingUpdateBatchId);
+            pendingUpdatePayload = null;
+            pendingUpdateBatchId = null;
+        }
+    });
+    document.getElementById('updateModeCreateBtn').addEventListener('click', function() {
+        document.getElementById('updateModeModal').classList.add('hidden');
+        if (pendingUpdatePayload && pendingUpdateBatchId) {
+            doSubmitPurchase(pendingUpdatePayload, 'create', pendingUpdateBatchId);
+            pendingUpdatePayload = null;
+            pendingUpdateBatchId = null;
+        }
+    });
+    document.getElementById('updateModeCancelBtn').addEventListener('click', function() {
+        document.getElementById('updateModeModal').classList.add('hidden');
+        pendingUpdatePayload = null;
+        pendingUpdateBatchId = null;
+    });
 
     // ---------- Edit / Reset ----------
     function editPurchase(batchId) {
@@ -1349,15 +1113,10 @@
             alert(`❌ Batch #${batchId} not found. It may have been deleted.`);
             return;
         }
-        
         console.log('📦 Purchase data:', purchase);
-        
-        // ✅ Show sold info when editing
         const soldQty = (purchase.quantity || 0) - (purchase.remaining_quantity || 0);
-        if (soldQty > 0) {
-            console.log(`📊 This batch has ${soldQty} units sold. Sold history will be preserved.`);
-        }
-        
+        if (soldQty > 0) console.log(`📊 This batch has ${soldQty} units sold. Sold history will be preserved.`);
+
         document.getElementById('name').value = purchase.name || '';
         document.getElementById('brand').value = purchase.brand || '';
         document.getElementById('category').value = purchase.category || 'Accessory';
@@ -1366,22 +1125,20 @@
         document.getElementById('discount').value = purchase.discount || 0;
         document.getElementById('selling_price').value = purchase.selling_price || '';
         document.getElementById('source').value = purchase.source || 'Unknown';
-        
+
         editMode = true;
         editBatchId = batchId;
-        
+
         document.getElementById('formTitle').innerHTML = `✏️ Update Accessory Purchase <span class="bg-green-100 text-green-800 text-xs font-semibold px-2.5 py-0.5 rounded">Accessories</span> ${soldQty > 0 ? `<span class="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded ml-2">📊 ${soldQty} Sold</span>` : ''}`;
         document.getElementById('submitBtn').innerHTML = '✏️ Update Accessory Purchase';
         document.getElementById('cancelBtn').classList.remove('hidden');
-        
+
         const form = document.querySelector('.bg-white.rounded-xl.shadow-md.p-6.mb-6');
         if (form) {
             form.scrollIntoView({ behavior: 'smooth', block: 'start' });
             form.style.border = '3px solid #f59e0b';
             form.style.transition = 'border-color 0.5s';
-            setTimeout(() => {
-                form.style.border = 'none';
-            }, 3000);
+            setTimeout(() => { form.style.border = 'none'; }, 3000);
         }
     }
 
@@ -1394,33 +1151,30 @@
         document.getElementById('discount').value = '';
         document.getElementById('selling_price').value = '';
         document.getElementById('source').value = '';
-        
         editMode = false;
         editBatchId = null;
-        
         document.getElementById('formTitle').innerHTML = '➕ Add Accessory Purchase <span class="bg-green-100 text-green-800 text-xs font-semibold px-2.5 py-0.5 rounded">Accessories</span>';
         document.getElementById('submitBtn').innerHTML = '➕ Add Accessory Purchase';
         document.getElementById('cancelBtn').classList.add('hidden');
-        
         const form = document.querySelector('.bg-white.rounded-xl.shadow-md.p-6.mb-6');
-        if (form) {
-            form.style.border = 'none';
-        }
-        
+        if (form) form.style.border = 'none';
         if (window.history && window.history.pushState) {
             const newUrl = window.location.pathname;
             window.history.pushState({}, '', newUrl);
         }
     }
 
-    // ---------- Search & Filter ----------
+    // ---------- Filter with date type ----------
     async function filterPurchases() {
         const fromDate = document.getElementById('fromDate').value;
         const toDate = document.getElementById('toDate').value;
-        
+        const dateType = document.getElementById('dateType').value;
+        const showUpdatedOnly = document.getElementById('showUpdatedOnly').checked;
+
         if (fromDate && toDate) {
             try {
-                const res = await fetch(`/api/purchases/filter?start_date=${fromDate}&end_date=${toDate}&exclude_category=Screen`);
+                let url = `/api/purchases/filter?start_date=${fromDate}&end_date=${toDate}&exclude_category=Screen&date_type=${dateType}&show_updated_only=${showUpdatedOnly}`;
+                const res = await fetch(url);
                 if (!res.ok) throw new Error();
                 const data = await res.json();
                 if (Array.isArray(data)) {
@@ -1454,11 +1208,13 @@
         document.getElementById('toDate').value = '';
         document.getElementById('searchInput').value = '';
         document.getElementById('clearSearchBtn').classList.add('hidden');
+        document.getElementById('showUpdatedOnly').checked = false;
+        document.getElementById('dateType').value = 'original';
         currentFilteredData = currentPurchases;
         loadPurchases(true);
     }
 
-    // ---------- PDF with Enhanced Summary ----------
+    // ---------- PDF (unchanged) ----------
     async function generatePDF() {
         if (!navigator.onLine) {
             alert('PDF generation requires internet. Please connect and try again.');
@@ -1466,25 +1222,14 @@
         }
         const fromDate = document.getElementById('fromDate').value;
         const toDate = document.getElementById('toDate').value;
-        
         const purchasesToExport = currentFilteredData;
-        
         if (!purchasesToExport || purchasesToExport.length === 0) {
             alert('No data to export. Please adjust your filters.');
             return;
         }
 
-        let totalQty = 0;
-        let totalCost = 0;
-        let totalDiscount = 0;
-        let totalSelling = 0;
-        let totalProfit = 0;
-        let totalCapital = 0;
-        let totalClaimed = 0;
-        let totalClaimedCost = 0;
-        let totalRemaining = 0;
-        let totalSold = 0;
-        
+        let totalQty = 0, totalCost = 0, totalDiscount = 0, totalSelling = 0, totalProfit = 0, totalCapital = 0;
+        let totalClaimed = 0, totalClaimedCost = 0, totalRemaining = 0, totalSold = 0;
         purchasesToExport.forEach(p => {
             const itemQty = p.quantity || 0;
             const remainingQty = p.remaining_quantity || 0;
@@ -1493,7 +1238,6 @@
             const itemDiscount = p.discount || 0;
             const claimed = p.claimed_quantity || 0;
             const sold = itemQty - remainingQty;
-            
             totalQty += itemQty;
             totalRemaining += remainingQty;
             totalSold += sold;
@@ -1502,14 +1246,11 @@
             totalSelling += itemSelling * itemQty;
             totalClaimed += claimed;
             totalClaimedCost += claimed * itemCost;
-            
             const itemProfit = (itemSelling - itemCost) * itemQty - itemDiscount;
             totalProfit += itemProfit;
             totalCapital += (itemCost * itemQty) - itemDiscount;
         });
-
         const adjustedCapital = totalCost - totalClaimedCost;
-        const totalSoldQty = totalQty - totalRemaining;
         const soldPercentage = totalQty > 0 ? ((totalSold / totalQty) * 100) : 0;
 
         try {
@@ -1552,7 +1293,7 @@
         }
     }
 
-    // ---------- Autocomplete with Batch ID Support ----------
+    // ---------- Autocomplete (UPDATED: scrollable & rich details) ----------
     let nameTimeout, catTimeout, sourceTimeout;
 
     async function fetchNameSuggestions() {
@@ -1561,17 +1302,26 @@
             return;
         }
         const q = document.getElementById('name').value.trim();
-        if (!q) { document.getElementById('nameSuggestions').classList.add('hidden'); return; }
+        if (!q) { 
+            document.getElementById('nameSuggestions').classList.add('hidden'); 
+            return; 
+        }
         try {
             const res = await fetch(`/api/purchases/suggestions/name?q=${encodeURIComponent(q)}&exclude_category=Screen`);
             if (!res.ok) throw new Error();
             const suggestions = await res.json();
             const box = document.getElementById('nameSuggestions');
-            if (!suggestions || suggestions.length === 0) { box.classList.add('hidden'); return; }
+            if (!suggestions || suggestions.length === 0) { 
+                box.classList.add('hidden'); 
+                return; 
+            }
+            // Build rich suggestion items
             box.innerHTML = suggestions.map(s => {
-                const batchDisplay = s.batch_id ? ` (Batch #${s.batch_id})` : '';
-                return `<div class="px-3 py-1 hover:bg-gray-100 cursor-pointer" onclick="selectNameSuggestion('${escapeHtml(s.name)}', '${escapeHtml(s.brand)}', '${escapeHtml(s.category)}')">
-                    ${escapeHtml(s.name)} (${escapeHtml(s.brand)})${batchDisplay}
+                const batchDisplay = s.batch_id ? ` <span class="text-xs text-gray-400">#${s.batch_id}</span>` : '';
+                return `<div class="px-3 py-1.5 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-0 text-sm" 
+                            onclick="selectNameSuggestion('${escapeHtml(s.name)}', '${escapeHtml(s.brand)}', '${escapeHtml(s.category)}')">
+                    <div class="font-medium">${escapeHtml(s.name)}</div>
+                    <div class="text-xs text-gray-500">${escapeHtml(s.brand)}${s.category ? ` · ${escapeHtml(s.category)}` : ''}${batchDisplay}</div>
                 </div>`;
             }).join('');
             box.classList.remove('hidden');
@@ -1585,6 +1335,7 @@
     }
 
     async function fetchCategorySuggestions() {
+        // unchanged (category suggestions are fine as is)
         if (!navigator.onLine) {
             document.getElementById('categorySuggestions').classList.add('hidden');
             return;
@@ -1609,6 +1360,7 @@
     }
 
     async function fetchSourceSuggestions() {
+        // unchanged
         if (!navigator.onLine) {
             document.getElementById('sourceSuggestions').classList.add('hidden');
             return;
@@ -1653,64 +1405,39 @@
     document.addEventListener('DOMContentLoaded', function() {
         loadPurchases();
         if (typeof updatePendingBadge === 'function') updatePendingBadge();
-        
-        const viewPendingBtn = document.getElementById('viewPendingBtn');
-        if (viewPendingBtn) {
-            viewPendingBtn.addEventListener('click', viewPendingPurchases);
-        }
-        
+
         document.getElementById('submitBtn').addEventListener('click', submitPurchase);
         document.getElementById('cancelBtn').addEventListener('click', resetForm);
         document.getElementById('filterBtn').addEventListener('click', filterPurchases);
         document.getElementById('clearFilterBtn').addEventListener('click', clearFilters);
         document.getElementById('pdfBtn').addEventListener('click', generatePDF);
-        
-        // Advanced search
+        document.getElementById('viewPendingBtn').addEventListener('click', viewPendingPurchases);
+
         document.getElementById('advancedToggle').addEventListener('click', function() {
-            const advanced = document.getElementById('advancedSearch');
-            advanced.classList.toggle('hidden');
+            document.getElementById('advancedSearch').classList.toggle('hidden');
         });
-        
         document.getElementById('applyAdvancedSearch').addEventListener('click', function() {
             applyAdvancedSearch();
         });
-        
         document.getElementById('clearSearchBtn').addEventListener('click', function() {
             document.getElementById('searchInput').value = '';
             this.classList.add('hidden');
             applyAdvancedSearch();
         });
-        
         document.getElementById('searchInput').addEventListener('input', function() {
             const keyword = this.value.trim();
-            if (keyword) {
-                document.getElementById('clearSearchBtn').classList.remove('hidden');
-            } else {
-                document.getElementById('clearSearchBtn').classList.add('hidden');
-            }
+            if (keyword) document.getElementById('clearSearchBtn').classList.remove('hidden');
+            else document.getElementById('clearSearchBtn').classList.add('hidden');
             applyAdvancedSearch();
         });
-        
         document.getElementById('searchInput').addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') {
-                applyAdvancedSearch();
-            }
+            if (e.key === 'Enter') applyAdvancedSearch();
         });
-        
-        // Autocomplete listeners
-        document.getElementById('name').addEventListener('input', () => { 
-            clearTimeout(nameTimeout); 
-            nameTimeout = setTimeout(fetchNameSuggestions, 300); 
-        });
-        document.getElementById('category').addEventListener('input', () => { 
-            clearTimeout(catTimeout); 
-            catTimeout = setTimeout(fetchCategorySuggestions, 300); 
-        });
-        document.getElementById('source').addEventListener('input', () => { 
-            clearTimeout(sourceTimeout); 
-            sourceTimeout = setTimeout(fetchSourceSuggestions, 300); 
-        });
-        
+
+        document.getElementById('name').addEventListener('input', () => { clearTimeout(nameTimeout); nameTimeout = setTimeout(fetchNameSuggestions, 300); });
+        document.getElementById('category').addEventListener('input', () => { clearTimeout(catTimeout); catTimeout = setTimeout(fetchCategorySuggestions, 300); });
+        document.getElementById('source').addEventListener('input', () => { clearTimeout(sourceTimeout); sourceTimeout = setTimeout(fetchSourceSuggestions, 300); });
+
         document.addEventListener('click', function(e) {
             if (!e.target.closest('#name')) document.getElementById('nameSuggestions').classList.add('hidden');
             if (!e.target.closest('#category')) document.getElementById('categorySuggestions').classList.add('hidden');
@@ -1718,13 +1445,11 @@
         });
     });
 
-    window.addEventListener('online', function() {
-        loadPurchases(true);
-    });
+    window.addEventListener('online', function() { loadPurchases(true); });
 
     // Expose functions for inline onclick
     window.viewPurchaseHistory = viewPurchaseHistory;
     window.closeHistoryModal = closeHistoryModal;
-
+    window.toggleUpdateHistory = toggleUpdateHistory;
 </script>
 {% endblock %}

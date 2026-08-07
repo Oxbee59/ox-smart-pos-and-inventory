@@ -12,7 +12,8 @@ from services.purchase_service import (
     get_purchases_by_date_range,
     get_product_suggestions,
     get_category_suggestions,
-    update_product
+    update_product,
+    get_batch_update_history   # <-- ADD THIS
 )
 
 # ---------- IMPORT DASHBOARD SERVICES ----------
@@ -966,13 +967,24 @@ def api_filter_purchases():
     end = request.args.get('end_date')
     category = request.args.get('category')
     exclude_category = request.args.get('exclude_category')
+    date_type = request.args.get('date_type', 'original')               # NEW
+    show_updated_only = request.args.get('show_updated_only', 'false').lower() == 'true'   # NEW
+
     if not start or not end:
         return jsonify([])
-    purchases = get_purchases_by_date_range(start, end)
+
+    # Pass the extra parameters to the service
+    purchases = get_purchases_by_date_range(
+        start, end,
+        date_type=date_type,
+        show_updated_only=show_updated_only
+    )
+
     if category:
         purchases = [p for p in purchases if p.get('category') == category]
     if exclude_category:
         purchases = [p for p in purchases if p.get('category') != exclude_category]
+
     return jsonify([serialize_purchase(p) for p in purchases])
 
 @app.route('/api/purchases/suggestions/name', methods=['GET'])
@@ -1154,20 +1166,22 @@ def api_purchases_pdf():
 @app.route('/api/purchases/<int:batch_id>/history', methods=['GET'])
 @login_required
 def api_purchase_history(batch_id):
-    """Get purchase history for a batch"""
+    """Get purchase history for a batch including update history"""
     try:
-        from services.purchase_service import get_purchase_history, get_sold_history
+        from services.purchase_service import get_purchase_history, get_sold_history, get_batch_update_history
         history = get_purchase_history(batch_id)
         sold_history = get_sold_history(batch_id)
-        
+        update_history = get_batch_update_history(batch_id)   # NEW
+
         if not history:
             return jsonify({'success': False, 'error': 'Batch not found'}), 404
-        
+
         return jsonify({
             'success': True,
             'purchase': history,
             'sold_items': sold_history,
-            'total_sold': sum(item['quantity'] for item in sold_history)
+            'total_sold': sum(item['quantity'] for item in sold_history),
+            'update_history': update_history          # <-- INCLUDE IT
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -1196,10 +1210,12 @@ def api_add_purchase():
 def api_update_purchase(batch_id):
     data = request.json
     try:
-        # Log the update attempt
         print(f"🔄 Updating batch #{batch_id}: {data}")
-        
-        update_product(
+
+        # Extract update_mode (default 'auto')
+        update_mode = data.get('update_mode', 'auto')
+
+        new_batch_id = update_product(
             batch_id=batch_id,
             name=data['name'],
             brand=data['brand'],
@@ -1208,9 +1224,10 @@ def api_update_purchase(batch_id):
             cost_price=float(data['cost_price']),
             discount=float(data.get('discount', 0)),
             selling_price=float(data['selling_price']),
-            source=data.get('source', 'Unknown')
+            source=data.get('source', 'Unknown'),
+            update_mode=update_mode          # <-- PASS IT
         )
-        return jsonify({'success': True})
+        return jsonify({'success': True, 'new_batch_id': new_batch_id})
     except ValueError as e:
         return jsonify({'success': False, 'error': str(e)}), 400
     except Exception as e:

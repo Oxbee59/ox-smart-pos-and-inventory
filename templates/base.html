@@ -579,25 +579,45 @@
         {% endif %}
 
         <nav class="flex-1 px-2 space-y-1 overflow-y-auto pb-4">
+            <!-- Dashboard: only for admin (including oxbee) -->
+            {% if current_user and current_user.role == 'admin' %}
             <a href="/" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                 <i class="fas fa-tachometer-alt w-5"></i> Dashboard
             </a>
+            {% endif %}
+
+            <!-- Sales (Accessories) – show to all -->
             <a href="/sales" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                 <i class="fas fa-cash-register w-5"></i> Sales (Accessories)
             </a>
+
+            <!-- Products (Accessories) – show to all -->
             <a href="/products" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                 <i class="fas fa-boxes w-5"></i> Products (Accessories)
             </a>
+
+            <!-- Today's Sales (Accessories) – ONLY for admin -->
+            {% if current_user and current_user.role == 'admin' %}
             <a href="/today-sales" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                 <i class="fas fa-chart-line w-5"></i> Today's Sales (Accessories)
             </a>
+            {% endif %}
+
+            <!-- Analytics – only for admin -->
+            {% if current_user and current_user.role == 'admin' %}
             <a href="/analytics" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                 <i class="fas fa-chart-pie w-5"></i> Analytics
             </a>
+            {% endif %}
+
+            <!-- Archive – only for admin -->
+            {% if current_user and current_user.role == 'admin' %}
             <a href="/archive" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                 <i class="fas fa-archive w-5"></i> Archive
             </a>
+            {% endif %}
 
+            <!-- Screens submenu – show to all -->
             <div class="mt-2">
                 <div class="dropdown-toggle flex items-center justify-between px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm" onclick="toggleDropdown(this)">
                     <span class="flex items-center gap-3">
@@ -606,29 +626,42 @@
                     <i class="fas fa-chevron-down text-xs"></i>
                 </div>
                 <div class="dropdown-menu space-y-1 pl-2">
+                    <!-- Sales (Screens) – show to all -->
                     <a href="/sales/screens" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                         <i class="fas fa-cash-register w-5"></i> Sales (Screens)
                     </a>
+                    <!-- Products (Screens) – show to all -->
                     <a href="/products/screens" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                         <i class="fas fa-boxes w-5"></i> Products (Screens)
                     </a>
+                    <!-- Today's Sales (Screens) – ONLY for admin -->
+                    {% if current_user and current_user.role == 'admin' %}
                     <a href="/today-sales/screens" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                         <i class="fas fa-chart-line w-5"></i> Today's Sales (Screens)
                     </a>
+                    {% endif %}
                 </div>
             </div>
 
+            <!-- Admin section (only for admins) -->
             {% if current_user and current_user.role == 'admin' %}
             <div class="border-t border-gray-700 my-2"></div>
             <div class="text-xs text-gray-500 uppercase px-3 py-1">Admin</div>
 
-            <!-- ===== CLAIMS PAGE ===== -->
+            <!-- Claims – show to all users, but we place it inside admin section? No, we'll move it out. We'll keep it outside admin section so users can see it. -->
+            <!-- Actually, we'll put Claims before the admin divider for everyone, but after the screens. Let's do that. -->
+            {% endif %}
+
+            <!-- Claims – show to all logged-in users -->
+            {% if current_user %}
             <a href="/claims" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                 <i class="fas fa-clipboard-list w-5"></i> Claims
                 <span class="text-xs text-yellow-400 ml-auto">⚠️</span>
             </a>
+            {% endif %}
 
-            <!-- ===== USER LOGS - SHOW TO ALL ADMINS ===== -->
+            <!-- Admin-only links (excluding Claims, which is above) -->
+            {% if current_user and current_user.role == 'admin' %}
             <a href="/logs" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                 <i class="fas fa-history w-5"></i> User Logs
                 <span class="text-xs text-blue-400 ml-auto">📋</span>
@@ -648,7 +681,7 @@
             </a>
             {% endif %}
 
-            <!-- ===== SETTINGS - ONLY FOR SYSTEM ADMIN (oxbee) ===== -->
+            <!-- Settings – only for oxbee -->
             {% if current_user and current_user.username.lower() == 'oxbee' %}
             <div class="border-t border-gray-700 my-2"></div>
             <div class="text-xs text-amber-500 uppercase px-3 py-1 font-bold">
@@ -660,6 +693,7 @@
             </a>
             {% endif %}
 
+            <!-- Bottom section: Offline sync, logout – show to all logged-in users -->
             {% if current_user %}
             <div class="mt-4 flex flex-col gap-2 px-3 py-1">
                 <div class="flex items-center gap-2">
