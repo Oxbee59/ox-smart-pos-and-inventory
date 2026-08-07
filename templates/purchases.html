@@ -302,7 +302,7 @@
     let searchMode = 'contains';
     let searchField = 'all';
     let caseSensitive = false;
-    let pendingUpdatePayload = null;  // store payload for update mode modal
+    let pendingUpdatePayload = null;
     let pendingUpdateBatchId = null;
 
     // ---------- Helper functions ----------
@@ -840,7 +840,6 @@
     }
 
     // ---------- Render list with enhanced badges ----------
-    // ✅ FIXED: updatedBadge appears for any batch where action != 'added'
     function renderList(purchases, fromCache = false) {
         const container = document.getElementById('purchasesList');
         if (!purchases || purchases.length === 0) {
@@ -858,7 +857,6 @@
             const claimedCost = claimedQty * (p.cost_price || 0);
             const soldBadge = soldQty > 0 ? `<span class="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded ml-2">📊 ${soldQty} Sold</span>` : '';
 
-            // ✅ Show updated badge if the batch has ever been modified (action != 'added')
             const isUpdated = (p.action !== 'added');
             const updatedBadge = isUpdated ?
                 `<span class="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded ml-2">🔄 Updated</span>` :
@@ -899,7 +897,7 @@
         updateSummary(purchases);
     }
 
-    // ---------- Summary (unchanged) ----------
+    // ---------- Summary ----------
     function updateSummary(purchases) {
         let totalQty = 0, totalRemaining = 0, totalCost = 0, totalDiscount = 0, totalSelling = 0, totalProfit = 0;
         let totalCapital = 0, totalClaimed = 0, totalGood = 0, totalClaimedCost = 0, totalSold = 0;
@@ -995,7 +993,6 @@
             return;
         }
 
-        // If editing, check if price or identity changed
         let updateMode = 'auto';
         if (editMode && editBatchId) {
             const purchase = currentPurchases.find(p => p.batch_id === editBatchId);
@@ -1016,7 +1013,6 @@
                     if (!confirm(`ℹ️ You are increasing the total quantity by ${increase} units.\n\nCurrent: ${purchase.quantity}\nNew: ${newQty}\nSold: ${soldQty} (preserved)\nNew Remaining: ${newRemaining}\n\nSold history will be preserved. Continue?`)) return;
                 }
 
-                // Check if price or identity changed
                 const costChanged = Math.abs(purchase.cost_price - payload.cost_price) > 0.001;
                 const sellingChanged = Math.abs(purchase.selling_price - payload.selling_price) > 0.001;
                 const discountChanged = Math.abs((purchase.discount || 0) - payload.discount) > 0.001;
@@ -1027,28 +1023,23 @@
                 );
 
                 if (costChanged || sellingChanged || discountChanged || identityChanged) {
-                    // Show update mode modal
                     pendingUpdatePayload = payload;
                     pendingUpdateBatchId = editBatchId;
                     document.getElementById('updateModeModal').classList.remove('hidden');
-                    return; // Wait for user choice
+                    return;
                 }
-                // else: no significant change → proceed with normal update (mode 'auto')
             }
         }
 
-        // No edit or no significant change → submit with 'auto' mode
         await doSubmitPurchase(payload, editMode ? 'auto' : 'add', editBatchId);
     }
 
-    // ---------- Actual submit after mode selection ----------
     async function doSubmitPurchase(payload, actionType, batchId) {
         let url = '/api/purchases';
         let method = 'POST';
         if (actionType === 'update' || (editMode && batchId)) {
             url = `/api/purchases/${batchId}`;
             method = 'PUT';
-            // Add update_mode to payload
             payload.update_mode = actionType === 'create' ? 'create' : 'update';
         }
         try {
@@ -1085,7 +1076,6 @@
         }
     }
 
-    // ---------- Update mode modal buttons ----------
     document.getElementById('updateModeUpdateBtn').addEventListener('click', function() {
         document.getElementById('updateModeModal').classList.add('hidden');
         if (pendingUpdatePayload && pendingUpdateBatchId) {
@@ -1168,72 +1158,82 @@
         }
     }
 
-    // ---------- ✅ FIXED: Filter with date type – now explicitly re‑renders ----------
+    // ========== ✅ NEW FILTER FUNCTION – Handles all cases ==========
     async function filterPurchases() {
         const fromDate = document.getElementById('fromDate').value;
         const toDate = document.getElementById('toDate').value;
         const dateType = document.getElementById('dateType').value;
         const showUpdatedOnly = document.getElementById('showUpdatedOnly').checked;
 
+        // Case 1: Both dates provided – use the full filter endpoint
         if (fromDate && toDate) {
             try {
                 let url = `/api/purchases/filter?start_date=${fromDate}&end_date=${toDate}&exclude_category=Screen&date_type=${dateType}&show_updated_only=${showUpdatedOnly}`;
-                console.log('🔍 Filter URL:', url);  // <-- CHECK THIS
+                console.log('🔍 Filter URL (with dates):', url);
                 const res = await fetch(url);
-                if (!res.ok) throw new Error();
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const data = await res.json();
-                
-                // 🔍 Log the API response – helps debug
-                console.log('🔍 Filter API returned:', data);
-
-                if (Array.isArray(data)) {
-                    currentPurchases = data;
-                    currentFilteredData = data;
-                    cachePurchases(currentPurchases);
-                    isDataFresh = true;
-                    updateCacheBanner();
-
-                    // ✅ Explicitly render the list and summary
-                    renderList(currentFilteredData, !isDataFresh);
-                    updateSummary(currentFilteredData);
-
-                    // Clear the search box to avoid confusion
-                    document.getElementById('searchInput').value = '';
-                    document.getElementById('clearSearchBtn').classList.add('hidden');
-                } else {
-                    throw new Error('Invalid data format');
-                }
+                console.log('🔍 Filter API returned:', data.length, 'items');
+                applyFilterResult(data);
             } catch (err) {
-                alert('Filter is unavailable offline. Showing cached data.');
-                const cached = loadCachedPurchases();
-                if (cached && Array.isArray(cached)) {
-                    currentPurchases = cached;
-                    currentFilteredData = cached;
-                    isDataFresh = false;
-                    updateCacheBanner();
-                    renderList(currentFilteredData, true);
-                    updateSummary(currentFilteredData);
-                }
+                console.error('Filter error:', err);
+                alert('Filter failed. Showing cached data.');
+                loadCachedData();
             }
-        } else {
-            await loadPurchases();
-            currentFilteredData = currentPurchases;
+            return;
+        }
+
+        // Case 2: No dates, but "Show only updated" is checked
+        if (showUpdatedOnly) {
+            try {
+                let url = `/api/purchases?exclude_category=Screen&show_updated_only=true`;
+                console.log('🔍 Filter URL (updated only):', url);
+                const res = await fetch(url);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                console.log('🔍 Updated-only API returned:', data.length, 'items');
+                applyFilterResult(data);
+            } catch (err) {
+                console.error('Filter error:', err);
+                alert('Filter failed. Showing cached data.');
+                loadCachedData();
+            }
+            return;
+        }
+
+        // Case 3: No dates, no updated-only – show message and load all
+        alert('Please select a date range or check "Show only updated".');
+        await loadPurchases();
+    }
+
+    // Helper to apply filter result
+    function applyFilterResult(data) {
+        if (Array.isArray(data)) {
+            currentPurchases = data;
+            currentFilteredData = data;
+            cachePurchases(currentPurchases);
+            isDataFresh = true;
+            updateCacheBanner();
             renderList(currentFilteredData, !isDataFresh);
             updateSummary(currentFilteredData);
             document.getElementById('searchInput').value = '';
             document.getElementById('clearSearchBtn').classList.add('hidden');
+        } else {
+            throw new Error('Invalid data format');
         }
     }
 
-    function clearFilters() {
-        document.getElementById('fromDate').value = '';
-        document.getElementById('toDate').value = '';
-        document.getElementById('searchInput').value = '';
-        document.getElementById('clearSearchBtn').classList.add('hidden');
-        document.getElementById('showUpdatedOnly').checked = false;
-        document.getElementById('dateType').value = 'original';
-        currentFilteredData = currentPurchases;
-        loadPurchases(true);
+    // Helper to load cached data on error
+    function loadCachedData() {
+        const cached = loadCachedPurchases();
+        if (cached && Array.isArray(cached)) {
+            currentPurchases = cached;
+            currentFilteredData = cached;
+            isDataFresh = false;
+            updateCacheBanner();
+            renderList(currentFilteredData, true);
+            updateSummary(currentFilteredData);
+        }
     }
 
     // ---------- PDF (unchanged) ----------
@@ -1315,7 +1315,7 @@
         }
     }
 
-    // ---------- Autocomplete (UPDATED: scrollable & rich details) ----------
+    // ---------- Autocomplete ----------
     let nameTimeout, catTimeout, sourceTimeout;
 
     async function fetchNameSuggestions() {
@@ -1337,7 +1337,6 @@
                 box.classList.add('hidden'); 
                 return; 
             }
-            // Build rich suggestion items
             box.innerHTML = suggestions.map(s => {
                 const batchDisplay = s.batch_id ? ` <span class="text-xs text-gray-400">#${s.batch_id}</span>` : '';
                 return `<div class="px-3 py-1.5 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-0 text-sm" 
@@ -1357,7 +1356,6 @@
     }
 
     async function fetchCategorySuggestions() {
-        // unchanged (category suggestions are fine as is)
         if (!navigator.onLine) {
             document.getElementById('categorySuggestions').classList.add('hidden');
             return;
@@ -1382,7 +1380,6 @@
     }
 
     async function fetchSourceSuggestions() {
-        // unchanged
         if (!navigator.onLine) {
             document.getElementById('sourceSuggestions').classList.add('hidden');
             return;

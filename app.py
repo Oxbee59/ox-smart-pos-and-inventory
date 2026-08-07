@@ -951,15 +951,18 @@ def serialize_purchase(p):
 def api_get_purchases():
     category = request.args.get('category')
     exclude_category = request.args.get('exclude_category')
+    show_updated_only = request.args.get('show_updated_only', 'false').lower() == 'true'
+
     purchases = get_all_purchases()
-    
+
     if category:
         purchases = [p for p in purchases if p.get('category') == category]
     if exclude_category:
         purchases = [p for p in purchases if p.get('category') != exclude_category]
-    
-    return jsonify([serialize_purchase(p) for p in purchases])
+    if show_updated_only:
+        purchases = [p for p in purchases if p.get('action') != 'added']
 
+    return jsonify([serialize_purchase(p) for p in purchases])
 @app.route('/api/purchases/filter', methods=['GET'])
 @login_required
 def api_filter_purchases():
