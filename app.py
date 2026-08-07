@@ -1251,122 +1251,115 @@ def api_suggest_source():
 @app.route('/api/products', methods=['GET'])
 @login_required
 def api_get_products():
-    """Get products with batches - OPTIMIZED with single query"""
+    """Get products grouped by case‑insensitive name+brand, merging all batches."""
     category = request.args.get('category')
     exclude_category = request.args.get('exclude_category')
-    
+
     conn = get_connection()
     cursor = conn.cursor()
     try:
-        # ✅ FIXED: Build WHERE clauses properly
-        where_clauses = [
-            """EXISTS (
-                SELECT 1 FROM purchase_batches pb2 
-                WHERE pb2.product_id = p.id
-            )""",
-            """NOT EXISTS (
+        # First, get all products that are not deleted, with category filter
+        product_query = """
+            SELECT p.id, p.name, p.brand, p.category, p.cost_price, p.selling_price, p.discount
+            FROM products p
+            WHERE NOT EXISTS (
                 SELECT 1 FROM deleted_products dp 
                 WHERE dp.product_id = p.id 
                 AND dp.action IN ('PERMANENTLY DELETED', 'PRODUCT DELETED')
                 AND dp.source = 'product'
-            )"""
-        ]
+            )
+        """
         params = []
-        
         if category:
-            where_clauses.append("p.category = %s")
+            product_query += " AND p.category = %s"
             params.append(category)
         if exclude_category:
-            where_clauses.append("p.category != %s")
+            product_query += " AND p.category != %s"
             params.append(exclude_category)
-        
-        where_sql = "WHERE " + " AND ".join(where_clauses)
-        
-        # ✅ FIXED: Removed p.stock from SELECT - we calculate from batches
-        query = f"""
-            SELECT 
-                p.id as product_id,
-                p.name,
-                p.brand,
-                p.cost_price,
-                p.selling_price,
-                p.category,
-                p.discount,
-                pb.id as batch_id,
-                pb.quantity as batch_quantity,
-                pb.remaining_quantity,
-                pb.cost_price as batch_cost,
-                pb.selling_price as batch_selling,
-                pb.discount as batch_discount,
-                pb.date as batch_date,
-                COALESCE(pb.is_faulty, FALSE) as is_faulty,
-                COALESCE(pb.claimed_quantity, 0) as claimed_quantity,
-                COALESCE(c.claim_count, 0) as active_claims_qty
-            FROM products p
-            LEFT JOIN purchase_batches pb ON pb.product_id = p.id
-            LEFT JOIN (
-                SELECT batch_id, SUM(quantity) as claim_count
-                FROM claims 
-                WHERE status = 'active'
-                GROUP BY batch_id
-            ) c ON c.batch_id = pb.id
-            {where_sql}
-            ORDER BY p.name ASC, pb.date ASC
-        """
-        
-        cursor.execute(query, params)
-        rows = cursor.fetchall()
-        
-        # Group results by product - calculate stock from batches
-        products_dict = {}
+
+        cursor.execute(product_query, params)
+        products = cursor.fetchall()
+
+        # Group by LOWER(name), LOWER(brand)
+        groups = {}
+        for p in products:
+            key = (p[1].lower(), p[2].lower())  # name, brand
+            if key not in groups:
+                groups[key] = {
+                    'product_id': p[0],  # use the first encountered id (could be min)
+                    'name': p[1],
+                    'brand': p[2],
+                    'category': p[3],
+                    'cost_price': p[4],
+                    'selling_price': p[5],
+                    'discount': p[6],
+                    'product_ids': [p[0]]
+                }
+            else:
+                # Keep the product with the lowest id as representative
+                if p[0] < groups[key]['product_id']:
+                    groups[key]['product_id'] = p[0]
+                    groups[key]['name'] = p[1]
+                    groups[key]['brand'] = p[2]
+                    groups[key]['category'] = p[3]
+                    groups[key]['cost_price'] = p[4]
+                    groups[key]['selling_price'] = p[5]
+                    groups[key]['discount'] = p[6]
+                groups[key]['product_ids'].append(p[0])
+
+        # Now for each group, fetch all batches from all product_ids in that group
+        result_products = []
         total_batches = 0
-        
-        for r in rows:
-            product_id = r[0]
-            if product_id not in products_dict:
-                products_dict[product_id] = {
-                    'product_id': product_id,
-                    'name': r[1] or "-",
-                    'brand': r[2] or "-",
-                    'cost_price': r[3] or 0.0,
-                    'selling_price': r[4] or 0.0,
-                    'stock': 0,  # ✅ Will be calculated from batches
-                    'category': r[5] or "-",
-                    'discount': r[6] or 0.0,
-                    'batches': []
-                }
-            
-            # Add batch if it exists
-            if r[7] is not None:  # batch_id exists (index 7 after removing p.stock)
+        for group in groups.values():
+            product_ids = group['product_ids']
+            placeholders = ','.join(['%s'] * len(product_ids))
+            batch_query = f"""
+                SELECT pb.id, pb.quantity, pb.remaining_quantity,
+                       pb.cost_price, pb.selling_price, pb.discount, pb.date,
+                       pb.is_faulty, pb.claimed_quantity,
+                       (SELECT SUM(quantity) FROM claims WHERE batch_id = pb.id AND status = 'active') AS active_claims
+                FROM purchase_batches pb
+                WHERE pb.product_id IN ({placeholders})
+            """
+            cursor.execute(batch_query, product_ids)
+            batch_rows = cursor.fetchall()
+            batches = []
+            for b in batch_rows:
+                batches.append({
+                    'batch_id': b[0],
+                    'quantity': b[1],
+                    'remaining_quantity': b[2],
+                    'cost_price': float(b[3]),
+                    'selling_price': float(b[4]),
+                    'discount': float(b[5]),
+                    'date': b[6],
+                    'is_faulty': b[7] or False,
+                    'claimed_quantity': b[8] or 0,
+                    'active_claims': b[9] or 0
+                })
                 total_batches += 1
-                remaining_qty = int(r[9] or 0)  # index 9 is remaining_quantity
-                claimed_qty = r[15] or 0  # index 15 is claimed_quantity
-                active_claims = r[16] or 0  # index 16 is active_claims_qty
-                
-                batch = {
-                    'batch_id': r[7],
-                    'quantity': int(r[8] or 0),
-                    'remaining_quantity': remaining_qty,
-                    'cost_price': float(r[10] or 0),
-                    'selling_price': float(r[11] or 0),
-                    'discount': float(r[12] or 0),
-                    'date': r[13],
-                    'is_faulty': r[14] or False,
-                    'claimed_quantity': claimed_qty,
-                    'active_claims': active_claims
-                }
-                products_dict[product_id]['batches'].append(batch)
-                # ✅ Calculate stock from batches
-                products_dict[product_id]['stock'] += remaining_qty
-        
-        result = list(products_dict.values())
-        
+
+            # Compute total stock for the merged product
+            total_stock = sum(b['remaining_quantity'] for b in batches)
+
+            result_products.append({
+                'product_id': group['product_id'],
+                'name': group['name'],
+                'brand': group['brand'],
+                'category': group['category'],
+                'cost_price': float(group['cost_price']),
+                'selling_price': float(group['selling_price']),
+                'discount': float(group['discount']),
+                'stock': total_stock,
+                'batches': batches
+            })
+
         return jsonify({
-            'products': result,
-            'total_products': len(result),
+            'products': result_products,
+            'total_products': len(result_products),
             'total_batches': total_batches
         })
-        
+
     except Exception as e:
         print(f"❌ Error in api_get_products: {str(e)}")
         import traceback
