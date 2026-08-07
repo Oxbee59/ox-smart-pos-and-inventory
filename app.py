@@ -1023,147 +1023,152 @@ def api_suggest_category():
 @app.route('/api/purchases/pdf', methods=['POST'])
 @login_required
 def api_purchases_pdf():
-    data = request.json
-    purchases = data.get('purchases', [])
-    from_date = data.get('from_date', '')
-    to_date = data.get('to_date', '')
-    totals = data.get('totals', {})
-    
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=15, leftMargin=15,
-                            topMargin=20, bottomMargin=20)
-    styles = getSampleStyleSheet()
-    elements = []
-    
-    elements.append(Paragraph("📦 Purchases Report", styles["Title"]))
-    elements.append(Spacer(1, 6))
-    elements.append(Paragraph(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", styles["Normal"]))
-    if from_date and to_date:
-        elements.append(Paragraph(f"Date Range: {from_date} → {to_date}", styles["Normal"]))
-    elements.append(Spacer(1, 12))
-
-    # ✅ Updated table with Claimed and Sold columns
-    table_data = [["ID", "Name", "Brand", "Qty", "Remaining", "Sold", "Claimed", "Cost", "Discount", "Total", "Selling", "Source", "Date/Time"]]
-    total_qty = total_cost = total_discount = total_selling = total_claimed = total_claimed_cost = total_sold_summary = 0
-    row_colors = [colors.whitesmoke, colors.lightgrey]
-
-    for p in purchases:
-        date_str = p.get('date', '')
-        if date_str:
-            try:
-                dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
-                date_str = dt.strftime("%Y-%m-%d %H:%M")
-            except:
-                date_str = str(date_str)[:16]
+    try:
+        data = request.json
+        purchases = data.get('purchases', [])
+        from_date = data.get('from_date', '')
+        to_date = data.get('to_date', '')
+        totals = data.get('totals', {})
         
-        qty = p.get("quantity", 0)
-        remaining = p.get("remaining_quantity", 0)
-        claimed = p.get("claimed_quantity", 0)
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=15, leftMargin=15,
+                                topMargin=20, bottomMargin=20)
+        styles = getSampleStyleSheet()
+        elements = []
         
-        # ✅ FIXED: Per‑batch sold = total quantity - remaining quantity
-        sold = qty - remaining
-        
-        cost = p.get("cost_price", 0)
-        claimed_cost = claimed * cost
+        elements.append(Paragraph("📦 Purchases Report", styles["Title"]))
+        elements.append(Spacer(1, 6))
+        elements.append(Paragraph(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", styles["Normal"]))
+        if from_date and to_date:
+            elements.append(Paragraph(f"Date Range: {from_date} → {to_date}", styles["Normal"]))
+        elements.append(Spacer(1, 12))
 
-        table_data.append([
-            p["batch_id"], 
-            p["name"], 
-            p["brand"],
-            qty, 
-            remaining,
-            sold,
-            claimed,
-            f"₵{cost:.2f}",
-            f"₵{p.get('discount', 0):.2f}",
-            f"₵{p.get('total_cost', 0):.2f}",
-            f"₵{p.get('selling_price', 0):.2f}",
-            p.get('source', 'Unknown'),
-            date_str
+        # Table headers
+        table_data = [["ID", "Name", "Brand", "Qty", "Remaining", "Sold", "Claimed", "Cost", "Discount", "Total", "Selling", "Source", "Date/Time"]]
+        total_qty = total_cost = total_discount = total_selling = total_claimed = total_claimed_cost = total_sold_summary = 0
+        row_colors = [colors.whitesmoke, colors.lightgrey]
+
+        for p in purchases:
+            # Convert date string safely
+            date_str = p.get('date', '')
+            if date_str:
+                try:
+                    if isinstance(date_str, str):
+                        dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                        date_str = dt.strftime("%Y-%m-%d %H:%M")
+                    else:
+                        date_str = str(date_str)[:16]
+                except:
+                    date_str = str(date_str)[:16]
+            
+            qty = p.get("quantity", 0)
+            remaining = p.get("remaining_quantity", 0)
+            claimed = p.get("claimed_quantity", 0)
+            sold = qty - remaining
+            cost = p.get("cost_price", 0)
+            claimed_cost = claimed * cost
+
+            table_data.append([
+                p.get("batch_id", ''),
+                p.get("name", ''),
+                p.get("brand", ''),
+                qty,
+                remaining,
+                sold,
+                claimed,
+                f"₵{cost:.2f}",
+                f"₵{p.get('discount', 0):.2f}",
+                f"₵{p.get('total_cost', 0):.2f}",
+                f"₵{p.get('selling_price', 0):.2f}",
+                p.get('source', 'Unknown'),
+                date_str
+            ])
+            total_qty += qty
+            total_cost += p.get("total_cost", 0)
+            total_discount += p.get("discount", 0)
+            total_selling += p.get("selling_price", 0) * qty
+            total_claimed += claimed
+            total_claimed_cost += claimed_cost
+            total_sold_summary += sold
+
+        # Build table (same as before, but with safe handling)
+        table = Table(table_data, repeatRows=1, hAlign='LEFT',
+                      colWidths=[1.5*cm, 4*cm, 3*cm, 1.5*cm, 1.5*cm, 1.5*cm, 1.5*cm, 2*cm, 2*cm, 2.5*cm, 2.5*cm, 2.5*cm, 3*cm])
+        style = TableStyle([
+            ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#00CFCF")),
+            ("TEXTCOLOR", (0,0), (-1,0), colors.whitesmoke),
+            ("ALIGN", (3,1), (-2,-1), "CENTER"),
+            ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+            ("GRID", (0,0), (-1,-1), 0.4, colors.black),
+            ("FONTSIZE", (0,0), (-1,-1), 7),
         ])
-        # Aggregate totals for summary
-        total_qty += qty
-        total_cost += p.get("total_cost", 0)
-        total_discount += p.get("discount", 0)
-        total_selling += p.get("selling_price", 0) * qty
-        total_claimed += claimed
-        total_claimed_cost += claimed_cost
-        total_sold_summary += sold   # sum of per‑batch sold
+        for i in range(1, len(table_data)):
+            style.add("BACKGROUND", (0,i), (-1,i), row_colors[i%2])
+        table.setStyle(style)
+        elements.append(table)
+        elements.append(Spacer(1, 12))
 
-    table = Table(table_data, repeatRows=1, hAlign='LEFT',
-                  colWidths=[1.5*cm, 4*cm, 3*cm, 1.5*cm, 1.5*cm, 1.5*cm, 1.5*cm, 2*cm, 2*cm, 2.5*cm, 2.5*cm, 2.5*cm, 3*cm])
-    style = TableStyle([
-        ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#00CFCF")),
-        ("TEXTCOLOR", (0,0), (-1,0), colors.whitesmoke),
-        ("ALIGN", (3,1), (-2,-1), "CENTER"),
-        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-        ("GRID", (0,0), (-1,-1), 0.4, colors.black),
-        ("FONTSIZE", (0,0), (-1,-1), 7),
-    ])
-    for i in range(1, len(table_data)):
-        style.add("BACKGROUND", (0,i), (-1,i), row_colors[i%2])
-    table.setStyle(style)
-    elements.append(table)
-    elements.append(Spacer(1, 12))
+        # Summary
+        elements.append(Paragraph("📊 Summary", styles["Heading2"]))
+        elements.append(Spacer(1, 6))
+        total_batches = len(purchases)
+        total_remaining = total_qty - total_sold_summary
+        total_sold = total_sold_summary
+        adjusted_capital = totals.get('adjusted_capital', total_cost - total_claimed_cost) if totals else total_cost - total_claimed_cost
+        total_profit = totals.get('total_profit', total_selling - (total_cost - total_discount)) if totals else total_selling - (total_cost - total_discount)
+        total_good = total_remaining - total_claimed
+        sold_percentage = (total_sold / total_qty * 100) if total_qty > 0 else 0
 
-    elements.append(Paragraph("📊 Summary", styles["Heading2"]))
-    elements.append(Spacer(1, 6))
-    
-    # Summary metrics – using the computed aggregates (and fallbacks from totals if provided)
-    total_batches = len(purchases)
-    total_remaining = total_qty - total_sold_summary
-    total_sold = total_sold_summary
-    adjusted_capital = totals.get('adjusted_capital', total_cost - total_claimed_cost) if totals else total_cost - total_claimed_cost
-    total_profit = totals.get('total_profit', total_selling - (total_cost - total_discount)) if totals else total_selling - (total_cost - total_discount)
-    total_good = total_remaining - total_claimed
-    
-    sold_percentage = (total_sold / total_qty * 100) if total_qty > 0 else 0
-    
-    summary_data = [
-        ["Metric", "Value"],
-        ["📦 Total Batches", str(total_batches)],
-        ["🧾 Total Quantity", str(total_qty)],
-        ["📦 Remaining Stock", str(total_remaining)],
-        ["📊 Sold", str(total_sold)],
-        ["⚠️ Claimed", str(total_claimed)],
-        ["✅ Good Stock", str(max(total_good, 0))],
-        ["💰 Total Cost", f"₵{total_cost:.2f}"],
-        ["📉 Claimed Cost", f"₵{total_claimed_cost:.2f}"],
-        ["💰 Capital (Adjusted)", f"₵{adjusted_capital:.2f}"],
-        ["📈 Total Selling Price", f"₵{total_selling:.2f}"],
-        ["📉 Total Discount", f"₵{total_discount:.2f}"],
-        ["💎 Total Profit", f"₵{total_profit:.2f}"],
-        ["📊 Sold %", f"{sold_percentage:.1f}%"]
-    ]
-    
-    summary_table = Table(summary_data, colWidths=[6*cm, 6*cm], hAlign='CENTER')
-    summary_table.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#1E3A5F")),
-        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
-        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0,0), (-1,-1), 9),
-        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.black),
-        ('BACKGROUND', (1,1), (1,-1), colors.lightgrey),
-        ('TEXTCOLOR', (1,1), (1,-1), colors.black),
-        ('BACKGROUND', (0,1), (0,-1), colors.whitesmoke),
-    ]))
-    elements.append(summary_table)
-    
-    profit_color = colors.green if total_profit >= 0 else colors.red
-    profit_status = "📈 PROFIT" if total_profit >= 0 else "📉 LOSS"
-    elements.append(Spacer(1, 6))
-    elements.append(Paragraph(
-        f"<font color='{profit_color}' size='14'><b>{profit_status}: ₵{total_profit:.2f}</b></font>",
-        styles["Normal"]
-    ))
-    
-    doc.build(elements)
-    buffer.seek(0)
-    return send_file(buffer, as_attachment=True,
-                     download_name=f"Purchases_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
-                     mimetype='application/pdf')
+        summary_data = [
+            ["Metric", "Value"],
+            ["📦 Total Batches", str(total_batches)],
+            ["🧾 Total Quantity", str(total_qty)],
+            ["📦 Remaining Stock", str(total_remaining)],
+            ["📊 Sold", str(total_sold)],
+            ["⚠️ Claimed", str(total_claimed)],
+            ["✅ Good Stock", str(max(total_good, 0))],
+            ["💰 Total Cost", f"₵{total_cost:.2f}"],
+            ["📉 Claimed Cost", f"₵{total_claimed_cost:.2f}"],
+            ["💰 Capital (Adjusted)", f"₵{adjusted_capital:.2f}"],
+            ["📈 Total Selling Price", f"₵{total_selling:.2f}"],
+            ["📉 Total Discount", f"₵{total_discount:.2f}"],
+            ["💎 Total Profit", f"₵{total_profit:.2f}"],
+            ["📊 Sold %", f"{sold_percentage:.1f}%"]
+        ]
+
+        summary_table = Table(summary_data, colWidths=[6*cm, 6*cm], hAlign='CENTER')
+        summary_table.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#1E3A5F")),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0,0), (-1,-1), 9),
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.black),
+            ('BACKGROUND', (1,1), (1,-1), colors.lightgrey),
+            ('TEXTCOLOR', (1,1), (1,-1), colors.black),
+            ('BACKGROUND', (0,1), (0,-1), colors.whitesmoke),
+        ]))
+        elements.append(summary_table)
+
+        profit_color = colors.green if total_profit >= 0 else colors.red
+        profit_status = "📈 PROFIT" if total_profit >= 0 else "📉 LOSS"
+        elements.append(Spacer(1, 6))
+        elements.append(Paragraph(
+            f"<font color='{profit_color}' size='14'><b>{profit_status}: ₵{total_profit:.2f}</b></font>",
+            styles["Normal"]
+        ))
+
+        doc.build(elements)
+        buffer.seek(0)
+        return send_file(buffer, as_attachment=True,
+                         download_name=f"Purchases_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+                         mimetype='application/pdf')
+    except Exception as e:
+        print(f"❌ PDF generation error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 
 # ===================== PURCHASE HISTORY API =====================
 @app.route('/api/purchases/<int:batch_id>/history', methods=['GET'])
@@ -1255,121 +1260,76 @@ def api_suggest_source():
 @login_required
 def api_get_products():
     """Get products grouped by case‑insensitive name+brand, merging all batches."""
+    from services.product_service import get_all_products as get_all_products_service
+
     category = request.args.get('category')
     exclude_category = request.args.get('exclude_category')
 
-    conn = get_connection()
-    cursor = conn.cursor()
-    try:
-        # First, get all products that are not deleted, with category filter
-        product_query = """
-            SELECT p.id, p.name, p.brand, p.category, p.cost_price, p.selling_price, p.discount
-            FROM products p
-            WHERE NOT EXISTS (
-                SELECT 1 FROM deleted_products dp 
-                WHERE dp.product_id = p.id 
-                AND dp.action IN ('PERMANENTLY DELETED', 'PRODUCT DELETED')
-                AND dp.source = 'product'
-            )
-        """
-        params = []
-        if category:
-            product_query += " AND p.category = %s"
-            params.append(category)
-        if exclude_category:
-            product_query += " AND p.category != %s"
-            params.append(exclude_category)
+    # Step 1: Fetch all products using the existing service (which is optimized)
+    data = get_all_products_service()
+    products = data.get('products', [])
 
-        cursor.execute(product_query, params)
-        products = cursor.fetchall()
+    # Step 2: Filter by category if needed
+    filtered = []
+    for p in products:
+        p_cat = p.get('category', '')
+        if category and p_cat.lower() != category.lower():
+            continue
+        if exclude_category and p_cat.lower() == exclude_category.lower():
+            continue
+        filtered.append(p)
 
-        # Group by LOWER(name), LOWER(brand)
-        groups = {}
-        for p in products:
-            key = (p[1].lower(), p[2].lower())  # name, brand
-            if key not in groups:
-                groups[key] = {
-                    'product_id': p[0],  # use the first encountered id (could be min)
-                    'name': p[1],
-                    'brand': p[2],
-                    'category': p[3],
-                    'cost_price': p[4],
-                    'selling_price': p[5],
-                    'discount': p[6],
-                    'product_ids': [p[0]]
-                }
-            else:
-                # Keep the product with the lowest id as representative
-                if p[0] < groups[key]['product_id']:
-                    groups[key]['product_id'] = p[0]
-                    groups[key]['name'] = p[1]
-                    groups[key]['brand'] = p[2]
-                    groups[key]['category'] = p[3]
-                    groups[key]['cost_price'] = p[4]
-                    groups[key]['selling_price'] = p[5]
-                    groups[key]['discount'] = p[6]
-                groups[key]['product_ids'].append(p[0])
+    # Step 3: Group by (name, brand) case‑insensitively
+    groups = {}
+    for p in filtered:
+        key = (p['name'].lower(), p['brand'].lower())
+        if key not in groups:
+            groups[key] = {
+                'product_id': p['product_id'],
+                'name': p['name'],
+                'brand': p['brand'],
+                'category': p['category'],
+                'cost_price': p['cost_price'],
+                'selling_price': p['selling_price'],
+                'discount': p['discount'],
+                'stock': 0,
+                'batches': []
+            }
+        # Merge batches
+        if p.get('batches'):
+            groups[key]['batches'].extend(p['batches'])
+        # Update stock from merged batches (recalculate later)
+        groups[key]['stock'] += p.get('stock', 0)
 
-        # Now for each group, fetch all batches from all product_ids in that group
-        result_products = []
-        total_batches = 0
-        for group in groups.values():
-            product_ids = group['product_ids']
-            placeholders = ','.join(['%s'] * len(product_ids))
-            batch_query = f"""
-                SELECT pb.id, pb.quantity, pb.remaining_quantity,
-                       pb.cost_price, pb.selling_price, pb.discount, pb.date,
-                       pb.is_faulty, pb.claimed_quantity,
-                       (SELECT SUM(quantity) FROM claims WHERE batch_id = pb.id AND status = 'active') AS active_claims
-                FROM purchase_batches pb
-                WHERE pb.product_id IN ({placeholders})
-            """
-            cursor.execute(batch_query, product_ids)
-            batch_rows = cursor.fetchall()
-            batches = []
-            for b in batch_rows:
-                batches.append({
-                    'batch_id': b[0],
-                    'quantity': b[1],
-                    'remaining_quantity': b[2],
-                    'cost_price': float(b[3]),
-                    'selling_price': float(b[4]),
-                    'discount': float(b[5]),
-                    'date': b[6],
-                    'is_faulty': b[7] or False,
-                    'claimed_quantity': b[8] or 0,
-                    'active_claims': b[9] or 0
-                })
-                total_batches += 1
+    # Step 4: Recalculate stock from merged batches (to avoid double counting)
+    # But also ensure we don't duplicate batches: if a product_id appears in multiple groups? Shouldn't.
+    # However, we need to deduplicate batches by batch_id because the same batch could be associated with multiple product_ids
+    # (if we merged products incorrectly). We'll deduplicate.
+    result = []
+    total_batches = 0
+    for group in groups.values():
+        # Deduplicate batches by batch_id
+        seen_batch_ids = set()
+        unique_batches = []
+        for batch in group['batches']:
+            batch_id = batch.get('batch_id')
+            if batch_id and batch_id not in seen_batch_ids:
+                seen_batch_ids.add(batch_id)
+                unique_batches.append(batch)
+        group['batches'] = unique_batches
+        # Recalculate stock from batches
+        total_stock = sum(b.get('remaining_quantity', 0) for b in unique_batches)
+        group['stock'] = total_stock
+        # Count total batches
+        total_batches += len(unique_batches)
+        result.append(group)
 
-            # Compute total stock for the merged product
-            total_stock = sum(b['remaining_quantity'] for b in batches)
-
-            result_products.append({
-                'product_id': group['product_id'],
-                'name': group['name'],
-                'brand': group['brand'],
-                'category': group['category'],
-                'cost_price': float(group['cost_price']),
-                'selling_price': float(group['selling_price']),
-                'discount': float(group['discount']),
-                'stock': total_stock,
-                'batches': batches
-            })
-
-        return jsonify({
-            'products': result_products,
-            'total_products': len(result_products),
-            'total_batches': total_batches
-        })
-
-    except Exception as e:
-        print(f"❌ Error in api_get_products: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
-    finally:
-        conn.close()
+    # Return in the same format expected by frontend
+    return jsonify({
+        'products': result,
+        'total_products': len(result),
+        'total_batches': total_batches
+    })
 
 @app.route('/api/products', methods=['POST'])
 @login_required

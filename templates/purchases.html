@@ -1158,12 +1158,31 @@
         }
     }
 
-    // ========== ✅ NEW FILTER FUNCTION – Handles all cases ==========
+    // ---------- Clear filters ----------
+    function clearFilters() {
+        document.getElementById('fromDate').value = '';
+        document.getElementById('toDate').value = '';
+        document.getElementById('searchInput').value = '';
+        document.getElementById('clearSearchBtn').classList.add('hidden');
+        document.getElementById('showUpdatedOnly').checked = false;
+        document.getElementById('dateType').value = 'original';
+        currentFilteredData = currentPurchases;
+        loadPurchases(true);
+    }
+
+    // ========== ✅ UPDATED FILTER FUNCTION – with auto‑enable & proper error handling ==========
     async function filterPurchases() {
-        const fromDate = document.getElementById('fromDate').value;
-        const toDate = document.getElementById('toDate').value;
-        const dateType = document.getElementById('dateType').value;
-        const showUpdatedOnly = document.getElementById('showUpdatedOnly').checked;
+        let fromDate = document.getElementById('fromDate').value;
+        let toDate = document.getElementById('toDate').value;
+        let dateType = document.getElementById('dateType').value;
+        let showUpdatedOnly = document.getElementById('showUpdatedOnly').checked;
+
+        // 🆕 Auto‑enable "Show only updated" when Date Type = "Last Update Date"
+        if (dateType === 'updated' && !showUpdatedOnly) {
+            showUpdatedOnly = true;
+            document.getElementById('showUpdatedOnly').checked = true;
+            console.log('🔄 Auto-enabled "Show only updated" because Date Type is "Last Update Date".');
+        }
 
         // Case 1: Both dates provided – use the full filter endpoint
         if (fromDate && toDate) {
@@ -1236,7 +1255,7 @@
         }
     }
 
-    // ---------- PDF (unchanged) ----------
+    // ---------- PDF – with robust error handling ----------
     async function generatePDF() {
         if (!navigator.onLine) {
             alert('PDF generation requires internet. Please connect and try again.');
@@ -1300,7 +1319,17 @@
                     }
                 })
             });
-            if (!res.ok) throw new Error();
+
+            // ✅ Check for HTTP errors and parse JSON error message
+            if (!res.ok) {
+                let errorMsg = `HTTP ${res.status}`;
+                try {
+                    const errorData = await res.json();
+                    if (errorData.error) errorMsg = errorData.error;
+                } catch (_) {}
+                throw new Error(errorMsg);
+            }
+
             const blob = await res.blob();
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -1311,7 +1340,8 @@
             a.remove();
             window.URL.revokeObjectURL(url);
         } catch (err) {
-            alert('Failed to generate PDF. Please try again.');
+            alert('❌ Failed to generate PDF: ' + err.message);
+            console.error('PDF generation error:', err);
         }
     }
 
