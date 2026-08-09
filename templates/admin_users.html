@@ -61,10 +61,56 @@
     </table>
 </div>
 
+<!-- ========== ERROR MODAL ========== -->
+<div id="errorModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
+    <div class="bg-white rounded-xl shadow-xl w-96 max-w-lg p-6">
+        <div class="flex items-start gap-3">
+            <div class="text-3xl text-red-500">❌</div>
+            <div class="flex-1">
+                <h3 class="text-lg font-bold text-gray-800">Cannot Delete User</h3>
+                <p id="errorModalMessage" class="text-sm text-gray-700 mt-1"></p>
+                <div id="errorModalDetails" class="text-xs text-gray-500 mt-2 border-t pt-2 hidden">
+                    <strong>Details:</strong> <span id="errorModalDetailsText"></span>
+                </div>
+            </div>
+        </div>
+        <div class="flex justify-end mt-4">
+            <button onclick="closeErrorModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded">
+                OK
+            </button>
+        </div>
+    </div>
+</div>
+
 <script>
     // Get the logged-in user's ID and username from the hidden input
     const currentUserId = parseInt(document.getElementById('currentUserId').value) || 0;
     const currentUsername = document.getElementById('currentUsername').value || '';
+
+    // ---------- Error Modal ----------
+    function showErrorModal(message, details) {
+        const modal = document.getElementById('errorModal');
+        const msgEl = document.getElementById('errorModalMessage');
+        const detailsEl = document.getElementById('errorModalDetails');
+        const detailsText = document.getElementById('errorModalDetailsText');
+
+        msgEl.textContent = message;
+        if (details) {
+            detailsText.textContent = details;
+            detailsEl.classList.remove('hidden');
+        } else {
+            detailsEl.classList.add('hidden');
+        }
+        modal.classList.remove('hidden');
+    }
+
+    function closeErrorModal() {
+        document.getElementById('errorModal').classList.add('hidden');
+    }
+    // Close modal on background click
+    document.getElementById('errorModal').addEventListener('click', function(e) {
+        if (e.target === this) closeErrorModal();
+    });
 
     async function fetchUsers() {
         const res = await fetch('/api/admin/users');
@@ -94,7 +140,7 @@
             const isCurrentUser = user.id === currentUserId;
             const isProtected = user.username && user.username.toLowerCase() === 'oxbee';
             const statusBadge = getStatusBadge(user.role, isProtected);
-            
+
             tr.innerHTML = `
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${user.id}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -113,7 +159,7 @@
                        ${isProtected ? 'onclick="return false;" title="Cannot edit system administrator"' : ''}>
                         ✏️ Edit
                     </a>
-                    
+
                     ${!isCurrentUser && !isProtected ? `
                         <button class="role-toggle text-indigo-600 hover:text-indigo-900 ml-2" 
                                 data-id="${user.id}" 
@@ -122,7 +168,7 @@
                         </button>
                         <button class="delete-user text-red-600 hover:text-red-900 ml-2" data-id="${user.id}">Delete</button>
                     ` : ''}
-                    
+
                     ${isProtected && !isCurrentUser ? `
                         <span class="text-gray-400 text-xs ml-2">🔒 System Protected</span>
                     ` : ''}
@@ -147,10 +193,10 @@
                     if (data.success) {
                         loadUsers();
                     } else {
-                        alert('Failed: ' + (data.error || 'Unknown error'));
+                        showErrorModal('Failed to update role', data.error || 'Unknown error');
                     }
                 } catch (err) {
-                    alert('Error: ' + err.message);
+                    showErrorModal('Network error', err.message);
                 }
             });
         });
@@ -167,10 +213,11 @@
                     if (data.success) {
                         loadUsers();
                     } else {
-                        alert('Failed: ' + (data.error || 'Unknown error'));
+                        // Show the detailed error from the backend
+                        showErrorModal('Cannot delete user', data.error || 'Unknown error');
                     }
                 } catch (err) {
-                    alert('Error: ' + err.message);
+                    showErrorModal('Network error', err.message);
                 }
             });
         });

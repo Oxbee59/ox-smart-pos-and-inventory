@@ -233,38 +233,43 @@ def update_user_password(user_id: int, new_password: str) -> bool:
 def delete_user(user_id: int):
     """
     Delete a user. Returns dict with success and error message.
-    Checks for dependent records (sales, purchases) to give a clear reason if deletion fails.
+    Checks for dependent records (sales, and optionally purchases if the column exists).
     """
     conn = get_connection()
     cursor = conn.cursor()
     
     try:
-        # Check for dependent records (sales, purchases)
-        cursor.execute("""
-            SELECT 
-                (SELECT COUNT(*) FROM sales WHERE user_id = %s) as sales_count,
-                (SELECT COUNT(*) FROM purchases WHERE user_id = %s) as purchases_count
-        """, (user_id, user_id))
-        counts = cursor.fetchone()
-        sales_count, purchases_count = counts[0], counts[1]
+        # 1. Count sales linked to this user (mandatory check)
+        cursor.execute("SELECT COUNT(*) FROM sales WHERE user_id = %s", (user_id,))
+        sales_count = cursor.fetchone()[0]
         
-        if sales_count > 0 or purchases_count > 0:
-            error_msg = "Cannot delete user. They have "
-            if sales_count > 0:
-                error_msg += f"{sales_count} sale(s) "
-            if purchases_count > 0:
-                error_msg += f"{purchases_count} purchase(s) "
-            error_msg += "associated. Please reassign or delete those records first."
-            return {"success": False, "error": error_msg}
+        if sales_count > 0:
+            return {
+                "success": False,
+                "error": f"Cannot delete user. They have {sales_count} sale(s) associated. "
+                         "Please reassign or delete those records first."
+            }
         
-        # Also check for any other references (e.g., user_logs – we can delete them)
-        # Delete user logs first
+        # 2. Optionally check purchases if the column exists
+        #    (Skip if you haven't added user_id to purchases yet)
+        #    Uncomment the lines below if you later add user_id to purchases.
+        #
+        # cursor.execute("SELECT COUNT(*) FROM purchases WHERE user_id = %s", (user_id,))
+        # purchases_count = cursor.fetchone()[0]
+        # if purchases_count > 0:
+        #     return {
+        #         "success": False,
+        #         "error": f"Cannot delete user. They have {purchases_count} purchase(s) associated."
+        #     }
+        
+        # 3. Delete user logs first (to avoid FK violations)
         cursor.execute("DELETE FROM user_logs WHERE user_id = %s", (user_id,))
         
-        # Now delete the user
+        # 4. Delete the user
         cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
         conn.commit()
         return {"success": True}
+        
     except Exception as e:
         conn.rollback()
         return {"success": False, "error": f"Database error: {str(e)}"}

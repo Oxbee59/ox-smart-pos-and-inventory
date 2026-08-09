@@ -87,6 +87,27 @@
     <div id="actionMessage" class="mt-4 text-sm"></div>
 </div>
 
+<!-- ========== ERROR MODAL ========== -->
+<div id="errorModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
+    <div class="bg-white rounded-xl shadow-xl w-96 max-w-lg p-6">
+        <div class="flex items-start gap-3">
+            <div class="text-3xl text-red-500">❌</div>
+            <div class="flex-1">
+                <h3 class="text-lg font-bold text-gray-800">Cannot Delete User</h3>
+                <p id="errorModalMessage" class="text-sm text-gray-700 mt-1"></p>
+                <div id="errorModalDetails" class="text-xs text-gray-500 mt-2 border-t pt-2 hidden">
+                    <strong>Details:</strong> <span id="errorModalDetailsText"></span>
+                </div>
+            </div>
+        </div>
+        <div class="flex justify-end mt-4">
+            <button onclick="closeErrorModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded">
+                OK
+            </button>
+        </div>
+    </div>
+</div>
+
 <!-- Data attributes for JavaScript -->
 <div id="editUserData" 
      data-user-id="{{ user_id }}" 
@@ -94,11 +115,36 @@
 </div>
 
 <script>
-    // Get data from data attributes (clean approach, no Jinja errors)
+    // Get data from data attributes
     const userId = parseInt(document.getElementById('editUserData').dataset.userId);
     const isOxbee = document.getElementById('editUserData').dataset.isOxbee === 'true';
 
-    // Load user data
+    // ---------- Error Modal ----------
+    function showErrorModal(message, details) {
+        const modal = document.getElementById('errorModal');
+        const msgEl = document.getElementById('errorModalMessage');
+        const detailsEl = document.getElementById('errorModalDetails');
+        const detailsText = document.getElementById('errorModalDetailsText');
+
+        msgEl.textContent = message;
+        if (details) {
+            detailsText.textContent = details;
+            detailsEl.classList.remove('hidden');
+        } else {
+            detailsEl.classList.add('hidden');
+        }
+        modal.classList.remove('hidden');
+    }
+
+    function closeErrorModal() {
+        document.getElementById('errorModal').classList.add('hidden');
+    }
+    // Close modal on background click
+    document.getElementById('errorModal').addEventListener('click', function(e) {
+        if (e.target === this) closeErrorModal();
+    });
+
+    // ---------- Load user data ----------
     async function loadUser() {
         try {
             const res = await fetch(`/api/admin/users/${userId}`);
@@ -129,6 +175,7 @@
         }
     }
 
+    // ---------- Show inline message ----------
     function showMessage(msg, color) {
         const el = document.getElementById('actionMessage');
         el.textContent = msg;
@@ -136,7 +183,7 @@
         setTimeout(() => { el.textContent = ''; }, 5000);
     }
 
-    // Update role
+    // ---------- Update role ----------
     document.getElementById('updateRoleBtn').addEventListener('click', async function() {
         if (isOxbee) {
             showMessage('Cannot modify the system administrator!', 'red');
@@ -164,7 +211,7 @@
         }
     });
 
-    // Reset password
+    // ---------- Reset password ----------
     document.getElementById('resetPasswordBtn').addEventListener('click', async function() {
         if (isOxbee) {
             showMessage('Cannot modify the system administrator!', 'red');
@@ -197,7 +244,7 @@
         }
     });
 
-    // View password hash
+    // ---------- View password hash ----------
     document.getElementById('viewPasswordBtn').addEventListener('click', async function() {
         const display = document.getElementById('passwordHashDisplay');
         if (display.classList.contains('hidden')) {
@@ -217,7 +264,7 @@
         }
     });
 
-    // Delete user
+    // ---------- Delete user ----------
     document.getElementById('deleteUserBtn').addEventListener('click', async function() {
         if (isOxbee) {
             showMessage('Cannot delete the system administrator!', 'red');
@@ -236,21 +283,22 @@
                     window.location.href = '/admin/users';
                 }, 1000);
             } else {
-                showMessage('❌ Error: ' + data.error, 'red');
+                // ✅ Use the modal for detailed errors
+                showErrorModal('Cannot delete user', data.error || 'Unknown error');
             }
         } catch (error) {
-            showMessage('❌ Failed to delete user: ' + error.message, 'red');
+            showErrorModal('Network error', error.message);
         }
     });
 
-    // Enter key on password field triggers reset
+    // ---------- Enter key on password field triggers reset ----------
     document.getElementById('newPassword').addEventListener('keypress', function(e) {
         if (e.key === 'Enter') {
             document.getElementById('resetPasswordBtn').click();
         }
     });
 
-    // Initial load
+    // ---------- Initial load ----------
     loadUser();
 </script>
 {% endblock %}
