@@ -6,6 +6,14 @@
     ⚠️ You are offline – showing cached accessories. Sales will be saved and synced when you reconnect.
 </div>
 
+<!-- One-time notice: Sales page revived -->
+<div id="salesReviveNotice" class="notice-banner" style="display: none;">
+    <div class="notice-content">
+        <span>🔄 <strong>Sales page revived!</strong> Further updates will continue later.</span>
+        <button id="dismissNotice" class="notice-close">&times;</button>
+    </div>
+</div>
+
 <!-- No accessories banner -->
 <div id="noProductsBanner" class="mb-4 bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded hidden">
     <strong>⚠️ No accessories found.</strong><br>
@@ -1354,7 +1362,28 @@
             `;
         }
     });
+     
+    // ---------- One-time notice for revived Sales page ----------
+(function() {
+    const notice = document.getElementById('salesReviveNotice');
+    const dismissBtn = document.getElementById('dismissNotice');
+    const STORAGE_KEY = 'salesReviveNoticeDismissed';
 
+    // Check if user already dismissed this notice
+    if (localStorage.getItem(STORAGE_KEY) === 'true') {
+        notice.style.display = 'none';
+        return;
+    }
+
+    // Show the banner
+    notice.style.display = 'flex';
+
+    // Dismiss handler
+    dismissBtn.addEventListener('click', function() {
+        notice.style.display = 'none';
+        localStorage.setItem(STORAGE_KEY, 'true');
+    });
+})();
     // ---------- Initialization ----------
     document.addEventListener('DOMContentLoaded', function() {
         loadProducts();

@@ -907,3 +907,39 @@ body.dark-theme .theme-option.bg-amber-50 {
 .batch-faulty { border-left: 3px solid #ef4444; background: #fef2f2; }
 .batch-good { border-left: 3px solid #22c55e; background: #f0fdf4; }
 .batch-warning { border-left: 3px solid #f59e0b; background: #fffbeb; }
+
+/* ============================================================
+   ONE-TIME NOTICE BANNER (for revived pages, etc.)
+   ============================================================ */
+.notice-banner {
+    background-color: #e3f2fd;
+    border-left: 5px solid #1976d2;
+    padding: 12px 20px;
+    margin-bottom: 20px;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    font-size: 1rem;
+    color: #0d47a1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.notice-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+}
+.notice-close {
+    background: none;
+    border: none;
+    font-size: 1.8rem;
+    font-weight: bold;
+    color: #0d47a1;
+    cursor: pointer;
+    padding: 0 8px;
+    line-height: 1;
+}
+.notice-close:hover {
+    color: #b71c1c;
+}
