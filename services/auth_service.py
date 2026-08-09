@@ -229,20 +229,45 @@ def update_user_password(user_id: int, new_password: str) -> bool:
         return_connection(conn)
 
 
-# ---------------- DELETE USER ----------------
-def delete_user(user_id: int) -> bool:
-    """Delete a user."""
+# ---------------- DELETE USER (IMPROVED WITH DEPENDENCY CHECK) ----------------
+def delete_user(user_id: int):
+    """
+    Delete a user. Returns dict with success and error message.
+    Checks for dependent records (sales, purchases) to give a clear reason if deletion fails.
+    """
     conn = get_connection()
     cursor = conn.cursor()
     
     try:
+        # Check for dependent records (sales, purchases)
+        cursor.execute("""
+            SELECT 
+                (SELECT COUNT(*) FROM sales WHERE user_id = %s) as sales_count,
+                (SELECT COUNT(*) FROM purchases WHERE user_id = %s) as purchases_count
+        """, (user_id, user_id))
+        counts = cursor.fetchone()
+        sales_count, purchases_count = counts[0], counts[1]
+        
+        if sales_count > 0 or purchases_count > 0:
+            error_msg = "Cannot delete user. They have "
+            if sales_count > 0:
+                error_msg += f"{sales_count} sale(s) "
+            if purchases_count > 0:
+                error_msg += f"{purchases_count} purchase(s) "
+            error_msg += "associated. Please reassign or delete those records first."
+            return {"success": False, "error": error_msg}
+        
+        # Also check for any other references (e.g., user_logs – we can delete them)
+        # Delete user logs first
+        cursor.execute("DELETE FROM user_logs WHERE user_id = %s", (user_id,))
+        
+        # Now delete the user
         cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
         conn.commit()
-        return True
+        return {"success": True}
     except Exception as e:
         conn.rollback()
-        print(f"Error deleting user: {e}")
-        return False
+        return {"success": False, "error": f"Database error: {str(e)}"}
     finally:
         return_connection(conn)
 

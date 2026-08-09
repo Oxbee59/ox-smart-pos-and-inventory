@@ -373,15 +373,27 @@ def products_screen():
 def add_product():
     return redirect(url_for("products"))
 
+# ===================== TEMPORARILY DISABLED =====================
+# @app.route("/sales")
+# @login_required
+# def sales():
+#     return render_template("sales.html")
+
+# @app.route("/sales/screens")
+# @login_required
+# def sales_screen():
+#     return render_template("sales_screen.html")
+# ================================================================
+
 @app.route("/sales")
 @login_required
 def sales():
-    return render_template("sales.html")
+    return render_template("under_construction.html")
 
 @app.route("/sales/screens")
 @login_required
 def sales_screen():
-    return render_template("sales_screen.html")
+    return render_template("under_construction.html")
 
 @app.route("/purchases")
 @login_required
@@ -833,17 +845,16 @@ def api_admin_create_user():
 @admin_required
 def api_admin_delete_user(user_id):
     if user_id == session.get('user_id'):
-        return jsonify({'success': False, 'error': 'Cannot delete your own account'}), 400
+        return jsonify({'success': False, 'error': 'Cannot delete your own account.'}), 400
     
     if is_protected_user(user_id):
-        return jsonify({'success': False, 'error': 'Cannot delete the system administrator (oxbee)'}), 400
-    
-    success = delete_user(user_id)
-    if success:
+        return jsonify({'success': False, 'error': 'Cannot delete the system administrator (oxbee).'}), 400
+
+    result = delete_user(user_id)
+    if result['success']:
         return jsonify({'success': True})
     else:
-        return jsonify({'success': False, 'error': 'Delete failed'}), 400
-
+        return jsonify({'success': False, 'error': result['error']}), 400
 @app.route('/api/admin/users/<int:user_id>/role', methods=['PUT'])
 @admin_required
 def api_admin_update_role(user_id):
