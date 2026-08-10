@@ -374,15 +374,20 @@ def add_product():
     return redirect(url_for("products"))
 
 # ===================== SALES ROUTES =====================
+# ===================== SALES ROUTES (UNDER CONSTRUCTION) =====================
 @app.route("/sales")
 @login_required
 def sales():
-    return render_template("sales.html")
+    # Original sales page – temporarily disabled
+    # return render_template("sales.html")
+    return render_template("under_construction.html")
 
 @app.route("/sales/screens")
 @login_required
 def sales_screen():
-    return render_template("sales_screen.html")
+    # Original sales screens page – temporarily disabled
+    # return render_template("sales_screen.html")
+    return render_template("under_construction.html")
 
 @app.route("/purchases")
 @login_required
