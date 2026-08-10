@@ -3,13 +3,17 @@ from datetime import datetime
 
 # --------------------------- CREATE CLAIM ---------------------------
 def create_claim(product_id, batch_id, product_name, brand, category, issue_type, description, quantity):
-    """Create a new claim for a product batch"""
+    """
+    Create a new claim for a product batch.
+    - Does NOT change remaining_quantity – only increments claimed_quantity.
+    - Validates against good stock (remaining_quantity - claimed_quantity).
+    """
     conn = get_connection()
     cursor = conn.cursor()
     try:
-        # Check if batch exists and has enough stock
+        # Get batch with claimed quantity
         cursor.execute("""
-            SELECT remaining_quantity, quantity 
+            SELECT remaining_quantity, quantity, COALESCE(claimed_quantity, 0) as claimed_qty
             FROM purchase_batches 
             WHERE id = %s AND product_id = %s
         """, (batch_id, product_id))
@@ -18,8 +22,11 @@ def create_claim(product_id, batch_id, product_name, brand, category, issue_type
             raise ValueError("Batch not found")
         
         remaining_qty = batch[0]
-        if remaining_qty < quantity:
-            raise ValueError(f"Insufficient stock in batch. Available: {remaining_qty}, Requested: {quantity}")
+        claimed_qty = batch[2] if len(batch) > 2 else 0
+        good_stock = remaining_qty - claimed_qty
+        
+        if good_stock < quantity:
+            raise ValueError(f"Insufficient good stock. Available: {good_stock}, Requested: {quantity}")
         
         # Create claim
         cursor.execute("""
@@ -27,20 +34,19 @@ def create_claim(product_id, batch_id, product_name, brand, category, issue_type
             (product_id, batch_id, product_name, brand, category, issue_type, description, quantity, remaining_good, status)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
-        """, (product_id, batch_id, product_name, brand, category, issue_type, description, quantity, remaining_qty - quantity, 'active'))
+        """, (product_id, batch_id, product_name, brand, category, issue_type, description, quantity, good_stock - quantity, 'active'))
         
         claim_id = cursor.fetchone()[0]
         
-        # Update batch - mark as faulty and update claimed quantity
+        # Update batch - mark as faulty, increment claimed_quantity ONLY – do NOT change remaining_quantity
         cursor.execute("""
             UPDATE purchase_batches 
             SET claimed_quantity = COALESCE(claimed_quantity, 0) + %s,
-                is_faulty = TRUE,
-                remaining_quantity = remaining_quantity - %s
+                is_faulty = TRUE
             WHERE id = %s
-        """, (quantity, quantity, batch_id))
+        """, (quantity, batch_id))
         
-        # Update product stock
+        # Update product stock (claimed items are removed from available stock)
         cursor.execute("""
             UPDATE products 
             SET stock = stock - %s 
@@ -56,9 +62,9 @@ def create_claim(product_id, batch_id, product_name, brand, category, issue_type
         conn.close()
 
 
-# --------------------------- GET ALL CLAIMS (FIXED - DYNAMIC remaining_good) ---------------------------
+# --------------------------- GET ALL CLAIMS (with sold from sales_items) ---------------------------
 def get_all_claims():
-    """Get all claims with product and batch info - DYNAMIC remaining_good"""
+    """Get all claims with product, batch, and sold quantity from sales_items"""
     conn = get_connection()
     cursor = conn.cursor()
     try:
@@ -80,7 +86,12 @@ def get_all_claims():
                 COALESCE(pb.remaining_quantity, 0) as batch_stock,
                 COALESCE(pb.quantity, 0) as batch_original,
                 COALESCE(pb.is_faulty, FALSE) as is_faulty,
-                COALESCE(pb.claimed_quantity, 0) as batch_claimed
+                COALESCE(pb.claimed_quantity, 0) as batch_claimed,
+                COALESCE((
+                    SELECT SUM(si.quantity)
+                    FROM sales_items si
+                    WHERE si.batch_id = pb.id
+                ), 0) as sold_from_sales
             FROM claims c
             LEFT JOIN purchase_batches pb ON c.batch_id = pb.id
             ORDER BY c.created_at DESC
@@ -93,11 +104,9 @@ def get_all_claims():
             batch_stock = r[13] if len(r) > 13 else 0
             claimed_qty = r[8]
             batch_claimed_total = r[16] if len(r) > 16 else 0
+            sold = r[17] if len(r) > 17 else 0   # from sales_items
             
-            # ✅ DYNAMIC CALCULATION: remaining_good = batch_stock - claimed_qty
-            # This reflects current stock minus this claim's quantity
             remaining_good_dynamic = batch_stock - claimed_qty
-            sold = batch_original - batch_stock
             
             result.append({
                 "id": r[0],
@@ -109,7 +118,7 @@ def get_all_claims():
                 "issue_type": r[6],
                 "description": r[7] or '',
                 "quantity": claimed_qty,
-                "remaining_good": remaining_good_dynamic,  # ✅ DYNAMIC
+                "remaining_good": remaining_good_dynamic,
                 "status": r[10],
                 "created_at": r[11].isoformat() if hasattr(r[11], 'isoformat') else str(r[11]),
                 "updated_at": r[12].isoformat() if hasattr(r[12], 'isoformat') else str(r[12]) if r[12] else None,
@@ -117,7 +126,7 @@ def get_all_claims():
                 "batch_original": int(batch_original),
                 "is_faulty": r[15] if len(r) > 15 else False,
                 "batch_claimed": int(batch_claimed_total),
-                "sold": int(sold) if sold > 0 else 0
+                "sold": int(sold)   # directly from sales
             })
         
         return result
@@ -130,9 +139,9 @@ def get_all_claims():
         conn.close()
 
 
-# --------------------------- GET CLAIMS BY PRODUCT (FIXED - DYNAMIC remaining_good) ---------------------------
+# --------------------------- GET CLAIMS BY PRODUCT (with sold from sales_items) ---------------------------
 def get_claims_by_product(product_id):
-    """Get all claims for a specific product - DYNAMIC remaining_good"""
+    """Get all claims for a specific product, with sold from sales_items"""
     conn = get_connection()
     cursor = conn.cursor()
     try:
@@ -151,7 +160,12 @@ def get_claims_by_product(product_id):
                 c.created_at,
                 COALESCE(pb.remaining_quantity, 0) as batch_stock,
                 COALESCE(pb.quantity, 0) as batch_original,
-                COALESCE(pb.claimed_quantity, 0) as batch_claimed
+                COALESCE(pb.claimed_quantity, 0) as batch_claimed,
+                COALESCE((
+                    SELECT SUM(si.quantity)
+                    FROM sales_items si
+                    WHERE si.batch_id = pb.id
+                ), 0) as sold_from_sales
             FROM claims c
             LEFT JOIN purchase_batches pb ON c.batch_id = pb.id
             WHERE c.product_id = %s
@@ -165,10 +179,9 @@ def get_claims_by_product(product_id):
             batch_stock = r[11] if len(r) > 11 else 0
             claimed_qty = r[7]
             batch_claimed_total = r[13] if len(r) > 13 else 0
+            sold = r[14] if len(r) > 14 else 0
             
-            # ✅ DYNAMIC CALCULATION
             remaining_good_dynamic = batch_stock - claimed_qty
-            sold = batch_original - batch_stock
             
             result.append({
                 "id": r[0],
@@ -179,13 +192,13 @@ def get_claims_by_product(product_id):
                 "issue_type": r[5],
                 "description": r[6] or '',
                 "quantity": claimed_qty,
-                "remaining_good": remaining_good_dynamic,  # ✅ DYNAMIC
+                "remaining_good": remaining_good_dynamic,
                 "status": r[9],
                 "created_at": r[10].isoformat() if hasattr(r[10], 'isoformat') else str(r[10]),
                 "batch_stock": int(batch_stock),
                 "batch_original": int(batch_original),
                 "batch_claimed": int(batch_claimed_total),
-                "sold": int(sold) if sold > 0 else 0
+                "sold": int(sold)
             })
         
         return result
@@ -196,9 +209,9 @@ def get_claims_by_product(product_id):
         conn.close()
 
 
-# --------------------------- GET CLAIM BY ID (FIXED - DYNAMIC remaining_good) ---------------------------
+# --------------------------- GET CLAIM BY ID (with sold from sales_items) ---------------------------
 def get_claim_by_id(claim_id):
-    """Get a single claim by ID - DYNAMIC remaining_good"""
+    """Get a single claim by ID, with sold from sales_items"""
     conn = get_connection()
     cursor = conn.cursor()
     try:
@@ -220,7 +233,12 @@ def get_claim_by_id(claim_id):
                 COALESCE(pb.remaining_quantity, 0) as batch_stock,
                 COALESCE(pb.quantity, 0) as batch_original,
                 COALESCE(pb.is_faulty, FALSE) as is_faulty,
-                COALESCE(pb.claimed_quantity, 0) as batch_claimed
+                COALESCE(pb.claimed_quantity, 0) as batch_claimed,
+                COALESCE((
+                    SELECT SUM(si.quantity)
+                    FROM sales_items si
+                    WHERE si.batch_id = pb.id
+                ), 0) as sold_from_sales
             FROM claims c
             LEFT JOIN purchase_batches pb ON c.batch_id = pb.id
             WHERE c.id = %s
@@ -231,10 +249,9 @@ def get_claim_by_id(claim_id):
             batch_stock = row[13] if len(row) > 13 else 0
             claimed_qty = row[8]
             batch_claimed_total = row[16] if len(row) > 16 else 0
+            sold = row[17] if len(row) > 17 else 0
             
-            # ✅ DYNAMIC CALCULATION
             remaining_good_dynamic = batch_stock - claimed_qty
-            sold = batch_original - batch_stock
             
             return {
                 "id": row[0],
@@ -246,7 +263,7 @@ def get_claim_by_id(claim_id):
                 "issue_type": row[6],
                 "description": row[7] or '',
                 "quantity": claimed_qty,
-                "remaining_good": remaining_good_dynamic,  # ✅ DYNAMIC
+                "remaining_good": remaining_good_dynamic,
                 "status": row[10],
                 "created_at": row[11].isoformat() if hasattr(row[11], 'isoformat') else str(row[11]),
                 "updated_at": row[12].isoformat() if hasattr(row[12], 'isoformat') else str(row[12]) if row[12] else None,
@@ -254,7 +271,7 @@ def get_claim_by_id(claim_id):
                 "batch_original": int(batch_original),
                 "is_faulty": row[15] if len(row) > 15 else False,
                 "batch_claimed": int(batch_claimed_total),
-                "sold": int(sold) if sold > 0 else 0
+                "sold": int(sold)
             }
         return None
     except Exception as e:
@@ -266,7 +283,11 @@ def get_claim_by_id(claim_id):
 
 # --------------------------- UPDATE CLAIM ---------------------------
 def update_claim(claim_id, issue_type, description, quantity):
-    """Update an existing claim"""
+    """
+    Update an existing claim.
+    - Does NOT change remaining_quantity – only adjusts claimed_quantity.
+    - Validates that we don't over-claim if quantity increases.
+    """
     conn = get_connection()
     cursor = conn.cursor()
     try:
@@ -282,6 +303,18 @@ def update_claim(claim_id, issue_type, description, quantity):
         old_quantity = current[2]
         diff = quantity - old_quantity
         
+        # If increasing, verify available good stock
+        if diff > 0:
+            cursor.execute("""
+                SELECT remaining_quantity, COALESCE(claimed_quantity, 0)
+                FROM purchase_batches WHERE id = %s
+            """, (current[1],))
+            batch = cursor.fetchone()
+            if batch:
+                good_stock = batch[0] - batch[1]
+                if good_stock < diff:
+                    raise ValueError(f"Not enough good stock. Available: {good_stock}, requested increase: {diff}")
+        
         # Update claim
         cursor.execute("""
             UPDATE claims 
@@ -291,17 +324,16 @@ def update_claim(claim_id, issue_type, description, quantity):
             WHERE id = %s
         """, (issue_type, description, quantity, diff, datetime.now(), claim_id))
         
-        # Update batch quantities if quantity changed
+        # Update batch claimed_quantity and product stock if quantity changed
         if diff != 0:
             batch_id = current[1]
             cursor.execute("""
                 UPDATE purchase_batches 
-                SET claimed_quantity = COALESCE(claimed_quantity, 0) + %s,
-                    remaining_quantity = remaining_quantity - %s
+                SET claimed_quantity = COALESCE(claimed_quantity, 0) + %s
                 WHERE id = %s
-            """, (diff, diff, batch_id))
+            """, (diff, batch_id))
             
-            # Update product stock
+            # Adjust product stock (negative diff reduces stock, positive increases)
             cursor.execute("""
                 UPDATE products 
                 SET stock = stock - %s 
@@ -317,9 +349,12 @@ def update_claim(claim_id, issue_type, description, quantity):
         conn.close()
 
 
-# --------------------------- DELETE CLAIM (FIXED - Resets faulty flag) ---------------------------
+# --------------------------- DELETE CLAIM ---------------------------
 def delete_claim(claim_id):
-    """Delete a claim and restore stock, AND reset faulty flag if no active claims remain"""
+    """
+    Delete a claim and restore stock, reset faulty flag if no active claims remain.
+    - Does NOT change remaining_quantity – only decrements claimed_quantity.
+    """
     conn = get_connection()
     cursor = conn.cursor()
     try:
@@ -334,22 +369,21 @@ def delete_claim(claim_id):
         
         product_id, batch_id, quantity = claim
         
-        # Restore stock to batch
+        # Restore stock to batch: only decrease claimed_quantity, do NOT touch remaining_quantity
         cursor.execute("""
             UPDATE purchase_batches 
-            SET claimed_quantity = GREATEST(COALESCE(claimed_quantity, 0) - %s, 0),
-                remaining_quantity = remaining_quantity + %s
+            SET claimed_quantity = GREATEST(COALESCE(claimed_quantity, 0) - %s, 0)
             WHERE id = %s
-        """, (quantity, quantity, batch_id))
+        """, (quantity, batch_id))
         
-        # ✅ Check if there are any other active claims for this batch
+        # Check if any active claims remain for this batch
         cursor.execute("""
             SELECT COUNT(*) FROM claims 
             WHERE batch_id = %s AND status = 'active'
         """, (batch_id,))
         active_claims_count = cursor.fetchone()[0]
         
-        # ✅ If no other active claims, reset the faulty flag
+        # If no active claims, reset faulty flag and set claimed_quantity to 0
         if active_claims_count == 0:
             cursor.execute("""
                 UPDATE purchase_batches 
@@ -378,9 +412,11 @@ def delete_claim(claim_id):
         conn.close()
 
 
-# --------------------------- RESOLVE CLAIM (FIXED - Resets faulty flag) ---------------------------
+# --------------------------- RESOLVE CLAIM ---------------------------
 def resolve_claim(claim_id):
-    """Mark a claim as resolved (stock stays deducted) AND reset faulty flag if no active claims remain"""
+    """
+    Mark a claim as resolved (stock stays deducted) and reset faulty flag if no active claims remain.
+    """
     conn = get_connection()
     cursor = conn.cursor()
     try:
@@ -401,14 +437,14 @@ def resolve_claim(claim_id):
             WHERE id = %s
         """, (datetime.now(), claim_id))
         
-        # ✅ Check if there are any other active claims for this batch
+        # Check if any active claims remain for this batch
         cursor.execute("""
             SELECT COUNT(*) FROM claims 
             WHERE batch_id = %s AND status = 'active'
         """, (batch_id,))
         active_claims_count = cursor.fetchone()[0]
         
-        # ✅ If no other active claims, reset the faulty flag
+        # If no active claims, reset faulty flag and set claimed_quantity to 0
         if active_claims_count == 0:
             cursor.execute("""
                 UPDATE purchase_batches 
@@ -555,7 +591,7 @@ def search_products_for_claims(keyword):
 
 # --------------------------- GET PRODUCT BATCHES FOR CLAIM ---------------------------
 def get_product_batches_for_claim(product_id):
-    """Get all batches for a product with claim info"""
+    """Get all batches for a product with claim info (good stock = remaining - claimed)"""
     conn = get_connection()
     cursor = conn.cursor()
     try:
@@ -598,7 +634,7 @@ def get_product_batches_for_claim(product_id):
                 "is_faulty": r[7] or False,
                 "claimed_quantity": claimed_qty,
                 "active_claims": int(r[9] or 0),
-                "good_stock": good_stock  # ✅ This is the real remaining good stock
+                "good_stock": good_stock
             })
         
         return result
