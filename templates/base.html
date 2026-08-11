@@ -698,7 +698,7 @@
             <div class="mt-4 flex flex-col gap-2 px-3 py-1">
                 <div class="flex items-center gap-2">
                     <span id="pending-badge" class="text-xs text-yellow-300 bg-gray-700 px-2 py-0.5 rounded-full" style="display:none;"></span>
-                    <button onclick="syncPendingSales()" class="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md transition">
+                    <button id="syncOfflineBtn" onclick="syncAllPending()" class="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md transition">
                         <i class="fas fa-cloud-upload-alt mr-1"></i> Sync Offline
                     </button>
                 </div>
@@ -828,58 +828,102 @@
         setTimeout(() => { location.reload(); }, 600);
     }
 
-    // ==================== SYNC ALL ON PAGE LOAD (if online) ====================
-    document.addEventListener('DOMContentLoaded', function() {
-        // Update footer year
-        const yearSpan = document.getElementById('footerYear');
-        if (yearSpan) yearSpan.textContent = new Date().getFullYear();
+    // ==================== 6-HOUR SYNC REMINDER (OFFLINE-FRIENDLY) ====================
+    const SYNC_INTERVAL = 6 * 60 * 60 * 1000; // 6 hours
 
-        // If online, sync all pending data automatically
-        if (navigator.onLine) {
-            console.log('🌐 Online – syncing all pending items...');
-            // These functions are defined in offline.js
-            if (typeof syncPendingSales === 'function') syncPendingSales();
-            if (typeof syncPendingPurchases === 'function') syncPendingPurchases();
-            if (typeof syncPendingProductDeletions === 'function') syncPendingProductDeletions();
-            if (typeof syncPendingBatchDeletions === 'function') syncPendingBatchDeletions();
+    function getLastSync() {
+        const stored = localStorage.getItem('lastSyncTime');
+        return stored ? parseInt(stored, 10) : 0;
+    }
+
+    function setLastSync() {
+        localStorage.setItem('lastSyncTime', Date.now().toString());
+    }
+
+    function showSyncReminder() {
+        // Now we show the reminder regardless of online/offline status
+        // as long as the data is stale (or never synced).
+        const lastSync = getLastSync();
+        const now = Date.now();
+
+        // If never synced or older than interval
+        if (lastSync === 0 || (now - lastSync) > SYNC_INTERVAL) {
+            // Avoid duplicate reminders
+            if (document.getElementById('syncReminderToast')) return;
+
+            const toast = document.createElement('div');
+            toast.id = 'syncReminderToast';
+            // Check online status to customise the message
+            const isOnline = navigator.onLine;
+            const message = isOnline
+                ? '⚠️ Your offline data is over 6 hours old.'
+                : '📡 You are offline – data may be stale. Please connect to the internet to sync.';
+            const buttonText = isOnline ? 'Sync Now' : 'Go Online';
+            toast.innerHTML = `
+                <span>${message}</span>
+                <button id="reminderActionBtn" class="ml-2 bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm font-semibold">
+                    ${buttonText}
+                </button>
+                <button id="reminderDismissBtn" class="ml-2 text-gray-400 hover:text-gray-600 text-sm">✕</button>
+            `;
+            toast.style.cssText = `
+                position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+                background: #FEF3C7; color: #92400E; padding: 12px 20px;
+                border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+                z-index: 9999; font-size: 14px; max-width: 90vw;
+                display: flex; align-items: center; gap: 12px;
+                border: 1px solid #F59E0B;
+                font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            `;
+            document.body.appendChild(toast);
+
+            document.getElementById('reminderActionBtn').addEventListener('click', function() {
+                if (navigator.onLine) {
+                    // Online – perform sync
+                    toast.remove();
+                    if (typeof window.syncAllPending === 'function') {
+                        window.syncAllPending();
+                    } else {
+                        alert('Sync function not available');
+                    }
+                } else {
+                    // Offline – show a friendly alert
+                    alert('You are offline. Please connect to the internet and try again.');
+                }
+            });
+
+            document.getElementById('reminderDismissBtn').addEventListener('click', function() {
+                toast.remove();
+            });
         }
-    });
+    }
 
-    // ==================== AUTO-SYNC ON RECONNECT ====================
-    window.addEventListener('online', function() {
-        console.log('🌐 Connection restored – syncing all pending items...');
-        if (typeof syncPendingSales === 'function') syncPendingSales();
-        if (typeof syncPendingPurchases === 'function') syncPendingPurchases();
-        if (typeof syncPendingProductDeletions === 'function') syncPendingProductDeletions();
-        if (typeof syncPendingBatchDeletions === 'function') syncPendingBatchDeletions();
-    });
-
-    // ==================== SIDEBAR AUTO-CLOSE ON RESIZE ====================
-    window.addEventListener('resize', function() {
-        if (window.innerWidth >= 768) closeSidebar();
-    });
-
-    // ==================== UPDATED syncAllPending WITH TOAST (no alert) ====================
-    window.syncAllPending = function() {
+    // ==================== UNIFIED SYNC FUNCTION (with timestamp update) ====================
+    window.syncAllPending = async function() {
         if (!navigator.onLine) {
             alert('You are offline. Please connect to the internet to sync.');
             return;
         }
-        console.log('🔄 Manually syncing all pending items...');
-        if (typeof syncPendingSales === 'function') syncPendingSales();
-        if (typeof syncPendingPurchases === 'function') syncPendingPurchases();
-        if (typeof syncPendingProductDeletions === 'function') syncPendingProductDeletions();
-        if (typeof syncPendingBatchDeletions === 'function') syncPendingBatchDeletions();
+        console.log('🔄 Syncing all pending data...');
 
-        // Show a toast message after a short delay
-        setTimeout(() => {
+        try {
+            await syncPendingSales();
+            await syncPendingPurchases();
+            await syncPendingProductDeletions();
+            await syncPendingBatchDeletions();
+            updatePendingBadge();
+
+            // Update last sync timestamp after successful sync
+            setLastSync();
+            console.log('✅ Sync completed – last sync time updated.');
+
+            // Show a success toast
             const badge = document.getElementById('pending-badge');
             let message = '✅ All pending items synced successfully!';
             if (badge && badge.style.display !== 'none') {
                 message = '⚠️ Some items could not be synced.';
             }
 
-            // Create a non‑blocking toast
             const toast = document.createElement('div');
             toast.textContent = message;
             toast.style.cssText = `
@@ -894,20 +938,52 @@
             `;
             document.body.appendChild(toast);
 
-            // Auto‑dismiss after 3 seconds
             setTimeout(() => {
                 toast.style.opacity = '0';
                 setTimeout(() => toast.remove(), 500);
             }, 3000);
-        }, 1500);
+
+            // Remove any lingering reminder
+            const reminder = document.getElementById('syncReminderToast');
+            if (reminder) reminder.remove();
+        } catch (err) {
+            console.error('Sync error:', err);
+            alert('Sync failed. Please try again.');
+        }
     };
 
-    // ==================== OPTIONAL: Update Sync button to use syncAllPending ====================
-    // Uncomment the lines below if you want the "Sync Offline" button to use syncAllPending
-    // document.addEventListener('DOMContentLoaded', function() {
-    //     const syncBtn = document.querySelector('button[onclick="syncPendingSales()"]');
-    //     if (syncBtn) syncBtn.setAttribute('onclick', 'syncAllPending()');
-    // });
+    // ==================== INITIALIZATION ====================
+    document.addEventListener('DOMContentLoaded', function() {
+        // Update footer year
+        const yearSpan = document.getElementById('footerYear');
+        if (yearSpan) yearSpan.textContent = new Date().getFullYear();
+
+        // If online, perform initial sync and update timestamp
+        if (navigator.onLine) {
+            console.log('🌐 Online – performing initial sync...');
+            window.syncAllPending();
+        } else {
+            // Offline: just show reminder (if data is stale)
+            setTimeout(showSyncReminder, 2000);
+        }
+
+        // Show reminder anyway after a delay – it will check the age
+        setTimeout(showSyncReminder, 4000);
+    });
+
+    // ==================== AUTO-SYNC ON RECONNECT ====================
+    window.addEventListener('online', function() {
+        console.log('🌐 Connection restored – syncing all pending items...');
+        window.syncAllPending();
+        // Remove any reminder that might be stuck (since we're online now)
+        const reminder = document.getElementById('syncReminderToast');
+        if (reminder) reminder.remove();
+    });
+
+    // ==================== SIDEBAR AUTO-CLOSE ON RESIZE ====================
+    window.addEventListener('resize', function() {
+        if (window.innerWidth >= 768) closeSidebar();
+    });
 </script>
 </body>
 </html>

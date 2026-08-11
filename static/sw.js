@@ -1,11 +1,14 @@
-// static/sw.js (or serve from root)
-const CACHE_NAME = 'oxsmart-v1';
-const OFFLINE_PAGE = '/offline.html'; // create this template
+// static/sw.js
+const CACHE_NAME = 'oxsmart-v2';  // bump version on every deploy
+const OFFLINE_PAGE = '/offline.html'; // create this page
 
-// List all routes you want available offline
-const PRECACHE_URLS = [
+// ===== ALL ROUTES FROM YOUR APP =====
+// I've compiled every route from app.py (including sub‑routes)
+const ROUTES = [
   '/',
-  '/dashboard',
+  '/login',
+  '/signup',
+  '/dashboard',           // alias for '/'
   '/products',
   '/products/screens',
   '/sales',
@@ -18,61 +21,100 @@ const PRECACHE_URLS = [
   '/archive',
   '/inventory/import',
   '/admin/users',
-  '/login',
-  '/signup',
+  '/settings',
+  '/claims',
+  '/logs',
+  '/offline',              // if you have one
+  // Add any other custom routes you have
+];
+
+// ===== STATIC ASSETS =====
+const STATIC_ASSETS = [
   '/static/css/style.css',
   '/static/js/offline.js',
   '/static/js/main.js',
-  // add any other static assets (e.g., fonts, images)
+  '/static/js/app.js',    // if you have it
+  '/static/manifest.json',
+  '/static/icons/icon-192.png',
+  '/static/icons/icon-512.png',
+  // Add any other assets (fonts, images, etc.)
 ];
 
-// Install event: pre‑cache all important pages
+// Combine everything to pre‑cache
+const PRECACHE_URLS = [...ROUTES, ...STATIC_ASSETS];
+
+// ===== INSTALL =====
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(PRECACHE_URLS))
-      .then(() => self.skipWaiting())
+      .then(cache => {
+        console.log('📦 Pre‑caching all pages and assets');
+        return cache.addAll(PRECACHE_URLS);
+      })
+      .then(() => self.skipWaiting()) // activates immediately
   );
 });
 
-// Activate event: clean up old caches
+// ===== ACTIVATE =====
 self.addEventListener('activate', event => {
-  const cacheWhitelist = [CACHE_NAME];
   event.waitUntil(
     caches.keys().then(cacheNames => {
       return Promise.all(
-        cacheNames.map(cacheName => {
-          if (cacheWhitelist.indexOf(cacheName) === -1) {
-            return caches.delete(cacheName);
+        cacheNames.map(cache => {
+          if (cache !== CACHE_NAME) {
+            console.log('🗑️ Deleting old cache:', cache);
+            return caches.delete(cache);
           }
         })
       );
-    }).then(() => self.clients.claim())
+    }).then(() => self.clients.claim()) // takes control immediately
   );
 });
 
-// Fetch event: serve from cache if available, else network, else fallback
+// ===== FETCH =====
 self.addEventListener('fetch', event => {
   const request = event.request;
   const url = new URL(request.url);
 
-  // Skip non‑GET requests and external resources (e.g., analytics, images from CDN)
+  // Only handle GET requests and same‑origin resources
   if (request.method !== 'GET' || url.origin !== location.origin) {
     return;
   }
 
+  // ----- API requests (GET) – stale‑while‑revalidate -----
+  if (url.pathname.startsWith('/api/')) {
+    event.respondWith(
+      caches.open(CACHE_NAME).then(cache => {
+        return fetch(request)
+          .then(networkResponse => {
+            // Update cache with fresh response
+            cache.put(request, networkResponse.clone());
+            return networkResponse;
+          })
+          .catch(() => {
+            // Offline – try cache
+            return cache.match(request);
+          });
+      })
+    );
+    return;
+  }
+
+  // ----- Pages & static assets (HTML, CSS, JS) -----
   event.respondWith(
     caches.match(request)
       .then(cachedResponse => {
         if (cachedResponse) {
-          // Return cached version, but update it in background (stale‑while‑revalidate)
+          // Stale‑while‑revalidate: update in background
           event.waitUntil(
-            fetch(request).then(networkResponse => {
-              return caches.open(CACHE_NAME).then(cache => {
-                cache.put(request, networkResponse.clone());
-                return networkResponse;
-              });
-            }).catch(() => {})
+            fetch(request)
+              .then(networkResponse => {
+                return caches.open(CACHE_NAME).then(cache => {
+                  cache.put(request, networkResponse.clone());
+                  return networkResponse;
+                });
+              })
+              .catch(() => {}) // ignore network errors
           );
           return cachedResponse;
         }
@@ -86,7 +128,7 @@ self.addEventListener('fetch', event => {
             return networkResponse;
           })
           .catch(() => {
-            // If the request is for a page (HTML), serve the offline fallback
+            // If the request is for a page (HTML), show offline fallback
             if (request.headers.get('accept').includes('text/html')) {
               return caches.match(OFFLINE_PAGE);
             }

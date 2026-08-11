@@ -1,7 +1,6 @@
 // static/js/offline.js
 
 // ==================== SALES ====================
-
 function savePendingSale(saleData) {
     let pending = JSON.parse(localStorage.getItem('pendingSales') || '[]');
     pending.push({
@@ -44,7 +43,7 @@ async function syncPendingSales() {
             }
         } catch (err) {
             console.warn(`Sync error for sale ${sale.id}:`, err);
-            break; // stop if network fails
+            break;
         }
     }
     if (synced > 0) {
@@ -54,13 +53,12 @@ async function syncPendingSales() {
 }
 
 // ==================== PURCHASES ====================
-
 function savePendingPurchase(payload, actionType, batchId = null) {
     let pending = JSON.parse(localStorage.getItem('pendingPurchases') || '[]');
     pending.push({
         id: Date.now() + '_' + Math.random().toString(36).substr(2, 5),
-        type: actionType,        // 'add' or 'update'
-        batchId: batchId,        // only for updates
+        type: actionType,
+        batchId: batchId,
         data: payload,
         timestamp: new Date().toISOString()
     });
@@ -105,7 +103,7 @@ async function syncPendingPurchases() {
             }
         } catch (err) {
             console.warn(`Sync error for purchase ${entry.id}:`, err);
-            break; // stop if network fails
+            break;
         }
     }
     if (synced > 0) {
@@ -115,13 +113,12 @@ async function syncPendingPurchases() {
 }
 
 // ==================== PRODUCT DELETIONS ====================
-
 function savePendingProductDeletion(productId, deleteType) {
     let pending = JSON.parse(localStorage.getItem('pendingProductDeletions') || '[]');
     pending.push({
         id: Date.now() + '_' + Math.random().toString(36).substr(2, 5),
         productId: productId,
-        deleteType: deleteType, // 'keep' or 'clean'
+        deleteType: deleteType,
         timestamp: new Date().toISOString()
     });
     localStorage.setItem('pendingProductDeletions', JSON.stringify(pending));
@@ -167,13 +164,12 @@ async function syncPendingProductDeletions() {
 }
 
 // ==================== BATCH DELETIONS ====================
-
 function savePendingBatchDeletion(batchId, deleteType) {
     let pending = JSON.parse(localStorage.getItem('pendingBatchDeletions') || '[]');
     pending.push({
         id: Date.now() + '_' + Math.random().toString(36).substr(2, 5),
         batchId: batchId,
-        deleteType: deleteType, // 'keep' or 'clean'
+        deleteType: deleteType,
         timestamp: new Date().toISOString()
     });
     localStorage.setItem('pendingBatchDeletions', JSON.stringify(pending));
@@ -219,7 +215,6 @@ async function syncPendingBatchDeletions() {
 }
 
 // ==================== UNIFIED BADGE ====================
-
 function updatePendingBadge() {
     const salesCount = getPendingSales().length;
     const purchasesCount = getPendingPurchases().length;
@@ -242,34 +237,8 @@ function updatePendingBadge() {
     }
 }
 
-// ==================== AUTO-SYNC ON RECONNECT ====================
-
-window.addEventListener('online', function() {
-    console.log('🌐 Connection restored – syncing all pending items...');
-    syncAllPending();
-});
-
-// ==================== SYNC ALL (manual) ====================
-
-async function syncAllPending() {
-    if (!navigator.onLine) {
-        console.warn('⛔ Offline – skipping sync');
-        return;
-    }
-    console.log('🔄 Syncing all pending data...');
-    await syncPendingSales();
-    await syncPendingPurchases();
-    await syncPendingProductDeletions();
-    await syncPendingBatchDeletions();
-    updatePendingBadge();
-}
-
-// ==================== BADGE UPDATE ON PAGE LOAD ====================
-
+// ==================== BADGE UPDATE ON PAGE LOAD (safe fallback) ====================
 document.addEventListener('DOMContentLoaded', function() {
     updatePendingBadge();
-    // If online, sync automatically
-    if (navigator.onLine) {
-        syncAllPending();
-    }
+    // DO NOT call syncAllPending here – it is handled by base.html
 });
