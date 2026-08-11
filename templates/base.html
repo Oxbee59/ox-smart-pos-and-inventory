@@ -859,20 +859,7 @@
         if (window.innerWidth >= 768) closeSidebar();
     });
 
-    // ==================== FALLBACK SYNC BUTTON (already in HTML) ====================
-    // The "Sync Offline" button calls syncPendingSales() – we extend it to sync everything.
-    // We can override the button's onclick to call all sync functions.
-    // The button in the sidebar already calls syncPendingSales(), but we can enhance it.
-    // Let's keep the original and also add a more comprehensive sync.
-    // We'll replace the syncPendingSales() in offline.js to sync everything, but we'll keep the existing function names.
-    // Instead, we can define a new function syncAllPending() and call it from the button.
-    // But since the user might not want to change the button, we'll just extend the existing syncPendingSales function in offline.js.
-    // However, offline.js is a separate file. We'll modify it to also sync purchases and deletions.
-    // We'll provide the updated offline.js below as well.
-
-    // For now, the code is already calling all sync functions on page load and on reconnect.
-    // The manual sync button still only calls syncPendingSales, but we can update the button to call a new function.
-    // Let's add a custom function to the window object that syncs everything.
+    // ==================== UPDATED syncAllPending WITH TOAST (no alert) ====================
     window.syncAllPending = function() {
         if (!navigator.onLine) {
             alert('You are offline. Please connect to the internet to sync.');
@@ -883,26 +870,44 @@
         if (typeof syncPendingPurchases === 'function') syncPendingPurchases();
         if (typeof syncPendingProductDeletions === 'function') syncPendingProductDeletions();
         if (typeof syncPendingBatchDeletions === 'function') syncPendingBatchDeletions();
-        // Show a message after a moment
+
+        // Show a toast message after a short delay
         setTimeout(() => {
             const badge = document.getElementById('pending-badge');
+            let message = '✅ All pending items synced successfully!';
             if (badge && badge.style.display !== 'none') {
-                alert('Some items could not be synced. Please check your connection and try again.');
-            } else {
-                alert('✅ All pending items synced successfully!');
+                message = '⚠️ Some items could not be synced.';
             }
+
+            // Create a non‑blocking toast
+            const toast = document.createElement('div');
+            toast.textContent = message;
+            toast.style.cssText = `
+                position: fixed; bottom: 20px; right: 20px;
+                background: ${message.includes('⚠️') ? '#EF4444' : '#10B981'};
+                color: white; padding: 12px 24px;
+                border-radius: 8px; z-index: 9999;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+                transition: opacity 0.5s;
+                font-size: 14px;
+                max-width: 90vw;
+            `;
+            document.body.appendChild(toast);
+
+            // Auto‑dismiss after 3 seconds
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 500);
+            }, 3000);
         }, 1500);
     };
 
-    // Override the original syncPendingSales function to also call the others? We'll keep it as is.
-    // Instead, we'll update the button onclick in the HTML to call syncAllPending().
-    // But we can't modify the HTML directly from here. We'll just add an event listener to the button.
-    // The button has id="pending-badge" (the badge) but the button is not identified by id.
-    // We can target the button by its text or by adding an id in the HTML.
-    // Since we can't change the HTML right now, we'll just inform the user to update the button.
-    // For now, the user can manually click the "Sync Offline" button and it will still work as before.
-    // We'll provide the updated offline.js file that includes syncAllPending function.
-    // But we'll also recommend to change the button's onclick to syncAllPending().
+    // ==================== OPTIONAL: Update Sync button to use syncAllPending ====================
+    // Uncomment the lines below if you want the "Sync Offline" button to use syncAllPending
+    // document.addEventListener('DOMContentLoaded', function() {
+    //     const syncBtn = document.querySelector('button[onclick="syncPendingSales()"]');
+    //     if (syncBtn) syncBtn.setAttribute('onclick', 'syncAllPending()');
+    // });
 </script>
 </body>
 </html>
