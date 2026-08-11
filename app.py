@@ -1734,8 +1734,6 @@ def api_today_sales():
     cursor = conn.cursor()
 
     try:
-        # Select only the columns we actually need – avoid `sales_items.profit` if it doesn't exist.
-        # We'll compute profit later if needed.
         select_clause = """
             SELECT 
                 sales.id, 
@@ -1747,12 +1745,12 @@ def api_today_sales():
                 sales_items.quantity * sales_items.selling_price AS subtotal,
                 sales.discount, 
                 sales.total, 
-                sales_items.profit,                     -- may be missing, let's catch
+                COALESCE(sales_items.profit, 0) as profit,
                 COALESCE(purchase_batches.id, -1) as batch_id,
                 COALESCE(purchase_batches.cost_price, 0) as cost_price, 
                 sales.date,
                 CASE WHEN purchase_batches.id IS NULL THEN 1 ELSE 0 END as is_deleted_batch,
-                sales.profit as net_profit,
+                COALESCE(sales.profit, 0) as net_profit,
                 COALESCE(sales.payment_method, 'cash') as payment_method,
                 sales.cheque_number,
                 u.username
@@ -1764,7 +1762,8 @@ def api_today_sales():
             LEFT JOIN purchase_batches ON purchase_batches.id = sales_items.batch_id
             LEFT JOIN users u ON sales.user_id = u.id
         """
-        where_conditions = ["sales.reversed = FALSE"]
+        # ✅ Use integer comparison (reversed = 0)
+        where_conditions = ["sales.reversed = 0"]
         params = []
 
         if start_date and end_date:
@@ -1779,7 +1778,7 @@ def api_today_sales():
                 where_conditions.append("EXTRACT(YEAR FROM sales.date) = EXTRACT(YEAR FROM CURRENT_DATE) AND EXTRACT(MONTH FROM sales.date) = EXTRACT(MONTH FROM CURRENT_DATE)")
             elif period == 'yearly':
                 where_conditions.append("EXTRACT(YEAR FROM sales.date) = EXTRACT(YEAR FROM CURRENT_DATE)")
-            # if 'all' – no date filter
+            # 'all' – no date filter
 
         if category:
             where_conditions.append("products.category = %s")
@@ -1790,10 +1789,6 @@ def api_today_sales():
 
         where_clause = " AND ".join(where_conditions)
         query = f"{select_clause} {from_clause} WHERE {where_clause} ORDER BY sales.date DESC"
-
-        # Log the query for debugging (disable in production)
-        app.logger.debug(f"SQL: {query}")
-        app.logger.debug(f"Params: {params}")
 
         cursor.execute(query, params)
         rows = cursor.fetchall()
@@ -1809,12 +1804,12 @@ def api_today_sales():
                 'subtotal': float(r[6]),
                 'discount': float(r[7]),
                 'total': float(r[8]),
-                'profit': float(r[9]) if r[9] is not None else 0,   # sales_items.profit
+                'profit': float(r[9]),
                 'batch_id': r[10],
                 'cost_price': float(r[11]) if r[11] is not None else 0,
                 'sale_date': r[12].isoformat() if hasattr(r[12], 'isoformat') else str(r[12]),
                 'is_deleted_batch': bool(r[13]),
-                'net_profit': float(r[14]) if r[14] is not None else 0,  # sales.profit
+                'net_profit': float(r[14]) if r[14] is not None else 0,
                 'payment_method': r[15] if len(r) > 15 else 'cash',
                 'cheque_number': r[16] if len(r) > 16 else None,
                 'username': r[17] if len(r) > 17 else 'Unknown'
@@ -1825,7 +1820,6 @@ def api_today_sales():
         app.logger.error(f"Error in today_sales API: {str(e)}")
         import traceback
         traceback.print_exc()
-        # Return a meaningful error message instead of a generic 500
         return jsonify({'error': str(e), 'trace': traceback.format_exc()}), 500
     finally:
         conn.close()
@@ -1973,6 +1967,7 @@ def api_today_sales_pdf():
     return send_file(buffer, as_attachment=True,
                      download_name=f"SalesReport_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
                      mimetype='application/pdf')
+
 # ===================== ANALYTICS API =====================
 @app.route('/api/analytics/summary', methods=['GET'])
 @login_required
@@ -1980,10 +1975,10 @@ def api_analytics_summary():
     period = request.args.get('period', 'daily')
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
-    
+
     conn = get_connection()
     cursor = conn.cursor()
-    
+
     if start_date and end_date:
         cursor.execute("""
             SELECT 
@@ -1994,7 +1989,7 @@ def api_analytics_summary():
             FROM sales s
             LEFT JOIN sales_items si ON s.id = si.sale_id
             WHERE s.date::date BETWEEN %s AND %s
-            AND s.reversed = FALSE
+            AND s.reversed = 0
         """, (start_date, end_date))
     elif period == 'weekly':
         cursor.execute("""
@@ -2006,7 +2001,7 @@ def api_analytics_summary():
             FROM sales s
             LEFT JOIN sales_items si ON s.id = si.sale_id
             WHERE s.date >= CURRENT_DATE - INTERVAL '6 days'
-            AND s.reversed = FALSE
+            AND s.reversed = 0
         """)
     elif period == 'monthly':
         cursor.execute("""
@@ -2019,7 +2014,7 @@ def api_analytics_summary():
             LEFT JOIN sales_items si ON s.id = si.sale_id
             WHERE EXTRACT(YEAR FROM s.date) = EXTRACT(YEAR FROM CURRENT_DATE)
             AND EXTRACT(MONTH FROM s.date) = EXTRACT(MONTH FROM CURRENT_DATE)
-            AND s.reversed = FALSE
+            AND s.reversed = 0
         """)
     elif period == 'yearly':
         cursor.execute("""
@@ -2031,7 +2026,7 @@ def api_analytics_summary():
             FROM sales s
             LEFT JOIN sales_items si ON s.id = si.sale_id
             WHERE EXTRACT(YEAR FROM s.date) = EXTRACT(YEAR FROM CURRENT_DATE)
-            AND s.reversed = FALSE
+            AND s.reversed = 0
         """)
     elif period == 'all':
         cursor.execute("""
@@ -2042,7 +2037,7 @@ def api_analytics_summary():
                 COALESCE(SUM(si.quantity), 0)
             FROM sales s
             LEFT JOIN sales_items si ON s.id = si.sale_id
-            WHERE s.reversed = FALSE
+            WHERE s.reversed = 0
         """)
     else:
         cursor.execute("""
@@ -2054,12 +2049,12 @@ def api_analytics_summary():
             FROM sales s
             LEFT JOIN sales_items si ON s.id = si.sale_id
             WHERE s.date::date = CURRENT_DATE
-            AND s.reversed = FALSE
+            AND s.reversed = 0
         """)
-    
+
     result = cursor.fetchone()
     conn.close()
-    
+
     return jsonify({
         'items_sold': int(result[3] or 0),
         'subtotal': float(result[0] or 0),
@@ -2074,10 +2069,10 @@ def api_analytics_trend():
     period = request.args.get('period', 'daily')
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
-    
+
     conn = get_connection()
     cursor = conn.cursor()
-    
+
     if start_date and end_date:
         cursor.execute("""
             SELECT 
@@ -2086,7 +2081,7 @@ def api_analytics_trend():
                 COALESCE(SUM(s.profit), 0) as profit_total
             FROM sales s
             WHERE s.date::date BETWEEN %s AND %s
-            AND s.reversed = FALSE
+            AND s.reversed = 0
             GROUP BY s.date::date
             ORDER BY label ASC
         """, (start_date, end_date))
@@ -2098,7 +2093,7 @@ def api_analytics_trend():
                 COALESCE(SUM(s.profit), 0) as profit_total
             FROM sales s
             WHERE s.date >= CURRENT_DATE - INTERVAL '6 days'
-            AND s.reversed = FALSE
+            AND s.reversed = 0
             GROUP BY s.date::date
             ORDER BY label ASC
         """)
@@ -2111,7 +2106,7 @@ def api_analytics_trend():
             FROM sales s
             WHERE EXTRACT(YEAR FROM s.date) = EXTRACT(YEAR FROM CURRENT_DATE)
             AND EXTRACT(MONTH FROM s.date) = EXTRACT(MONTH FROM CURRENT_DATE)
-            AND s.reversed = FALSE
+            AND s.reversed = 0
             GROUP BY s.date::date
             ORDER BY label ASC
         """)
@@ -2123,7 +2118,7 @@ def api_analytics_trend():
                 COALESCE(SUM(s.profit), 0) as profit_total
             FROM sales s
             WHERE EXTRACT(YEAR FROM s.date) = EXTRACT(YEAR FROM CURRENT_DATE)
-            AND s.reversed = FALSE
+            AND s.reversed = 0
             GROUP BY DATE_TRUNC('month', s.date)
             ORDER BY label ASC
         """)
@@ -2134,7 +2129,7 @@ def api_analytics_trend():
                 COALESCE(SUM(s.total), 0) as sales_total,
                 COALESCE(SUM(s.profit), 0) as profit_total
             FROM sales s
-            WHERE s.reversed = FALSE
+            WHERE s.reversed = 0
             GROUP BY DATE_TRUNC('month', s.date)
             ORDER BY label ASC
             LIMIT 24
@@ -2147,14 +2142,14 @@ def api_analytics_trend():
                 COALESCE(SUM(s.profit), 0) as profit_total
             FROM sales s
             WHERE s.date::date = CURRENT_DATE
-            AND s.reversed = FALSE
+            AND s.reversed = 0
             GROUP BY s.date::date
             ORDER BY label ASC
         """)
-    
+
     rows = cursor.fetchall()
     conn.close()
-    
+
     result = []
     for row in rows:
         label = row[0]
@@ -2168,15 +2163,14 @@ def api_analytics_trend():
                 label = label.strftime('%Y-%m-%d')
             else:
                 label = str(label)
-        
+
         result.append({
             'label': str(label),
             'sales': float(row[1]),
             'profit': float(row[2])
         })
-    
-    return jsonify(result)
 
+    return jsonify(result)
 
 @app.route('/api/analytics/top_products', methods=['GET'])
 @login_required
@@ -2185,10 +2179,10 @@ def api_analytics_top_products():
     limit = int(request.args.get('limit', 10))
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
-    
+
     conn = get_connection()
     cursor = conn.cursor()
-    
+
     if start_date and end_date:
         cursor.execute("""
             SELECT 
@@ -2200,7 +2194,7 @@ def api_analytics_top_products():
             JOIN sales s ON si.sale_id = s.id
             JOIN products p ON p.id = si.product_id
             WHERE s.date::date BETWEEN %s AND %s
-            AND s.reversed = FALSE
+            AND s.reversed = 0
             AND NOT EXISTS (
                 SELECT 1 FROM deleted_products dp 
                 WHERE dp.product_id = p.id 
@@ -2222,7 +2216,7 @@ def api_analytics_top_products():
             JOIN sales s ON si.sale_id = s.id
             JOIN products p ON p.id = si.product_id
             WHERE s.date >= CURRENT_DATE - INTERVAL '6 days'
-            AND s.reversed = FALSE
+            AND s.reversed = 0
             AND NOT EXISTS (
                 SELECT 1 FROM deleted_products dp 
                 WHERE dp.product_id = p.id 
@@ -2245,7 +2239,7 @@ def api_analytics_top_products():
             JOIN products p ON p.id = si.product_id
             WHERE EXTRACT(YEAR FROM s.date) = EXTRACT(YEAR FROM CURRENT_DATE)
             AND EXTRACT(MONTH FROM s.date) = EXTRACT(MONTH FROM CURRENT_DATE)
-            AND s.reversed = FALSE
+            AND s.reversed = 0
             AND NOT EXISTS (
                 SELECT 1 FROM deleted_products dp 
                 WHERE dp.product_id = p.id 
@@ -2267,7 +2261,7 @@ def api_analytics_top_products():
             JOIN sales s ON si.sale_id = s.id
             JOIN products p ON p.id = si.product_id
             WHERE EXTRACT(YEAR FROM s.date) = EXTRACT(YEAR FROM CURRENT_DATE)
-            AND s.reversed = FALSE
+            AND s.reversed = 0
             AND NOT EXISTS (
                 SELECT 1 FROM deleted_products dp 
                 WHERE dp.product_id = p.id 
@@ -2288,7 +2282,7 @@ def api_analytics_top_products():
             FROM sales_items si
             JOIN sales s ON si.sale_id = s.id
             JOIN products p ON p.id = si.product_id
-            WHERE s.reversed = FALSE
+            WHERE s.reversed = 0
             AND NOT EXISTS (
                 SELECT 1 FROM deleted_products dp 
                 WHERE dp.product_id = p.id 
@@ -2310,7 +2304,7 @@ def api_analytics_top_products():
             JOIN sales s ON si.sale_id = s.id
             JOIN products p ON p.id = si.product_id
             WHERE s.date::date = CURRENT_DATE
-            AND s.reversed = FALSE
+            AND s.reversed = 0
             AND NOT EXISTS (
                 SELECT 1 FROM deleted_products dp 
                 WHERE dp.product_id = p.id 
@@ -2321,10 +2315,10 @@ def api_analytics_top_products():
             ORDER BY qty DESC
             LIMIT %s
         """, (limit,))
-    
+
     rows = cursor.fetchall()
     conn.close()
-    
+
     result = [{'name': r[0], 'brand': r[1] or '', 'category': r[2] or '', 'quantity': int(r[3])} for r in rows]
     return jsonify(result)
 
