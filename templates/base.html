@@ -21,7 +21,6 @@
     <!-- ===== SERVICE WORKER WITH CACHE-BUSTING ===== -->
     <script>
         if ('serviceWorker' in navigator) {
-            // Add version parameter to force fresh fetch
             navigator.serviceWorker.register('/static/sw.js?v=5')
                 .then(() => console.log('✅ Service Worker registered'))
                 .catch(err => console.log('❌ SW registration failed:', err));
@@ -636,17 +635,13 @@
     //  VERSION CHECK – ONLY FOR INSTALLED APP (standalone mode)
     // ============================================================
     (function checkVersion() {
-        // Skip version check for web version (not installed)
         if (!window.matchMedia('(display-mode: standalone)').matches) {
             return;
         }
-
-        // If already on reinstall page, stop
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('reinstall') === 'true') {
             return;
         }
-
         const storedVersion = localStorage.getItem('app_version');
         if (storedVersion !== APP_VERSION) {
             localStorage.removeItem('app_version');
@@ -1071,12 +1066,13 @@
     };
 
     // ============================================================
-    //  INITIALIZATION
+    //  INITIALIZATION (FIXED: no public page redirect)
     // ============================================================
     document.addEventListener('DOMContentLoaded', function() {
         const yearSpan = document.getElementById('footerYear');
         if (yearSpan) yearSpan.textContent = new Date().getFullYear();
 
+        // PIN lock check (only standalone)
         const pinUnlocked = checkPinLock();
         if (!pinUnlocked) {
             const observer = new MutationObserver(() => {
@@ -1107,33 +1103,39 @@
             const session = getStoredSession();
             const sessionValid = session && isSessionValid(session);
 
-            if (publicPaths.includes(currentPath) && sessionValid) {
-                window.location.href = '/';
+            // IMPORTANT: Do NOT redirect on public pages – let the server handle it.
+            // If on a public page, just show the login/signup page.
+            if (publicPaths.includes(currentPath)) {
+                // If we are online and have a session, we could redirect, but the server will do it.
+                // We'll let the server redirect us if we have a session.
+                // The login page will call /api/auth/check and redirect if valid (in login.html).
                 return;
             }
 
-            if (!publicPaths.includes(currentPath)) {
-                if (!sessionValid) {
-                    clearSession();
-                    if (!navigator.onLine) {
-                        alert('Your session has expired or you are not logged in. Please connect to the internet and login.');
-                    }
-                    window.location.href = '/login';
-                    return;
+            // If on a protected page and session is invalid, redirect to login
+            if (!sessionValid) {
+                clearSession();
+                if (!navigator.onLine) {
+                    alert('Your session has expired or you are not logged in. Please connect to the internet and login.');
                 }
-                if (navigator.onLine) {
-                    fetch('/api/auth/check')
-                        .then(res => res.json())
-                        .then(data => {
-                            if (!data.logged_in) {
-                                clearSession();
-                                window.location.href = '/login';
-                            }
-                        })
-                        .catch(() => {});
-                }
+                window.location.href = '/login';
+                return;
             }
 
+            // If online, verify session with server
+            if (navigator.onLine) {
+                fetch('/api/auth/check')
+                    .then(res => res.json())
+                    .then(data => {
+                        if (!data.logged_in) {
+                            clearSession();
+                            window.location.href = '/login';
+                        }
+                    })
+                    .catch(() => {});
+            }
+
+            // Reinstall notice (if any)
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('reinstall') === 'true') {
                 const toast = document.createElement('div');
