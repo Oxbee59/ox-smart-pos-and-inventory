@@ -28,7 +28,7 @@
     </script>
 
     <style>
-        /* === RESET & BASE (unchanged) === */
+        /* === RESET & BASE === */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body { height: 100%; }
         body { 
@@ -42,7 +42,7 @@
         ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 8px; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
 
-        /* === SIDEBAR STYLES (keep your existing styles) === */
+        /* === SIDEBAR STYLES === */
         .nav-link { transition: all 0.2s ease; }
         .nav-link:hover { background-color: #334155; }
         .nav-link.active { background-color: #00CFCF; color: #0f172a; }
@@ -129,7 +129,6 @@
             .sidebar-close-btn { display: block !important; }
             .hamburger-btn { display: block !important; }
             .main-content { padding: 0.75rem; }
-            /* Mobile font reductions – keep your existing */
         }
 
         .hamburger-btn {
@@ -438,21 +437,24 @@
         {% endif %}
 
         <nav class="flex-1 px-2 space-y-1 overflow-y-auto pb-4">
-            <!-- === YOUR EXISTING NAV LINKS === -->
-            <!-- Dashboard -->
+            <!-- Dashboard (admin only) -->
             {% if current_user and current_user.role == 'admin' %}
             <a href="/" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                 <i class="fas fa-tachometer-alt w-5"></i> Dashboard
             </a>
             {% endif %}
 
-            <!-- Sales & Products -->
+            <!-- Sales (Accessories) -->
             <a href="/sales" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                 <i class="fas fa-cash-register w-5"></i> Sales (Accessories)
             </a>
+
+            <!-- Products (Accessories) -->
             <a href="/products" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                 <i class="fas fa-boxes w-5"></i> Products (Accessories)
             </a>
+
+            <!-- Today's Sales (Accessories) -->
             <a href="/today-sales" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                 <i class="fas fa-chart-line w-5"></i> Today's Sales (Accessories)
             </a>
@@ -488,7 +490,7 @@
                 </div>
             </div>
 
-            <!-- Admin section -->
+            <!-- Admin section (only for admins) -->
             {% if current_user and current_user.role == 'admin' %}
             <div class="border-t border-gray-700 my-2"></div>
             <div class="text-xs text-gray-500 uppercase px-3 py-1">Admin</div>
@@ -632,16 +634,12 @@
     const PIN_CODE = '1234';
 
     // ============================================================
-    //  VERSION CHECK – ONLY FOR INSTALLED APP (standalone mode)
+    //  VERSION CHECK – ONLY FOR STANDALONE
     // ============================================================
     (function checkVersion() {
-        if (!window.matchMedia('(display-mode: standalone)').matches) {
-            return;
-        }
+        if (!window.matchMedia('(display-mode: standalone)').matches) return;
         const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.get('reinstall') === 'true') {
-            return;
-        }
+        if (urlParams.get('reinstall') === 'true') return;
         const storedVersion = localStorage.getItem('app_version');
         if (storedVersion !== APP_VERSION) {
             localStorage.removeItem('app_version');
@@ -656,14 +654,12 @@
                 font-family: -apple-system, BlinkMacSystemFont, sans-serif;
             `;
             document.body.appendChild(toast);
-            setTimeout(() => {
-                window.location.href = '/?reinstall=true';
-            }, 2000);
+            setTimeout(() => { window.location.href = '/?reinstall=true'; }, 2000);
         }
     })();
 
     // ============================================================
-    //  PIN LOCK SCREEN – ONLY FOR STANDALONE
+    //  PIN LOCK – ONLY FOR STANDALONE
     // ============================================================
     let pinAttempt = '';
     const MAX_PIN_LENGTH = 4;
@@ -732,9 +728,7 @@
     });
 
     function checkPinLock() {
-        if (!window.matchMedia('(display-mode: standalone)').matches) {
-            return true;
-        }
+        if (!window.matchMedia('(display-mode: standalone)').matches) return true;
         const unlocked = localStorage.getItem('pin_unlocked') === 'true';
         const unlockedAt = parseInt(localStorage.getItem('pin_unlocked_at') || '0', 10);
         const now = Date.now();
@@ -783,7 +777,7 @@
     });
 
     // ============================================================
-    //  SESSION MANAGEMENT (7‑day expiry)
+    //  SESSION MANAGEMENT
     // ============================================================
     const SESSION_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -793,6 +787,16 @@
         try { return JSON.parse(stored); } catch { return null; }
     }
 
+    function setStoredSession(user) {
+        const session = {
+            username: user.username,
+            role: user.role,
+            id: user.id,
+            expiresAt: Date.now() + SESSION_EXPIRY_MS
+        };
+        localStorage.setItem('ox_user', JSON.stringify(session));
+    }
+
     function clearSession() {
         localStorage.removeItem('ox_user');
     }
@@ -800,6 +804,26 @@
     function isSessionValid(session) {
         if (!session) return false;
         return Date.now() < session.expiresAt;
+    }
+
+    // ============================================================
+    //  SYNC SESSION WITH SERVER
+    // ============================================================
+    async function syncSessionWithServer() {
+        if (!navigator.onLine) return null;
+        try {
+            const res = await fetch('/api/auth/check');
+            const data = await res.json();
+            if (data.logged_in) {
+                setStoredSession({ username: data.username, role: data.role, id: data.id });
+                return { logged_in: true, user: data };
+            } else {
+                clearSession();
+                return { logged_in: false };
+            }
+        } catch (err) {
+            return null;
+        }
     }
 
     // ============================================================
@@ -929,21 +953,15 @@
         localStorage.removeItem('pin_unlocked_at');
         if (navigator.onLine) {
             try {
-                const res = await fetch('/api/auth/logout', { method: 'POST' });
-                const data = await res.json();
-                if (data.success) {
-                    window.location.href = '/login';
-                } else {
-                    alert('Logout failed');
-                }
-            } catch (error) {
-                alert('Logout failed: ' + error.message);
-            }
-        } else {
-            window.location.href = '/login';
+                await fetch('/api/auth/logout', { method: 'POST' });
+            } catch (e) {}
         }
+        window.location.href = '/login';
     }
 
+    // ============================================================
+    //  CLEAR OFFLINE DATA
+    // ============================================================
     function clearOfflineData() {
         if (!confirm('⚠️ This will clear all pending offline sales and import data. Proceed?')) return;
         const keysToRemove = ['pendingCount', 'pendingSales', 'offlineQueue', 'importPending', 'pendingImports', 'offlineSales', 'pendingJobId', 'pendingJobStatus', 'pendingPurchases'];
@@ -1066,13 +1084,13 @@
     };
 
     // ============================================================
-    //  INITIALIZATION (FIXED: no public page redirect)
+    //  INITIALIZATION (FIXED)
     // ============================================================
     document.addEventListener('DOMContentLoaded', function() {
         const yearSpan = document.getElementById('footerYear');
         if (yearSpan) yearSpan.textContent = new Date().getFullYear();
 
-        // PIN lock check (only standalone)
+        // PIN lock
         const pinUnlocked = checkPinLock();
         if (!pinUnlocked) {
             const observer = new MutationObserver(() => {
@@ -1096,46 +1114,45 @@
             initializeApp();
         }
 
-        function initializeApp() {
+        async function initializeApp() {
             const currentPath = window.location.pathname;
             const publicPaths = ['/login', '/signup'];
 
-            const session = getStoredSession();
-            const sessionValid = session && isSessionValid(session);
-
-            // IMPORTANT: Do NOT redirect on public pages – let the server handle it.
-            // If on a public page, just show the login/signup page.
+            // On public pages – let login.html handle the check.
             if (publicPaths.includes(currentPath)) {
-                // If we are online and have a session, we could redirect, but the server will do it.
-                // We'll let the server redirect us if we have a session.
-                // The login page will call /api/auth/check and redirect if valid (in login.html).
                 return;
             }
 
-            // If on a protected page and session is invalid, redirect to login
-            if (!sessionValid) {
-                clearSession();
-                if (!navigator.onLine) {
-                    alert('Your session has expired or you are not logged in. Please connect to the internet and login.');
-                }
-                window.location.href = '/login';
-                return;
-            }
-
-            // If online, verify session with server
+            // Protected page: sync with server if online
+            let serverSession = null;
             if (navigator.onLine) {
-                fetch('/api/auth/check')
-                    .then(res => res.json())
-                    .then(data => {
-                        if (!data.logged_in) {
-                            clearSession();
-                            window.location.href = '/login';
-                        }
-                    })
-                    .catch(() => {});
+                serverSession = await syncSessionWithServer();
             }
 
-            // Reinstall notice (if any)
+            const session = getStoredSession();
+            const sessionValid = isSessionValid(session);
+
+            if (serverSession !== null) {
+                if (serverSession.logged_in) {
+                    // Valid session – proceed
+                } else {
+                    clearSession();
+                    window.location.href = '/login';
+                    return;
+                }
+            } else {
+                // Offline
+                if (!sessionValid) {
+                    clearSession();
+                    if (!navigator.onLine) {
+                        alert('Your session has expired or you are not logged in. Please connect to the internet and login.');
+                    }
+                    window.location.href = '/login';
+                    return;
+                }
+            }
+
+            // Reinstall notice
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('reinstall') === 'true') {
                 const toast = document.createElement('div');
