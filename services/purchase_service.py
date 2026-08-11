@@ -122,8 +122,8 @@ def update_product(
     discount,
     selling_price,
     source=None,
-    update_mode='auto',          # 'auto', 'create', 'update'
-    keep_sold_with_old=True      # NEW: controls how sold items are handled when creating a new batch
+    update_mode='auto',
+    keep_sold_with_old=True
 ):
     """
     Smart batch update with explicit mode and sold‑item handling.
@@ -618,7 +618,7 @@ def get_all_purchases():
 def get_purchases_by_date_range(
     start_date,
     end_date,
-    date_type='original',           # 'original' or 'updated'
+    date_type='original',
     show_updated_only=False
 ):
     """
@@ -694,10 +694,14 @@ def get_purchases_by_date_range(
 
 
 # ============================================================
-#  SUGGESTIONS / BATCH FETCH (UPDATED: LIMIT 15)
+#  SUGGESTIONS (UPDATED: HIGHER LIMIT FOR "ALL")
 # ============================================================
 
 def get_product_suggestions(keyword):
+    """
+    Search products by name, brand, or batch ID.
+    Returns a limited set (1000) – practically all matching results.
+    """
     conn = get_connection()
     try:
         cursor = conn.cursor()
@@ -720,7 +724,7 @@ def get_product_suggestions(keyword):
                     AND dp.action = 'PERMANENTLY DELETED' 
                     AND dp.source = 'product'
                 )
-                LIMIT 15
+                LIMIT 1000
             """, (batch_id,))
         else:
             cursor.execute("""
@@ -734,7 +738,7 @@ def get_product_suggestions(keyword):
                     AND dp.source = 'product'
                 )
                 ORDER BY p.name ASC
-                LIMIT 15
+                LIMIT 1000
             """, (f"%{keyword}%",))
 
         results = cursor.fetchall()
@@ -764,7 +768,7 @@ def get_category_suggestions(keyword):
                 AND dp.source = 'product'
             )
             ORDER BY p.category ASC
-            LIMIT 5
+            LIMIT 1000
         """, (f"%{keyword}%",))
         results = cursor.fetchall()
         return [{"category": r[0]} for r in results if r[0]]
@@ -786,7 +790,7 @@ def get_source_suggestions(keyword):
             AND source IS NOT NULL
             AND source != ''
             ORDER BY source ASC
-            LIMIT 5
+            LIMIT 1000
         """, (f"%{keyword}%",))
         results = cursor.fetchall()
         return [{"source": r[0]} for r in results if r[0]]
@@ -796,6 +800,46 @@ def get_source_suggestions(keyword):
     finally:
         conn.close()
 
+
+# ============================================================
+#  NEW: UNIFIED SEARCH BY NAME OR BRAND (NO LIMIT – ALL RESULTS)
+# ============================================================
+
+def search_products_by_name_or_brand(keyword):
+    """
+    Search products by name or brand (case-insensitive) – returns ALL matching results.
+    Used for the product name / brand autocomplete.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT DISTINCT p.name, p.brand, p.category
+            FROM products p
+            WHERE (p.name ILIKE %s OR p.brand ILIKE %s)
+            AND NOT EXISTS (
+                SELECT 1 FROM deleted_products dp
+                WHERE dp.product_id = p.id
+                AND dp.action IN ('PERMANENTLY DELETED', 'PRODUCT DELETED')
+                AND dp.source = 'product'
+            )
+            ORDER BY p.name ASC
+        """, (f'%{keyword}%', f'%{keyword}%'))
+        rows = cursor.fetchall()
+        return [
+            {"name": r[0], "brand": r[1] or "", "category": r[2] or ""}
+            for r in rows
+        ]
+    except Exception as e:
+        print(f"❌ Error searching products by name/brand: {str(e)}")
+        return []
+    finally:
+        conn.close()
+
+
+# ============================================================
+#  BATCH FETCH
+# ============================================================
 
 def get_batch_by_id(batch_id):
     conn = get_connection()

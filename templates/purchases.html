@@ -43,11 +43,12 @@
         </div>
         <div>
             <label class="block text-sm font-medium text-gray-700">Brand</label>
-            <input type="text" id="brand" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
+            <input type="text" id="brand" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" autocomplete="off">
+            <div id="brandSuggestions" class="absolute z-10 bg-white border rounded-lg shadow-lg hidden max-h-60 overflow-y-auto w-full"></div>
         </div>
         <div>
             <label class="block text-sm font-medium text-gray-700">Category</label>
-            <input type="text" id="category" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" autocomplete="off">
+            <input type="text" id="category" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" autocomplete="off" value="Accessory" readonly>
             <div id="categorySuggestions" class="absolute z-10 bg-white border rounded-lg shadow-lg hidden"></div>
         </div>
         <div>
@@ -930,7 +931,7 @@
         updateSummary(purchases);
     }
 
-    // ---------- Summary ----------
+    // ---------- Summary – CORRECTED TOTAL COST & CAPITAL ----------
     function updateSummary(purchases) {
         let totalQty = 0, totalRemaining = 0, totalCost = 0, totalDiscount = 0, totalSelling = 0, totalProfit = 0;
         let totalCapital = 0, totalClaimed = 0, totalGood = 0, totalClaimedCost = 0, totalSold = 0;
@@ -947,7 +948,8 @@
                 totalQty += itemQty;
                 totalRemaining += remainingQty;
                 totalSold += sold;
-                totalCost += p.total_cost || (itemCost * itemQty);
+                // ✅ CORRECT totalCost = cost × quantity
+                totalCost += itemCost * itemQty;
                 totalDiscount += itemDiscount;
                 totalSelling += itemSelling * itemQty;
                 totalClaimed += claimed;
@@ -955,10 +957,11 @@
                 totalClaimedCost += claimed * itemCost;
                 const itemProfit = (itemSelling - itemCost) * itemQty - itemDiscount;
                 totalProfit += itemProfit;
-                totalCapital += (itemCost * itemQty) - itemDiscount;
+                // ✅ CORRECT capital = (remaining - claimed) × cost
+                totalCapital += (remainingQty - claimed) * itemCost;
             });
         }
-        const adjustedCapital = totalCost - totalClaimedCost;
+
         const isOffline = !navigator.onLine;
         const isCached = !isDataFresh && !isOffline;
         const soldPercentage = totalQty > 0 ? ((totalSold / totalQty) * 100) : 0;
@@ -974,7 +977,7 @@
                 <div class="bg-white rounded p-2 shadow"><span class="text-gray-500">✅ Good</span><br><span class="text-lg font-bold text-green-600">${Math.max(totalGood, 0)}</span></div>
                 <div class="bg-white rounded p-2 shadow"><span class="text-gray-500">💰 Total Cost</span><br><span class="text-lg font-bold text-gray-700">${formatMoney(totalCost)}</span></div>
                 <div class="bg-white rounded p-2 shadow"><span class="text-gray-500">📉 Claimed Cost</span><br><span class="text-lg font-bold text-red-600">${formatMoney(totalClaimedCost)}</span></div>
-                <div class="bg-white rounded p-2 shadow"><span class="text-gray-500">💰 Capital</span><br><span class="text-lg font-bold text-purple-600">${formatMoney(adjustedCapital)}</span></div>
+                <div class="bg-white rounded p-2 shadow"><span class="text-gray-500">💰 Capital</span><br><span class="text-lg font-bold text-purple-600">${formatMoney(totalCapital)}</span></div>
                 <div class="bg-white rounded p-2 shadow"><span class="text-gray-500">📊 Sold %</span><br><span class="text-lg font-bold ${soldColor}">${soldPercentage.toFixed(0)}%</span></div>
             </div>
             <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm mt-2">
@@ -984,7 +987,7 @@
                 <div class="bg-white rounded p-2 shadow"><span class="text-gray-500">📊 Avg Profit/Batch</span><br><span class="text-lg font-bold ${totalBatches > 0 && totalProfit / totalBatches >= 0 ? 'text-teal-600' : 'text-red-600'}">${totalBatches > 0 ? formatMoney(totalProfit / totalBatches) : '₵0.00'}</span></div>
             </div>
             <div class="mt-2 text-xs text-gray-400">
-                💡 Total: ${totalQty} | Remaining: ${totalRemaining} | Sold: ${totalSold} | Claimed: ${totalClaimed} | Good: ${Math.max(totalGood, 0)} | Capital: ${formatMoney(adjustedCapital)} (${formatMoney(totalCost)} - ${formatMoney(totalClaimedCost)} claimed cost)
+                💡 Total: ${totalQty} | Remaining: ${totalRemaining} | Sold: ${totalSold} | Claimed: ${totalClaimed} | Good: ${Math.max(totalGood, 0)} | Capital: ${formatMoney(totalCapital)}
                 ${isOffline ? ' | ⚠️ Offline mode' : ''}
                 ${isCached ? ' | 📦 Showing cached data' : ''}
                 ${!isOffline && !isCached ? ' | ✅ Live data' : ''}
@@ -1320,7 +1323,7 @@
         }
     }
 
-    // ---------- PDF – with robust error handling ----------
+    // ---------- PDF – CORRECTED TOTAL COST & CAPITAL ----------
     async function generatePDF() {
         if (!navigator.onLine) {
             alert('PDF generation requires internet. Please connect and try again.');
@@ -1347,16 +1350,18 @@
             totalQty += itemQty;
             totalRemaining += remainingQty;
             totalSold += sold;
-            totalCost += p.total_cost || (itemCost * itemQty);
+            // ✅ Correct totalCost
+            totalCost += itemCost * itemQty;
             totalDiscount += itemDiscount;
             totalSelling += itemSelling * itemQty;
             totalClaimed += claimed;
             totalClaimedCost += claimed * itemCost;
             const itemProfit = (itemSelling - itemCost) * itemQty - itemDiscount;
             totalProfit += itemProfit;
-            totalCapital += (itemCost * itemQty) - itemDiscount;
+            // ✅ Capital per batch
+            totalCapital += (remainingQty - claimed) * itemCost;
         });
-        const adjustedCapital = totalCost - totalClaimedCost;
+        const adjustedCapital = totalCapital;
         const soldPercentage = totalQty > 0 ? ((totalSold / totalQty) * 100) : 0;
 
         try {
@@ -1410,45 +1415,52 @@
         }
     }
 
-    // ---------- Autocomplete ----------
-    let nameTimeout, catTimeout, sourceTimeout;
+    // ---------- NEW UNIFIED PRODUCT SEARCH (for both Name and Brand) ----------
+    let nameTimeout, brandTimeout, catTimeout, sourceTimeout;
 
-    async function fetchNameSuggestions() {
+    async function fetchProductSuggestions(inputId, suggestionsId) {
         if (!navigator.onLine) {
-            document.getElementById('nameSuggestions').classList.add('hidden');
+            document.getElementById(suggestionsId).classList.add('hidden');
             return;
         }
-        const q = document.getElementById('name').value.trim();
-        if (!q) { 
-            document.getElementById('nameSuggestions').classList.add('hidden'); 
-            return; 
+        const q = document.getElementById(inputId).value.trim();
+        if (!q) {
+            document.getElementById(suggestionsId).classList.add('hidden');
+            return;
         }
         try {
-            const res = await fetch(`/api/purchases/suggestions/name?q=${encodeURIComponent(q)}&exclude_category=Screen`);
+            const res = await fetch(`/api/purchases/suggestions/product?q=${encodeURIComponent(q)}`);
             if (!res.ok) throw new Error();
             const suggestions = await res.json();
-            const box = document.getElementById('nameSuggestions');
-            if (!suggestions || suggestions.length === 0) { 
-                box.classList.add('hidden'); 
-                return; 
+            const box = document.getElementById(suggestionsId);
+            if (!suggestions || suggestions.length === 0) {
+                box.classList.add('hidden');
+                return;
             }
-            box.innerHTML = suggestions.map(s => {
-                const batchDisplay = s.batch_id ? ` <span class="text-xs text-gray-400">#${s.batch_id}</span>` : '';
-                return `<div class="px-3 py-1.5 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-0 text-sm" 
-                            onclick="selectNameSuggestion('${escapeHtml(s.name)}', '${escapeHtml(s.brand)}', '${escapeHtml(s.category)}')">
+            box.innerHTML = suggestions.map(s => `
+                <div class="px-3 py-1.5 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-0 text-sm" 
+                     onclick="selectProductSuggestion('${escapeHtml(s.name)}', '${escapeHtml(s.brand)}', '${escapeHtml(s.category)}')">
                     <div class="font-medium">${escapeHtml(s.name)}</div>
-                    <div class="text-xs text-gray-500">${escapeHtml(s.brand)}${s.category ? ` · ${escapeHtml(s.category)}` : ''}${batchDisplay}</div>
-                </div>`;
-            }).join('');
+                    <div class="text-xs text-gray-500">${escapeHtml(s.brand)}${s.category ? ` · ${escapeHtml(s.category)}` : ''}</div>
+                </div>
+            `).join('');
             box.classList.remove('hidden');
-            const rect = document.getElementById('name').getBoundingClientRect();
+            const rect = document.getElementById(inputId).getBoundingClientRect();
             box.style.top = rect.bottom + window.scrollY + 'px';
             box.style.left = rect.left + 'px';
             box.style.width = rect.width + 'px';
         } catch (err) {
-            document.getElementById('nameSuggestions').classList.add('hidden');
+            document.getElementById(suggestionsId).classList.add('hidden');
         }
     }
+
+    window.selectProductSuggestion = function(name, brand, category) {
+        document.getElementById('name').value = name;
+        document.getElementById('brand').value = brand;
+        document.getElementById('category').value = category || 'Accessory';
+        document.getElementById('nameSuggestions').classList.add('hidden');
+        document.getElementById('brandSuggestions').classList.add('hidden');
+    };
 
     async function fetchCategorySuggestions() {
         if (!navigator.onLine) {
@@ -1498,13 +1510,6 @@
         }
     }
 
-    window.selectNameSuggestion = function(name, brand, category) {
-        document.getElementById('name').value = name;
-        document.getElementById('brand').value = brand;
-        document.getElementById('category').value = category || 'Accessory';
-        document.getElementById('nameSuggestions').classList.add('hidden');
-    };
-
     window.selectCategorySuggestion = function(cat) {
         document.getElementById('category').value = cat;
         document.getElementById('categorySuggestions').classList.add('hidden');
@@ -1548,12 +1553,21 @@
             if (e.key === 'Enter') applyAdvancedSearch();
         });
 
-        document.getElementById('name').addEventListener('input', () => { clearTimeout(nameTimeout); nameTimeout = setTimeout(fetchNameSuggestions, 300); });
+        // Name and Brand use the unified product search
+        document.getElementById('name').addEventListener('input', function() {
+            clearTimeout(nameTimeout);
+            nameTimeout = setTimeout(() => fetchProductSuggestions('name', 'nameSuggestions'), 300);
+        });
+        document.getElementById('brand').addEventListener('input', function() {
+            clearTimeout(brandTimeout);
+            brandTimeout = setTimeout(() => fetchProductSuggestions('brand', 'brandSuggestions'), 300);
+        });
         document.getElementById('category').addEventListener('input', () => { clearTimeout(catTimeout); catTimeout = setTimeout(fetchCategorySuggestions, 300); });
         document.getElementById('source').addEventListener('input', () => { clearTimeout(sourceTimeout); sourceTimeout = setTimeout(fetchSourceSuggestions, 300); });
 
         document.addEventListener('click', function(e) {
             if (!e.target.closest('#name')) document.getElementById('nameSuggestions').classList.add('hidden');
+            if (!e.target.closest('#brand')) document.getElementById('brandSuggestions').classList.add('hidden');
             if (!e.target.closest('#category')) document.getElementById('categorySuggestions').classList.add('hidden');
             if (!e.target.closest('#source')) document.getElementById('sourceSuggestions').classList.add('hidden');
         });
