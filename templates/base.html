@@ -760,6 +760,27 @@
 
 <script src="{{ url_for('static', filename='js/offline.js') }}"></script>
 <script>
+    // ==================== SESSION MANAGEMENT (7‑day expiry) ====================
+    const SESSION_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+    function getStoredSession() {
+        const stored = localStorage.getItem('ox_user');
+        if (!stored) return null;
+        try {
+            return JSON.parse(stored);
+        } catch { return null; }
+    }
+
+    function clearSession() {
+        localStorage.removeItem('ox_user');
+    }
+
+    function isSessionValid(session) {
+        if (!session) return false;
+        if (Date.now() > session.expiresAt) return false;
+        return true;
+    }
+
     // ==================== EXISTING SIDEBAR / DROPDOWN FUNCTIONS ====================
     function toggleSidebar() {
         const sidebar = document.getElementById('sidebar');
@@ -797,17 +818,24 @@
         }
     });
 
+    // ==================== UPDATED LOGOUT (clears session) ====================
     async function logout() {
-        try {
-            const res = await fetch('/api/auth/logout', { method: 'POST' });
-            const data = await res.json();
-            if (data.success) {
-                window.location.href = '/login';
-            } else {
-                alert('Logout failed');
+        clearSession();
+        if (navigator.onLine) {
+            try {
+                const res = await fetch('/api/auth/logout', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    window.location.href = '/login';
+                } else {
+                    alert('Logout failed');
+                }
+            } catch (error) {
+                alert('Logout failed: ' + error.message);
             }
-        } catch (error) {
-            alert('Logout failed: ' + error.message);
+        } else {
+            // Offline – just redirect
+            window.location.href = '/login';
         }
     }
 
@@ -841,19 +869,14 @@
     }
 
     function showSyncReminder() {
-        // Now we show the reminder regardless of online/offline status
-        // as long as the data is stale (or never synced).
         const lastSync = getLastSync();
         const now = Date.now();
 
-        // If never synced or older than interval
         if (lastSync === 0 || (now - lastSync) > SYNC_INTERVAL) {
-            // Avoid duplicate reminders
             if (document.getElementById('syncReminderToast')) return;
 
             const toast = document.createElement('div');
             toast.id = 'syncReminderToast';
-            // Check online status to customise the message
             const isOnline = navigator.onLine;
             const message = isOnline
                 ? '⚠️ Your offline data is over 6 hours old.'
@@ -879,7 +902,6 @@
 
             document.getElementById('reminderActionBtn').addEventListener('click', function() {
                 if (navigator.onLine) {
-                    // Online – perform sync
                     toast.remove();
                     if (typeof window.syncAllPending === 'function') {
                         window.syncAllPending();
@@ -887,7 +909,6 @@
                         alert('Sync function not available');
                     }
                 } else {
-                    // Offline – show a friendly alert
                     alert('You are offline. Please connect to the internet and try again.');
                 }
             });
@@ -898,7 +919,7 @@
         }
     }
 
-    // ==================== UNIFIED SYNC FUNCTION (with timestamp update) ====================
+    // ==================== UNIFIED SYNC FUNCTION ====================
     window.syncAllPending = async function() {
         if (!navigator.onLine) {
             alert('You are offline. Please connect to the internet to sync.');
@@ -913,11 +934,9 @@
             await syncPendingBatchDeletions();
             updatePendingBadge();
 
-            // Update last sync timestamp after successful sync
             setLastSync();
             console.log('✅ Sync completed – last sync time updated.');
 
-            // Show a success toast
             const badge = document.getElementById('pending-badge');
             let message = '✅ All pending items synced successfully!';
             if (badge && badge.style.display !== 'none') {
@@ -943,7 +962,6 @@
                 setTimeout(() => toast.remove(), 500);
             }, 3000);
 
-            // Remove any lingering reminder
             const reminder = document.getElementById('syncReminderToast');
             if (reminder) reminder.remove();
         } catch (err) {
@@ -952,22 +970,62 @@
         }
     };
 
-    // ==================== INITIALIZATION ====================
+    // ==================== INITIALIZATION (with session expiry) ====================
     document.addEventListener('DOMContentLoaded', function() {
         // Update footer year
         const yearSpan = document.getElementById('footerYear');
         if (yearSpan) yearSpan.textContent = new Date().getFullYear();
 
-        // If online, perform initial sync and update timestamp
+        const currentPath = window.location.pathname;
+        const publicPaths = ['/login', '/signup'];
+
+        // 1. Check stored session
+        const session = getStoredSession();
+        const sessionValid = session && isSessionValid(session);
+
+        // 2. If on a public page and session is valid, redirect to dashboard
+        if (publicPaths.includes(currentPath) && sessionValid) {
+            window.location.href = '/';
+            return;
+        }
+
+        // 3. If on a protected page (not public)
+        if (!publicPaths.includes(currentPath)) {
+            // If no valid session, clear and redirect to login
+            if (!sessionValid) {
+                clearSession();
+                if (!navigator.onLine) {
+                    alert('Your session has expired or you are not logged in. Please connect to the internet and login.');
+                }
+                window.location.href = '/login';
+                return;
+            }
+
+            // Session is valid – verify with server if online
+            if (navigator.onLine) {
+                fetch('/api/auth/check')
+                    .then(res => res.json())
+                    .then(data => {
+                        if (!data.logged_in) {
+                            clearSession();
+                            window.location.href = '/login';
+                        }
+                    })
+                    .catch(() => {
+                        console.log('⚠️ Could not verify session with server – using cached session.');
+                    });
+            }
+        }
+
+        // 4. If online, perform initial sync
         if (navigator.onLine) {
             console.log('🌐 Online – performing initial sync...');
             window.syncAllPending();
         } else {
-            // Offline: just show reminder (if data is stale)
             setTimeout(showSyncReminder, 2000);
         }
 
-        // Show reminder anyway after a delay – it will check the age
+        // 5. Show sync reminder after a delay
         setTimeout(showSyncReminder, 4000);
     });
 
@@ -975,7 +1033,6 @@
     window.addEventListener('online', function() {
         console.log('🌐 Connection restored – syncing all pending items...');
         window.syncAllPending();
-        // Remove any reminder that might be stuck (since we're online now)
         const reminder = document.getElementById('syncReminderToast');
         if (reminder) reminder.remove();
     });

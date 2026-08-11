@@ -44,7 +44,9 @@
 </div>
 
 <script>
-    // ----- OFFLINE BANNER -----
+    // ============================================================
+    //  OFFLINE BANNER
+    // ============================================================
     function updateOfflineBanner() {
         const banner = document.getElementById('offlineBanner');
         const loginBtn = document.getElementById('loginBtn');
@@ -63,7 +65,9 @@
     window.addEventListener('online', updateOfflineBanner);
     window.addEventListener('offline', updateOfflineBanner);
 
-    // ----- CLEAR FORM FIELDS -----
+    // ============================================================
+    //  CLEAR FORM FIELDS
+    // ============================================================
     function clearFormFields() {
         document.querySelectorAll('#loginForm input[type="text"], #loginForm input[type="password"]').forEach(input => {
             input.value = '';
@@ -90,18 +94,21 @@
         }
     });
 
-    // ----- TOGGLE PASSWORD VISIBILITY -----
+    // ============================================================
+    //  TOGGLE PASSWORD VISIBILITY
+    // ============================================================
     const showPasswordCheckbox = document.getElementById('showPassword');
     const passwordField = document.getElementById('password');
     showPasswordCheckbox.addEventListener('change', () => {
         passwordField.type = showPasswordCheckbox.checked ? 'text' : 'password';
     });
     
-    // ----- HANDLE LOGIN SUBMISSION -----
+    // ============================================================
+    //  HANDLE LOGIN SUBMISSION (with 7‑day expiry)
+    // ============================================================
     const loginForm = document.getElementById('loginForm');
     loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        // Check offline
         if (!navigator.onLine) {
             alert('You are offline. Please connect to the internet and try again.');
             return;
@@ -121,6 +128,14 @@
             }
             const data = await response.json();
             if (data.success) {
+                // Store session in localStorage with 7‑day expiry
+                const session = {
+                    username: data.user.username,
+                    role: data.user.role,
+                    id: data.user.id,
+                    expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000 // 7 days
+                };
+                localStorage.setItem('ox_user', JSON.stringify(session));
                 window.location.href = '/';
             } else {
                 alert('Login failed: ' + data.error);
