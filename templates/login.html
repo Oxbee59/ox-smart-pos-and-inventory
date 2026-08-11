@@ -45,6 +45,29 @@
 
 <script>
     // ============================================================
+    //  OFFLINE SESSION CHECK – ONLY redirect if server session exists
+    // ============================================================
+    (function() {
+        if (!navigator.onLine) return;
+
+        const storedUser = localStorage.getItem('ox_user');
+        if (!storedUser) return;
+
+        fetch('/api/auth/check')
+            .then(res => res.json())
+            .then(data => {
+                if (data.logged_in) {
+                    window.location.href = '/';
+                } else {
+                    localStorage.removeItem('ox_user');
+                }
+            })
+            .catch(() => {
+                console.warn('Could not verify session, staying on login.');
+            });
+    })();
+
+    // ============================================================
     //  OFFLINE BANNER
     // ============================================================
     function updateOfflineBanner() {
@@ -133,7 +156,7 @@
                     username: data.user.username,
                     role: data.user.role,
                     id: data.user.id,
-                    expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000 // 7 days
+                    expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000
                 };
                 localStorage.setItem('ox_user', JSON.stringify(session));
                 window.location.href = '/';
