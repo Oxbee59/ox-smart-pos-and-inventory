@@ -151,7 +151,7 @@
             }
             const data = await response.json();
             if (data.success) {
-                // Store session in localStorage with 7‑day expiry
+                // ✅ Store session with 7‑day expiry
                 const session = {
                     username: data.user.username,
                     role: data.user.role,
