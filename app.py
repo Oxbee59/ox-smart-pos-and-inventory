@@ -1729,66 +1729,72 @@ def api_today_sales():
     end_date = request.args.get('end_date')
     category = request.args.get('category')
     exclude_category = request.args.get('exclude_category')
-    
+
     conn = get_connection()
     cursor = conn.cursor()
-    
-    select_clause = """
-        SELECT 
-            sales.id, 
-            products.name, 
-            products.brand, 
-            products.category,
-            sales_items.quantity, 
-            sales_items.selling_price,
-            sales_items.quantity * sales_items.selling_price AS subtotal,
-            sales.discount, 
-            sales.total, 
-            sales_items.profit,
-            COALESCE(purchase_batches.id, -1) as batch_id,
-            COALESCE(purchase_batches.cost_price, 0) as cost_price, 
-            sales.date,
-            CASE WHEN purchase_batches.id IS NULL THEN 1 ELSE 0 END as is_deleted_batch,
-            sales.profit as net_profit,
-            COALESCE(sales.payment_method, 'cash') as payment_method,
-            sales.cheque_number,
-            u.username
-    """
-    from_clause = """
-        FROM sales
-        JOIN sales_items ON sales.id = sales_items.sale_id
-        JOIN products ON products.id = sales_items.product_id
-        LEFT JOIN purchase_batches ON purchase_batches.id = sales_items.batch_id
-        LEFT JOIN users u ON sales.user_id = u.id
-    """
-    
-    where_conditions = ["sales.reversed = FALSE"]
-    params = []
-    
-    if start_date and end_date:
-        where_conditions.append("sales.date::date BETWEEN %s AND %s")
-        params.extend([start_date, end_date])
-    else:
-        if period == 'daily':
-            where_conditions.append("sales.date::date = CURRENT_DATE")
-        elif period == 'weekly':
-            where_conditions.append("sales.date >= CURRENT_DATE - INTERVAL '6 days'")
-        elif period == 'monthly':
-            where_conditions.append("EXTRACT(YEAR FROM sales.date) = EXTRACT(YEAR FROM CURRENT_DATE) AND EXTRACT(MONTH FROM sales.date) = EXTRACT(MONTH FROM CURRENT_DATE)")
-        elif period == 'yearly':
-            where_conditions.append("EXTRACT(YEAR FROM sales.date) = EXTRACT(YEAR FROM CURRENT_DATE)")
-    
-    if category:
-        where_conditions.append("products.category = %s")
-        params.append(category)
-    if exclude_category:
-        where_conditions.append("products.category != %s")
-        params.append(exclude_category)
-    
-    where_clause = " AND ".join(where_conditions)
-    query = f"{select_clause} {from_clause} WHERE {where_clause} ORDER BY sales.date DESC"
-    
+
     try:
+        # Select only the columns we actually need – avoid `sales_items.profit` if it doesn't exist.
+        # We'll compute profit later if needed.
+        select_clause = """
+            SELECT 
+                sales.id, 
+                products.name, 
+                products.brand, 
+                products.category,
+                sales_items.quantity, 
+                sales_items.selling_price,
+                sales_items.quantity * sales_items.selling_price AS subtotal,
+                sales.discount, 
+                sales.total, 
+                sales_items.profit,                     -- may be missing, let's catch
+                COALESCE(purchase_batches.id, -1) as batch_id,
+                COALESCE(purchase_batches.cost_price, 0) as cost_price, 
+                sales.date,
+                CASE WHEN purchase_batches.id IS NULL THEN 1 ELSE 0 END as is_deleted_batch,
+                sales.profit as net_profit,
+                COALESCE(sales.payment_method, 'cash') as payment_method,
+                sales.cheque_number,
+                u.username
+        """
+        from_clause = """
+            FROM sales
+            JOIN sales_items ON sales.id = sales_items.sale_id
+            JOIN products ON products.id = sales_items.product_id
+            LEFT JOIN purchase_batches ON purchase_batches.id = sales_items.batch_id
+            LEFT JOIN users u ON sales.user_id = u.id
+        """
+        where_conditions = ["sales.reversed = FALSE"]
+        params = []
+
+        if start_date and end_date:
+            where_conditions.append("sales.date::date BETWEEN %s AND %s")
+            params.extend([start_date, end_date])
+        else:
+            if period == 'daily':
+                where_conditions.append("sales.date::date = CURRENT_DATE")
+            elif period == 'weekly':
+                where_conditions.append("sales.date >= CURRENT_DATE - INTERVAL '6 days'")
+            elif period == 'monthly':
+                where_conditions.append("EXTRACT(YEAR FROM sales.date) = EXTRACT(YEAR FROM CURRENT_DATE) AND EXTRACT(MONTH FROM sales.date) = EXTRACT(MONTH FROM CURRENT_DATE)")
+            elif period == 'yearly':
+                where_conditions.append("EXTRACT(YEAR FROM sales.date) = EXTRACT(YEAR FROM CURRENT_DATE)")
+            # if 'all' – no date filter
+
+        if category:
+            where_conditions.append("products.category = %s")
+            params.append(category)
+        if exclude_category:
+            where_conditions.append("products.category != %s")
+            params.append(exclude_category)
+
+        where_clause = " AND ".join(where_conditions)
+        query = f"{select_clause} {from_clause} WHERE {where_clause} ORDER BY sales.date DESC"
+
+        # Log the query for debugging (disable in production)
+        app.logger.debug(f"SQL: {query}")
+        app.logger.debug(f"Params: {params}")
+
         cursor.execute(query, params)
         rows = cursor.fetchall()
         sales_data = []
@@ -1803,23 +1809,26 @@ def api_today_sales():
                 'subtotal': float(r[6]),
                 'discount': float(r[7]),
                 'total': float(r[8]),
-                'profit': float(r[9]),
+                'profit': float(r[9]) if r[9] is not None else 0,   # sales_items.profit
                 'batch_id': r[10],
-                'cost_price': float(r[11]),
+                'cost_price': float(r[11]) if r[11] is not None else 0,
                 'sale_date': r[12].isoformat() if hasattr(r[12], 'isoformat') else str(r[12]),
                 'is_deleted_batch': bool(r[13]),
-                'net_profit': float(r[14]),
+                'net_profit': float(r[14]) if r[14] is not None else 0,  # sales.profit
                 'payment_method': r[15] if len(r) > 15 else 'cash',
                 'cheque_number': r[16] if len(r) > 16 else None,
                 'username': r[17] if len(r) > 17 else 'Unknown'
             })
         return jsonify(sales_data)
+
     except Exception as e:
-        print(f"Error in today_sales API: {str(e)}")
-        return jsonify([]), 500
+        app.logger.error(f"Error in today_sales API: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        # Return a meaningful error message instead of a generic 500
+        return jsonify({'error': str(e), 'trace': traceback.format_exc()}), 500
     finally:
         conn.close()
-
 @app.route('/api/today_sales/pdf', methods=['POST'])
 @login_required
 def api_today_sales_pdf():
@@ -1827,9 +1836,13 @@ def api_today_sales_pdf():
     sales_data = data.get('sales_data', [])
     period_text = data.get('period_text', 'Sales Report')
     summary = data.get('summary', '')
-    
+    is_admin = data.get('is_admin', False)   # <-- get from frontend
+
+    if not sales_data:
+        return jsonify({'error': 'No data to export'}), 400
+
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), 
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(A4),
                            rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20)
     elements = []
     styles = getSampleStyleSheet()
@@ -1837,87 +1850,81 @@ def api_today_sales_pdf():
     elements.append(Spacer(1, 0.2*cm))
     elements.append(Paragraph(period_text, styles['Normal']))
     elements.append(Spacer(1, 0.2*cm))
-    
+
     seen_sales = set()
     total_sales = 0.0
     total_discount = 0.0
     total_profit = 0.0
     total_items = 0
-    total_subtotal = 0.0
-    gross_profit = 0.0
-    
-    # ✅ Initialize payment totals
     cash_total = 0.0
     momo_total = 0.0
     cheque_total = 0.0
-    
+
+    # First pass: compute totals and net profit
     for sale in sales_data:
         sale_id = sale['sale_id']
-        
-        # ✅ Count each sale only once for payment totals
         if sale_id not in seen_sales:
             total_sales += sale['total']
             total_discount += sale['discount']
+            total_profit += sale['net_profit'] or 0
             seen_sales.add(sale_id)
-            
-            # ✅ Calculate payment totals per sale (not per item)
-            payment_method = sale.get('payment_method', 'cash').lower()
-            if payment_method == 'cash' or payment_method == '':
+            method = (sale.get('payment_method', 'cash') or 'cash').lower()
+            if method == 'cash' or method == '':
                 cash_total += sale['total']
-            elif payment_method == 'momo':
+            elif method == 'momo':
                 momo_total += sale['total']
-            elif payment_method == 'cheque':
+            elif method == 'cheque':
                 cheque_total += sale['total']
             else:
-                # Default to cash if unknown
                 cash_total += sale['total']
-        
-        # ✅ Calculate item profit correctly (always per item)
-        item_gross_profit = (sale['selling_price'] - sale['cost_price']) * sale['quantity']
-        gross_profit += item_gross_profit
-        total_items += sale['quantity']
-        total_subtotal += sale['selling_price'] * sale['quantity']
-    
-    # ✅ Net profit = Gross profit - Total discount
-    net_profit = gross_profit - total_discount
-    total_profit = net_profit
-    
-    elements.append(Paragraph(
-        f"🧾 Items: {total_items}   |   💰 Sales: ₵{total_sales:.2f}   |   "
-        f"📉 Discount: ₵{total_discount:.2f}   |   📈 Profit: ₵{total_profit:.2f}",
-        styles['Normal']
-    ))
-    elements.append(Spacer(1, 0.3*cm))
-    
-    table_data = [["Name", "Brand", "Category", "Qty", "Price", "Subtotal", 
-                   "Discount", "Total", "Profit", "Batch", "Cost", "Sale Date", "Payment", "Status", "User"]]
-    
-    for s in sales_data:
-        status = "Deleted Batch" if s['is_deleted_batch'] else "Active"
-        payment_display = s.get('payment_method', 'cash').upper()
-        if s.get('cheque_number'):
-            payment_display += f" #{s['cheque_number']}"
-        
-        # ✅ Calculate item profit correctly (gross profit per item)
-        item_profit = (s['selling_price'] - s['cost_price']) * s['quantity']
-        
+        total_items += sale.get('quantity', 0)
+
+    # Build header and rows depending on admin status
+    if is_admin:
+        headers = ["Name", "Brand", "Category", "Qty", "Price", "Subtotal",
+                   "Discount", "Total", "Profit", "Batch", "Cost", "Sale Date", "Payment", "Status", "User"]
+    else:
+        headers = ["Name", "Brand", "Category", "Qty", "Price", "Subtotal",
+                   "Discount", "Total", "Batch", "Sale Date", "Payment", "Status", "User"]
+
+    table_data = [headers]
+
+    for sale in sales_data:
+        # For each item, compute item profit (only needed for admin view)
+        item_profit = (sale['selling_price'] - sale['cost_price']) * sale['quantity'] if is_admin else 0
+        status = "Deleted Batch" if sale.get('is_deleted_batch') else "Active"
+        payment_display = sale.get('payment_method', 'cash').upper()
+        if sale.get('cheque_number'):
+            payment_display += f" #{sale['cheque_number']}"
+
         row = [
-            s['name'], s['brand'], s['category'],
-            str(s['quantity']),
-            f"₵{s['selling_price']:.2f}",
-            f"₵{s['subtotal']:.2f}",
-            f"₵{s['discount']:.2f}",
-            f"₵{s['total']:.2f}",
-            f"₵{item_profit:.2f}",
-            str(s['batch_id']) if s['batch_id'] != -1 else "DELETED",
-            f"₵{s['cost_price']:.2f}",
-            s['sale_date'],
+            sale['name'],
+            sale['brand'],
+            sale['category'],
+            str(sale['quantity']),
+            f"₵{sale['selling_price']:.2f}",
+            f"₵{sale['subtotal']:.2f}",
+            f"₵{sale['discount']:.2f}",
+            f"₵{sale['total']:.2f}"
+        ]
+
+        if is_admin:
+            row.append(f"₵{item_profit:.2f}")           # Profit per item
+            row.append(str(sale['batch_id']) if sale['batch_id'] != -1 else "DELETED")
+            row.append(f"₵{sale['cost_price']:.2f}")
+        else:
+            row.append(str(sale['batch_id']) if sale['batch_id'] != -1 else "DELETED")
+
+        # Common fields
+        row.extend([
+            sale['sale_date'],
             payment_display,
             status,
-            s.get('username', 'Unknown')
-        ]
+            sale.get('username', 'Unknown')
+        ])
         table_data.append(row)
-    
+
+    # Build table
     table = Table(table_data, repeatRows=1)
     table.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#1E3A5F")),
@@ -1928,23 +1935,24 @@ def api_today_sales_pdf():
         ('FONTSIZE', (0,0), (-1,-1), 7),
     ]))
     elements.append(table)
-    
-    # ✅ Add summary section with corrected payment totals
+
+    # Summary section
     elements.append(Spacer(1, 0.5*cm))
     elements.append(Paragraph("📊 Summary", styles["Heading2"]))
     elements.append(Spacer(1, 0.2*cm))
-    
+
     summary_data = [
         ["Metric", "Value"],
         ["🧾 Total Sales", f"₵{total_sales:.2f}"],
         ["📦 Total Items", str(total_items)],
         ["📉 Total Discount", f"₵{total_discount:.2f}"],
-        ["📈 Net Profit", f"₵{net_profit:.2f}"],
         ["💵 Cash Payments", f"₵{cash_total:.2f}"],
         ["📱 MoMo Payments", f"₵{momo_total:.2f}"],
         ["📝 Cheque Payments", f"₵{cheque_total:.2f}"]
     ]
-    
+    if is_admin:
+        summary_data.insert(4, ["📈 Net Profit", f"₵{total_profit:.2f}"])
+
     summary_table = Table(summary_data, colWidths=[6*cm, 6*cm], hAlign='CENTER')
     summary_table.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#1E3A5F")),
@@ -1959,7 +1967,7 @@ def api_today_sales_pdf():
         ('BACKGROUND', (0,1), (0,-1), colors.whitesmoke),
     ]))
     elements.append(summary_table)
-    
+
     doc.build(elements)
     buffer.seek(0)
     return send_file(buffer, as_attachment=True,

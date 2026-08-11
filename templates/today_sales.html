@@ -6,6 +6,9 @@
     ⚠️ You are offline – showing cached sales data (Accessories & Phones). Data will refresh when you reconnect.
 </div>
 
+<!-- Hidden user role for JavaScript -->
+<div id="userRole" data-role="{{ current_user.role if current_user else 'user' }}" style="display:none;"></div>
+
 <!-- Header with category indicator -->
 <div class="flex flex-wrap justify-between items-center gap-3 mb-6">
     <div class="flex items-center gap-2">
@@ -136,33 +139,26 @@
 </div>
 
 <style>
-    /* ===== VISIBLE SCROLLBAR FOR MOBILE & DESKTOP ===== */
     .scrollable-area {
         scrollbar-width: thin;
         scrollbar-color: #cbd5e1 #f1f1f1;
     }
-    
     .scrollable-area::-webkit-scrollbar {
         width: 8px;
         height: 8px;
     }
-    
     .scrollable-area::-webkit-scrollbar-track {
         background: #f1f1f1;
         border-radius: 10px;
     }
-    
     .scrollable-area::-webkit-scrollbar-thumb {
         background: #cbd5e1;
         border-radius: 10px;
         border: 2px solid #f1f1f1;
     }
-    
     .scrollable-area::-webkit-scrollbar-thumb:hover {
         background: #94a3b8;
     }
-    
-    /* Mobile scrollbar - slightly larger for touch */
     @media (max-width: 767px) {
         .scrollable-area::-webkit-scrollbar {
             width: 10px;
@@ -177,8 +173,6 @@
             scrollbar-color: #94a3b8 #f1f1f1;
         }
     }
-    
-    /* Highlight matching text */
     .highlight-match {
         background-color: #fef08a;
         padding: 0 2px;
@@ -190,6 +184,11 @@
     document.addEventListener('DOMContentLoaded', function () {
         console.log("DOM loaded – initializing Today Sales (Accessories & Phones) with Advanced Search");
 
+        // Get user role from hidden element
+        const userRoleEl = document.getElementById('userRole');
+        const isAdmin = userRoleEl ? userRoleEl.getAttribute('data-role') === 'admin' : false;
+        console.log("User is admin:", isAdmin);
+
         let currentSalesData = [];
         let currentFilteredData = [];
         let currentPeriod = 'daily';
@@ -197,12 +196,10 @@
         let currentEndDate = null;
         let currentSearchTerm = '';
 
-        // Advanced search settings
         let searchMode = 'contains';
         let searchField = 'all';
         let caseSensitive = false;
 
-        // For reversal modal
         let currentReverseSaleId = null;
         let currentReverseItems = [];
 
@@ -218,7 +215,7 @@
         window.addEventListener('online', updateOfflineBanner);
         window.addEventListener('offline', updateOfflineBanner);
 
-        // ---------- Caching helpers ----------
+        // ---------- Caching ----------
         function cacheData(key, data) {
             try {
                 localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }));
@@ -234,7 +231,6 @@
                 return parsed.data;
             } catch (e) { return null; }
         }
-
         function getCacheKey() {
             if (currentStartDate && currentEndDate) {
                 return `sales_data_nonscreen_custom_${currentStartDate}_${currentEndDate}`;
@@ -243,7 +239,6 @@
             }
         }
 
-        // ---------- Helper: format currency ----------
         function formatMoney(amount) {
             return '₵' + (parseFloat(amount) || 0).toFixed(2);
         }
@@ -270,81 +265,51 @@
             }
         }
 
-        // ---------- Advanced Search Functions ----------
+        // ---------- Advanced Search ----------
         function matchesSearch(value, searchTerm, mode, caseSensitive) {
             if (!value) return false;
-            
-            let searchValue = value;
-            let term = searchTerm;
-            
-            if (!caseSensitive) {
-                searchValue = searchValue.toLowerCase();
-                term = term.toLowerCase();
-            }
-            
+            let searchValue = value, term = searchTerm;
+            if (!caseSensitive) { searchValue = searchValue.toLowerCase(); term = term.toLowerCase(); }
             switch(mode) {
-                case 'exact':
-                    return searchValue === term;
-                case 'starts':
-                    return searchValue.startsWith(term);
-                case 'ends':
-                    return searchValue.endsWith(term);
-                case 'words':
-                    // Check if ALL words in search term are present
+                case 'exact': return searchValue === term;
+                case 'starts': return searchValue.startsWith(term);
+                case 'ends': return searchValue.endsWith(term);
+                case 'words': {
                     const words = term.split(/\s+/).filter(w => w.length > 0);
                     return words.every(word => searchValue.includes(word));
-                case 'contains':
-                default:
-                    return searchValue.includes(term);
+                }
+                default: return searchValue.includes(term);
             }
         }
 
         function getSearchableText(sale, field) {
             switch(field) {
-                case 'name':
-                    return sale.name || '';
-                case 'brand':
-                    return sale.brand || '';
-                case 'username':
-                    return sale.username || '';
-                case 'category':
-                    return sale.category || '';
-                case 'all':
-                default:
-                    return [
-                        sale.name || '',
-                        sale.brand || '',
-                        sale.username || '',
-                        sale.category || ''
-                    ].join(' ');
+                case 'name': return sale.name || '';
+                case 'brand': return sale.brand || '';
+                case 'username': return sale.username || '';
+                case 'category': return sale.category || '';
+                default: return [sale.name, sale.brand, sale.username, sale.category].filter(Boolean).join(' ');
             }
         }
 
         function applyAdvancedSearchAndRender() {
             const searchInput = document.getElementById('searchInput');
             currentSearchTerm = searchInput ? searchInput.value : '';
-            
-            // Get advanced search settings
             searchMode = document.getElementById('searchMode').value;
             searchField = document.getElementById('searchField').value;
             caseSensitive = document.getElementById('caseSensitive').value === 'true';
             
             let filtered = currentSalesData;
-            
             if (currentSearchTerm.trim()) {
-                const searchTerm = currentSearchTerm.trim();
-                
+                const term = currentSearchTerm.trim();
                 filtered = currentSalesData.filter(sale => {
-                    const searchableText = getSearchableText(sale, searchField);
-                    return matchesSearch(searchableText, searchTerm, searchMode, caseSensitive);
+                    const text = getSearchableText(sale, searchField);
+                    return matchesSearch(text, term, searchMode, caseSensitive);
                 });
             }
-            
             currentFilteredData = filtered;
             updateFilterInfo();
             renderSales(filtered, currentSearchTerm);
-            
-            // Update result count
             const resultCount = document.getElementById('resultCount');
             if (resultCount) {
                 const total = currentSalesData.length;
@@ -360,26 +325,14 @@
         async function loadSalesData() {
             updateOfflineBanner();
             console.log("Loading non‑screen sales data...");
-
             let url = '';
             if (currentStartDate && currentEndDate) {
                 url = `/api/today_sales?start_date=${currentStartDate}&end_date=${currentEndDate}&exclude_category=Screen`;
-            } else if (currentPeriod === 'all') {
-                url = '/api/today_sales?period=all&exclude_category=Screen';
-            } else if (currentPeriod === 'weekly') {
-                url = '/api/today_sales?period=weekly&exclude_category=Screen';
-            } else if (currentPeriod === 'monthly') {
-                url = '/api/today_sales?period=monthly&exclude_category=Screen';
-            } else if (currentPeriod === 'yearly') {
-                url = '/api/today_sales?period=yearly&exclude_category=Screen';
             } else {
-                url = '/api/today_sales?period=daily&exclude_category=Screen';
+                url = `/api/today_sales?period=${currentPeriod}&exclude_category=Screen`;
             }
-
             console.log("Fetching from URL:", url);
-            let data = [];
-            let fromCache = false;
-
+            let data = [], fromCache = false;
             try {
                 const res = await fetch(url);
                 if (!res.ok) {
@@ -387,73 +340,48 @@
                     throw new Error(`HTTP error! status: ${res.status}`);
                 }
                 data = await res.json();
+                // If the API returns an error object (due to our error handler), show it.
+                if (data.error) {
+                    console.error("API error:", data.error);
+                    alert("Error loading sales data: " + data.error);
+                    data = [];
+                }
                 cacheData(getCacheKey(), data);
                 console.log("Received data:", data.length, "records");
             } catch (error) {
                 console.warn("Offline – using cached non‑screen sales data");
                 fromCache = true;
                 const cached = getCachedData(getCacheKey());
-                if (cached) {
-                    data = cached;
-                } else {
-                    data = [];
-                }
+                if (cached) data = cached;
+                else data = [];
             }
-
             currentSalesData = data;
             updateFilterInfo();
             applyAdvancedSearchAndRender();
-            
             if (fromCache) {
                 const list = document.getElementById('salesList');
                 list.innerHTML += '<div class="text-xs text-gray-500 text-center mt-2">⚠️ Data may be outdated (offline)</div>';
             }
         }
 
-        // ---------- Update filter info ----------
         function updateFilterInfo() {
             const filterInfo = document.getElementById('filterInfo');
             const filterDesc = document.getElementById('filterDescription');
-            
-            let hasFilter = false;
-            let descriptions = [];
-            
+            let hasFilter = false, descriptions = [];
             if (currentSearchTerm) {
                 hasFilter = true;
-                let modeText = {
-                    'contains': 'contains',
-                    'exact': 'exactly matches',
-                    'starts': 'starts with',
-                    'ends': 'ends with',
-                    'words': 'contains all words'
-                }[searchMode] || 'contains';
-                
-                let fieldText = {
-                    'all': 'all fields',
-                    'name': 'product name',
-                    'brand': 'brand',
-                    'username': 'user',
-                    'category': 'category'
-                }[searchField] || 'all fields';
-                
+                let modeText = { 'contains': 'contains', 'exact': 'exactly matches', 'starts': 'starts with', 'ends': 'ends with', 'words': 'contains all words' }[searchMode] || 'contains';
+                let fieldText = { 'all': 'all fields', 'name': 'product name', 'brand': 'brand', 'username': 'user', 'category': 'category' }[searchField] || 'all fields';
                 descriptions.push(`Search: "${currentSearchTerm}" (${modeText} in ${fieldText})`);
             }
-            
             if (currentStartDate && currentEndDate) {
                 hasFilter = true;
                 descriptions.push(`Date: ${currentStartDate} to ${currentEndDate}`);
             } else if (currentPeriod) {
                 hasFilter = true;
-                const periodNames = {
-                    'daily': 'Today',
-                    'weekly': 'This Week',
-                    'monthly': 'This Month',
-                    'yearly': 'This Year',
-                    'all': 'All Time'
-                };
+                const periodNames = { 'daily': 'Today', 'weekly': 'This Week', 'monthly': 'This Month', 'yearly': 'This Year', 'all': 'All Time' };
                 descriptions.push(`Period: ${periodNames[currentPeriod] || currentPeriod}`);
             }
-            
             if (hasFilter) {
                 filterInfo.classList.remove('hidden');
                 filterDesc.textContent = descriptions.join(' | ');
@@ -462,40 +390,36 @@
             }
         }
 
-        // ---------- Reverse modal functions ----------
+        // ---------- Reverse modal ----------
         window.openReverseModal = function (saleId, saleItems) {
             currentReverseSaleId = saleId;
             const container = document.getElementById('reverseItemList');
             container.innerHTML = '';
             currentReverseItems = [];
-
             saleItems.forEach((item, idx) => {
-                const itemDiv = document.createElement('div');
-                itemDiv.className = 'border rounded-lg p-2 md:p-3 flex items-start space-x-2 md:space-x-3';
+                const div = document.createElement('div');
+                div.className = 'border rounded-lg p-2 md:p-3 flex items-start space-x-2 md:space-x-3';
                 const cb = document.createElement('input');
                 cb.type = 'checkbox';
                 cb.className = 'mt-1';
-                cb.dataset.item = JSON.stringify({
-                    batch_id: item.batch_id,
-                    quantity: item.quantity,
-                    product_id: item.product_id
-                });
+                cb.dataset.item = JSON.stringify({ batch_id: item.batch_id, quantity: item.quantity, product_id: item.product_id });
                 const info = document.createElement('div');
                 info.className = 'flex-1 text-xs md:text-sm';
-                info.innerHTML = `
+                let details = `
                     <strong>${escapeHtml(item.name)} (${escapeHtml(item.brand)})</strong><br>
                     Batch #${item.batch_id === -1 ? 'DELETED' : item.batch_id}<br>
                     Quantity: ${item.quantity}<br>
-                    Selling: ${formatMoney(item.selling_price)}<br>
-                    Cost: ${formatMoney(item.cost_price)}<br>
-                    Profit: ${formatMoney(item.profit)}
+                    Selling: ${formatMoney(item.selling_price)}
                 `;
-                itemDiv.appendChild(cb);
-                itemDiv.appendChild(info);
-                container.appendChild(itemDiv);
+                if (isAdmin) {
+                    details += `<br>Cost: ${formatMoney(item.cost_price)}<br>Profit: ${formatMoney(item.profit)}`;
+                }
+                info.innerHTML = details;
+                div.appendChild(cb);
+                div.appendChild(info);
+                container.appendChild(div);
                 currentReverseItems.push({ checkbox: cb, itemData: item });
             });
-
             document.getElementById('reverseModalTitle').innerHTML = `Reverse Items from Sale #${saleId}`;
             document.getElementById('reverseModal').classList.remove('hidden');
         };
@@ -509,7 +433,6 @@
         window.selectAllReverseItems = function () {
             currentReverseItems.forEach(i => i.checkbox.checked = true);
         };
-
         window.deselectAllReverseItems = function () {
             currentReverseItems.forEach(i => i.checkbox.checked = false);
         };
@@ -524,17 +447,12 @@
                 alert('Please select at least one item to reverse.');
                 return;
             }
-
             const itemsToReverse = selected.map(i => JSON.parse(i.checkbox.dataset.item));
-
             try {
                 const response = await fetch('/api/sales/reverse_items', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        sale_id: currentReverseSaleId,
-                        items: itemsToReverse
-                    })
+                    body: JSON.stringify({ sale_id: currentReverseSaleId, items: itemsToReverse })
                 });
                 const data = await response.json();
                 if (data.success) {
@@ -549,26 +467,18 @@
             }
         }
 
-        // ---------- Render sales cards with highlighting ----------
+        // ---------- Render sales cards ----------
         function renderSales(sales, searchTerm = '') {
             const container = document.getElementById('salesList');
             if (!sales || sales.length === 0) {
-                const message = searchTerm ? 
-                    `No sales found matching "${searchTerm}"` : 
-                    'No sales recorded for this period (Accessories & Phones).';
+                const message = searchTerm ? `No sales found matching "${searchTerm}"` : 'No sales recorded for this period (Accessories & Phones).';
                 container.innerHTML = `<div class="text-center text-gray-400 py-8">${message}</div>`;
                 updateSummary([]);
                 return;
             }
-
-            // Group sales by sale_id
             const saleMap = new Map();
             for (const sale of sales) {
-                if (!sale.sale_id) {
-                    console.warn('Sale missing sale_id:', sale);
-                    continue;
-                }
-                
+                if (!sale.sale_id) continue;
                 if (!saleMap.has(sale.sale_id)) {
                     saleMap.set(sale.sale_id, {
                         sale_id: sale.sale_id,
@@ -582,30 +492,19 @@
                         items: []
                     });
                 }
-                
                 saleMap.get(sale.sale_id).items.push(sale);
             }
-
-            let html = '';
-            let saleCount = 0;
-            
+            let html = '', saleCount = 0;
             for (const [saleId, saleGroup] of saleMap) {
-                if (!saleGroup.items || saleGroup.items.length === 0) {
-                    continue;
-                }
-
+                if (!saleGroup.items || saleGroup.items.length === 0) continue;
                 saleCount++;
                 const paymentBadge = getPaymentBadge(saleGroup.payment_method, saleGroup.cheque_number);
-
                 const itemsHtml = saleGroup.items.map(item => {
                     const statusText = item.is_deleted_batch ? '⚠️ (Batch Deleted - History Only)' : '';
-                    // Highlight search term in product name if it matches
                     let displayName = escapeHtml(item.name);
                     let displayBrand = escapeHtml(item.brand);
-                    
                     if (searchTerm && searchTerm.trim()) {
                         const term = searchTerm.trim();
-                        // Simple highlighting - could be enhanced
                         if (item.name && item.name.toLowerCase().includes(term.toLowerCase())) {
                             const regex = new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
                             displayName = escapeHtml(item.name).replace(regex, '<span class="highlight-match">$1</span>');
@@ -615,7 +514,13 @@
                             displayBrand = escapeHtml(item.brand).replace(regex, '<span class="highlight-match">$1</span>');
                         }
                     }
-                    
+                    let extraDetails = '';
+                    if (isAdmin) {
+                        extraDetails = `
+                            <div>Cost: ${formatMoney(item.cost_price)}</div>
+                            <div>Profit: ${formatMoney(item.profit)}</div>
+                        `;
+                    }
                     return `
                         <div class="border-b pb-1 md:pb-2 mb-1 md:mb-2 last:border-0">
                             <div class="font-semibold text-indigo-700 text-sm md:text-base">${displayName} (${displayBrand}) ${statusText}</div>
@@ -623,14 +528,12 @@
                                 <div>Qty: ${item.quantity}</div>
                                 <div>Selling: ${formatMoney(item.selling_price)}</div>
                                 <div>Batch: ${item.batch_id === -1 ? 'DELETED' : '#' + item.batch_id}</div>
-                                <div>Cost: ${formatMoney(item.cost_price)}</div>
+                                ${extraDetails}
                                 <div>Subtotal: ${formatMoney(item.subtotal)}</div>
-                                <div>Profit: ${formatMoney(item.profit)}</div>
                             </div>
                         </div>
                     `;
                 }).join('');
-
                 html += `
                     <div class="bg-white rounded-xl shadow-md p-3 md:p-4 border" data-sale-id="${saleId}">
                         <div class="flex flex-wrap justify-between items-start mb-1 md:mb-2 gap-1">
@@ -649,13 +552,8 @@
                     </div>
                 `;
             }
-            
             container.innerHTML = html;
-            
-            // Update summary with all sales
             updateSummary(sales);
-
-            // Attach reverse event listeners
             document.querySelectorAll('.reverse-sale-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     const saleId = parseInt(btn.getAttribute('data-sale-id'));
@@ -663,23 +561,20 @@
                     openReverseModal(saleId, saleItems);
                 });
             });
-            
             console.log(`✅ Rendered ${saleCount} sales with ${sales.length} total items`);
         }
 
-        // ---------- Update summary ----------
+        // ---------- Update summary (hide profit for non‑admins) ----------
         function updateSummary(sales) {
             const seenSales = new Set();
             let totalSales = 0, totalDiscount = 0, totalProfit = 0, totalItems = 0;
             let cashTotal = 0, momoTotal = 0, chequeTotal = 0;
-
             for (const sale of sales) {
                 if (!seenSales.has(sale.sale_id)) {
                     totalSales += sale.total || 0;
                     totalDiscount += sale.discount || 0;
                     totalProfit += sale.net_profit || 0;
                     seenSales.add(sale.sale_id);
-
                     const method = (sale.payment_method || 'cash').toLowerCase();
                     if (method === 'cash' || method === '') {
                         cashTotal += sale.total || 0;
@@ -693,9 +588,7 @@
                 }
                 totalItems += sale.quantity || 0;
             }
-
             const totalSalesCount = seenSales.size;
-
             let periodText = '';
             if (currentStartDate && currentEndDate) {
                 periodText = `📅 ${currentStartDate} to ${currentEndDate}`;
@@ -709,10 +602,12 @@
                     default: periodText = '📅 Today';
                 }
             }
+            let filterSummary = currentSearchTerm ? ` | 🔍 "${currentSearchTerm}"` : '';
 
-            let filterSummary = '';
-            if (currentSearchTerm) {
-                filterSummary = ` | 🔍 "${currentSearchTerm}"`;
+            let profitHtml = '';
+            if (isAdmin) {
+                profitHtml = `<span class="text-gray-500">|</span>
+                              <span>📈 Profit: <strong class="${totalProfit >= 0 ? 'text-teal-400' : 'text-red-400'}">${formatMoney(totalProfit)}</strong></span>`;
             }
 
             document.getElementById('summaryBar').innerHTML = `
@@ -726,8 +621,7 @@
                     <span>💰 Sales: <strong class="text-green-400">${formatMoney(totalSales)}</strong></span>
                     <span class="text-gray-500">|</span>
                     <span>📉 Disc: <strong class="text-red-400">${formatMoney(totalDiscount)}</strong></span>
-                    <span class="text-gray-500">|</span>
-                    <span>📈 Profit: <strong class="${totalProfit >= 0 ? 'text-teal-400' : 'text-red-400'}">${formatMoney(totalProfit)}</strong></span>
+                    ${profitHtml}
                     ${filterSummary}
                 </div>
                 <div class="flex flex-wrap justify-center items-center gap-1 md:gap-2 text-[9px] md:text-xs mt-0.5">
@@ -740,47 +634,32 @@
             `;
         }
 
-        // ---------- PDF export ----------
+        // ---------- PDF export (faster – reduce columns) ----------
         async function exportPDF() {
             if (!navigator.onLine) {
                 alert('PDF export requires internet. Please connect and try again.');
                 return;
             }
-            
             const dataToExport = currentFilteredData;
-            
             if (!dataToExport || dataToExport.length === 0) {
                 alert('No data to export. Please adjust your filters.');
                 return;
             }
-            
             let periodText = '';
             if (currentStartDate && currentEndDate) {
                 periodText = `Period: ${currentStartDate} to ${currentEndDate}`;
             } else {
-                switch (currentPeriod) {
-                    case 'daily': periodText = 'Today'; break;
-                    case 'weekly': periodText = 'This Week'; break;
-                    case 'monthly': periodText = 'This Month'; break;
-                    case 'yearly': periodText = 'This Year'; break;
-                    case 'all': periodText = 'All Time'; break;
-                    default: periodText = 'Today';
-                }
+                const periodNames = { 'daily': 'Today', 'weekly': 'This Week', 'monthly': 'This Month', 'yearly': 'This Year', 'all': 'All Time' };
+                periodText = periodNames[currentPeriod] || 'Today';
             }
-            
             if (currentSearchTerm) {
-                const modeText = {
-                    'contains': 'contains',
-                    'exact': 'exactly matches',
-                    'starts': 'starts with',
-                    'ends': 'ends with',
-                    'words': 'contains all words'
-                }[searchMode] || 'contains';
+                const modeText = { 'contains': 'contains', 'exact': 'exactly matches', 'starts': 'starts with', 'ends': 'ends with', 'words': 'contains all words' }[searchMode] || 'contains';
                 periodText += ` (Filtered by: "${currentSearchTerm}" - ${modeText})`;
             }
-            
+            // For non‑admins, we send the data as is, but we will not include cost/profit columns in the PDF if not admin.
+            // However, the backend PDF generation currently includes cost/profit. We'll skip those columns for non‑admins by modifying the request.
+            // For simplicity, we send the data and the backend will decide what to include.
             const summary = document.getElementById('summaryBar').innerText;
-            
             try {
                 const response = await fetch('/api/today_sales/pdf', {
                     method: 'POST',
@@ -788,7 +667,8 @@
                     body: JSON.stringify({
                         sales_data: dataToExport,
                         period_text: periodText + ' (Accessories & Phones)',
-                        summary: summary
+                        summary: summary,
+                        is_admin: isAdmin  // pass role to backend
                     })
                 });
                 if (response.ok) {
@@ -815,36 +695,18 @@
         document.getElementById('refreshBtn').addEventListener('click', () => loadSalesData());
         document.getElementById('pdfBtn').addEventListener('click', exportPDF);
         document.getElementById('confirmReverseBtn').addEventListener('click', confirmReverseSelected);
-        
-        // Search input with real-time filtering
-        document.getElementById('searchInput').addEventListener('input', () => {
-            applyAdvancedSearchAndRender();
-        });
-        
-        // Clear search
+        document.getElementById('searchInput').addEventListener('input', applyAdvancedSearchAndRender);
         document.getElementById('clearSearchBtn').addEventListener('click', () => {
             document.getElementById('searchInput').value = '';
             applyAdvancedSearchAndRender();
         });
-        
-        // Advanced toggle
         document.getElementById('advancedToggle').addEventListener('click', () => {
-            const advanced = document.getElementById('advancedSearch');
-            advanced.classList.toggle('hidden');
+            document.getElementById('advancedSearch').classList.toggle('hidden');
         });
-        
-        // Apply advanced search
-        document.getElementById('applyAdvancedSearch').addEventListener('click', () => {
-            applyAdvancedSearchAndRender();
-        });
-        
-        // Apply search settings on Enter key in search input
+        document.getElementById('applyAdvancedSearch').addEventListener('click', applyAdvancedSearchAndRender);
         document.getElementById('searchInput').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                applyAdvancedSearchAndRender();
-            }
+            if (e.key === 'Enter') applyAdvancedSearchAndRender();
         });
-
         document.getElementById('applyDateBtn').addEventListener('click', () => {
             const start = document.getElementById('startDate').value;
             const end = document.getElementById('endDate').value;
@@ -857,7 +719,6 @@
                 alert('Please select both start and end dates.');
             }
         });
-
         document.querySelectorAll('.period-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 currentPeriod = btn.getAttribute('data-period');
@@ -870,11 +731,7 @@
                 loadSalesData();
             });
         });
-
-        // ---------- Auto-refresh on reconnect ----------
-        window.addEventListener('online', function () {
-            loadSalesData();
-        });
+        window.addEventListener('online', () => loadSalesData());
 
         // ---------- Initial load ----------
         const today = new Date().toISOString().split('T')[0];

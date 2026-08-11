@@ -596,12 +596,10 @@
                 <i class="fas fa-boxes w-5"></i> Products (Accessories)
             </a>
 
-            <!-- Today's Sales (Accessories) – ONLY for admin -->
-            {% if current_user and current_user.role == 'admin' %}
+            <!-- TODAY'S SALES (ACCESSORIES) – NOW SHOW TO ALL USERS -->
             <a href="/today-sales" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                 <i class="fas fa-chart-line w-5"></i> Today's Sales (Accessories)
             </a>
-            {% endif %}
 
             <!-- Analytics – only for admin -->
             {% if current_user and current_user.role == 'admin' %}
@@ -634,12 +632,10 @@
                     <a href="/products/screens" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                         <i class="fas fa-boxes w-5"></i> Products (Screens)
                     </a>
-                    <!-- Today's Sales (Screens) – ONLY for admin -->
-                    {% if current_user and current_user.role == 'admin' %}
+                    <!-- TODAY'S SALES (SCREENS) – NOW SHOW TO ALL USERS -->
                     <a href="/today-sales/screens" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                         <i class="fas fa-chart-line w-5"></i> Today's Sales (Screens)
                     </a>
-                    {% endif %}
                 </div>
             </div>
 
@@ -647,9 +643,6 @@
             {% if current_user and current_user.role == 'admin' %}
             <div class="border-t border-gray-700 my-2"></div>
             <div class="text-xs text-gray-500 uppercase px-3 py-1">Admin</div>
-
-            <!-- Claims – show to all users, but we place it inside admin section? No, we'll move it out. We'll keep it outside admin section so users can see it. -->
-            <!-- Actually, we'll put Claims before the admin divider for everyone, but after the screens. Let's do that. -->
             {% endif %}
 
             <!-- Claims – show to all logged-in users -->

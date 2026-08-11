@@ -6,6 +6,9 @@
     ⚠️ You are offline – showing cached screen sales data. Data will refresh when you reconnect.
 </div>
 
+<!-- Hidden user role for JavaScript -->
+<div id="userRole" data-role="{{ current_user.role if current_user else 'user' }}" style="display:none;"></div>
+
 <!-- Header with screen indicator -->
 <div class="flex flex-wrap justify-between items-center gap-3 mb-6">
     <div class="flex items-center gap-2">
@@ -189,6 +192,11 @@
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         console.log("DOM fully loaded - initializing screen today sales page with Advanced Search");
+
+        // Get user role from hidden element
+        const userRoleEl = document.getElementById('userRole');
+        const isAdmin = userRoleEl ? userRoleEl.getAttribute('data-role') === 'admin' : false;
+        console.log("User is admin:", isAdmin);
 
         let currentSalesData = [];
         let currentFilteredData = [];
@@ -482,14 +490,16 @@
                 });
                 const info = document.createElement('div');
                 info.className = 'flex-1 text-xs md:text-sm';
-                info.innerHTML = `
+                let details = `
                     <strong>${escapeHtml(item.name)} (${escapeHtml(item.brand)})</strong><br>
                     Batch #${item.batch_id === -1 ? 'DELETED' : item.batch_id}<br>
                     Quantity: ${item.quantity}<br>
-                    Selling: ${formatMoney(item.selling_price)}<br>
-                    Cost: ${formatMoney(item.cost_price)}<br>
-                    Profit: ${formatMoney(item.profit)}
+                    Selling: ${formatMoney(item.selling_price)}
                 `;
+                if (isAdmin) {
+                    details += `<br>Cost: ${formatMoney(item.cost_price)}<br>Profit: ${formatMoney(item.profit)}`;
+                }
+                info.innerHTML = details;
                 itemDiv.appendChild(cb);
                 itemDiv.appendChild(info);
                 container.appendChild(itemDiv);
@@ -549,7 +559,7 @@
             }
         }
 
-        // ---------- Render sales cards with highlighting ----------
+        // ---------- Render sales cards with highlighting and role-based visibility ----------
         function renderSales(sales, searchTerm = '') {
             const container = document.getElementById('salesList');
             if (!sales || sales.length === 0) {
@@ -599,13 +609,11 @@
 
                 const itemsHtml = saleGroup.items.map(item => {
                     const statusText = item.is_deleted_batch ? '⚠️ (Batch Deleted - History Only)' : '';
-                    // Highlight search term in product name if it matches
                     let displayName = escapeHtml(item.name);
                     let displayBrand = escapeHtml(item.brand);
                     
                     if (searchTerm && searchTerm.trim()) {
                         const term = searchTerm.trim();
-                        // Simple highlighting - could be enhanced
                         if (item.name && item.name.toLowerCase().includes(term.toLowerCase())) {
                             const regex = new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
                             displayName = escapeHtml(item.name).replace(regex, '<span class="highlight-match">$1</span>');
@@ -616,6 +624,14 @@
                         }
                     }
                     
+                    let extraDetails = '';
+                    if (isAdmin) {
+                        extraDetails = `
+                            <div>Cost: ${formatMoney(item.cost_price)}</div>
+                            <div>Profit: ${formatMoney(item.profit)}</div>
+                        `;
+                    }
+                    
                     return `
                         <div class="border-b pb-1 md:pb-2 mb-1 md:mb-2 last:border-0">
                             <div class="font-semibold text-indigo-700 text-sm md:text-base">${displayName} (${displayBrand}) ${statusText}</div>
@@ -623,9 +639,8 @@
                                 <div>Qty: ${item.quantity}</div>
                                 <div>Selling: ${formatMoney(item.selling_price)}</div>
                                 <div>Batch: ${item.batch_id === -1 ? 'DELETED' : '#' + item.batch_id}</div>
-                                <div>Cost: ${formatMoney(item.cost_price)}</div>
+                                ${extraDetails}
                                 <div>Subtotal: ${formatMoney(item.subtotal)}</div>
-                                <div>Profit: ${formatMoney(item.profit)}</div>
                             </div>
                         </div>
                     `;
@@ -667,7 +682,7 @@
             console.log(`✅ Rendered ${saleCount} screen sales with ${sales.length} total items`);
         }
 
-        // ---------- Update summary ----------
+        // ---------- Update summary (hide profit for non‑admins) ----------
         function updateSummary(sales) {
             const seenSales = new Set();
             let totalSales = 0, totalDiscount = 0, totalProfit = 0, totalItems = 0;
@@ -710,9 +725,12 @@
                 }
             }
 
-            let filterSummary = '';
-            if (currentSearchTerm) {
-                filterSummary = ` | 🔍 "${currentSearchTerm}"`;
+            let filterSummary = currentSearchTerm ? ` | 🔍 "${currentSearchTerm}"` : '';
+
+            let profitHtml = '';
+            if (isAdmin) {
+                profitHtml = `<span class="text-gray-500">|</span>
+                              <span>📈 Profit: <strong class="${totalProfit >= 0 ? 'text-teal-400' : 'text-red-400'}">${formatMoney(totalProfit)}</strong></span>`;
             }
 
             document.getElementById('summaryBar').innerHTML = `
@@ -726,8 +744,7 @@
                     <span>💰 Sales: <strong class="text-green-400">${formatMoney(totalSales)}</strong></span>
                     <span class="text-gray-500">|</span>
                     <span>📉 Disc: <strong class="text-red-400">${formatMoney(totalDiscount)}</strong></span>
-                    <span class="text-gray-500">|</span>
-                    <span>📈 Profit: <strong class="${totalProfit >= 0 ? 'text-teal-400' : 'text-red-400'}">${formatMoney(totalProfit)}</strong></span>
+                    ${profitHtml}
                     ${filterSummary}
                 </div>
                 <div class="flex flex-wrap justify-center items-center gap-1 md:gap-2 text-[9px] md:text-xs mt-0.5">
@@ -740,7 +757,7 @@
             `;
         }
 
-        // ---------- PDF export ----------
+        // ---------- PDF export (pass is_admin to backend) ----------
         async function exportPDF() {
             if (!navigator.onLine) {
                 alert('PDF export requires internet. Please connect and try again.');
@@ -788,7 +805,8 @@
                     body: JSON.stringify({
                         sales_data: dataToExport,
                         period_text: periodText + ' (Screens)',
-                        summary: summary
+                        summary: summary,
+                        is_admin: isAdmin  // <-- pass role to backend
                     })
                 });
                 if (response.ok) {
