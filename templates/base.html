@@ -631,16 +631,35 @@
     const PIN_CODE = '1234'; // 4‑digit PIN
 
     // ============================================================
-    //  VERSION CHECK – invalidate old installations
+    //  VERSION CHECK – NO REDIRECT LOOP
     // ============================================================
     (function checkVersion() {
+        // If we are already on the reinstall page, skip the redirect.
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('reinstall') === 'true') {
+            return;
+        }
+
         const storedVersion = localStorage.getItem('app_version');
         if (storedVersion !== APP_VERSION) {
+            // Clear all app data
             localStorage.clear();
-            alert('This version is outdated. Please uninstall the old app and reinstall from the web.');
-            const url = new URL(window.location.href);
-            url.searchParams.set('reinstall', 'true');
-            window.location.href = url.toString();
+            // Show a non‑blocking toast
+            const toast = document.createElement('div');
+            toast.textContent = '📱 This version is outdated. Please uninstall the old app and reinstall from the web.';
+            toast.style.cssText = `
+                position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+                background: #EF4444; color: white; padding: 16px 24px;
+                border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                z-index: 9999; font-size: 14px; max-width: 90vw;
+                text-align: center;
+                font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            `;
+            document.body.appendChild(toast);
+            // Redirect after a short delay so the toast is visible
+            setTimeout(() => {
+                window.location.href = '/?reinstall=true';
+            }, 2000);
         }
     })();
 

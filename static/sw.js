@@ -1,21 +1,11 @@
 // static/sw.js
 // ============================================================
-//  Only cache public assets & pages at install time.
-//  Protected routes (requiring login) are cached on‑demand.
+//  Minimal, robust Service Worker – pre‑cache only static assets
 // ============================================================
 
-const CACHE_NAME = 'oxsmart-v3';  // ⚠️ increment this on every deploy
-const OFFLINE_PAGE = '/offline.html';
+const CACHE_NAME = 'oxsmart-v4';  // ⚠️ increment this on every deploy
 
-// ----- PUBLIC ROUTES (no login required) -----
-const PUBLIC_ROUTES = [
-  '/',
-  '/login',
-  '/signup',
-  '/offline',          // if you have a dedicated offline page
-];
-
-// ----- STATIC ASSETS (always cache) -----
+// ----- Only static assets (no HTML pages) -----
 const STATIC_ASSETS = [
   '/static/css/style.css',
   '/static/js/offline.js',
@@ -27,16 +17,14 @@ const STATIC_ASSETS = [
   // Add any other fonts, images, etc.
 ];
 
-// Combine into pre‑cache list
-const PRECACHE_URLS = [...PUBLIC_ROUTES, ...STATIC_ASSETS];
-
 // ===== INSTALL =====
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        console.log('📦 Pre‑caching public assets');
-        return cache.addAll(PRECACHE_URLS);
+        console.log('📦 Pre‑caching static assets');
+        // Only cache static assets – no HTML pages that might redirect
+        return cache.addAll(STATIC_ASSETS);
       })
       .then(() => self.skipWaiting())   // force activation
   );
@@ -74,7 +62,10 @@ self.addEventListener('fetch', event => {
       caches.open(CACHE_NAME).then(cache => {
         return fetch(request)
           .then(networkResponse => {
-            cache.put(request, networkResponse.clone());
+            // Cache the response (only if it's a success)
+            if (networkResponse.ok) {
+              cache.put(request, networkResponse.clone());
+            }
             return networkResponse;
           })
           .catch(() => cache.match(request));
@@ -83,36 +74,45 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // ----- Pages & static assets (HTML, CSS, JS) -----
+  // ----- Pages & static assets -----
   event.respondWith(
     caches.match(request)
       .then(cachedResponse => {
         if (cachedResponse) {
-          // Stale‑while‑revalidate: update in background
+          // Stale‑while‑revalidate – update in background
           event.waitUntil(
             fetch(request)
               .then(networkResponse => {
-                return caches.open(CACHE_NAME).then(cache => {
-                  cache.put(request, networkResponse.clone());
-                  return networkResponse;
-                });
+                // Only cache successful responses (not 302, 404, etc.)
+                if (networkResponse.ok) {
+                  return caches.open(CACHE_NAME).then(cache => {
+                    cache.put(request, networkResponse.clone());
+                    return networkResponse;
+                  });
+                }
               })
-              .catch(() => {})   // ignore network errors
+              .catch(() => {})
           );
           return cachedResponse;
         }
 
-        // Not in cache – try network, then cache for next time
+        // Not in cache – try network
         return fetch(request)
           .then(networkResponse => {
-            const clone = networkResponse.clone();
-            caches.open(CACHE_NAME).then(cache => cache.put(request, clone));
+            // Cache the response if it's a success (200)
+            if (networkResponse.ok) {
+              const clone = networkResponse.clone();
+              caches.open(CACHE_NAME).then(cache => cache.put(request, clone));
+            }
             return networkResponse;
           })
           .catch(() => {
-            // If the request is for a page (HTML), show offline fallback
+            // If the request is for a page (HTML), return a simple offline message
             if (request.headers.get('accept').includes('text/html')) {
-              return caches.match(OFFLINE_PAGE);
+              return new Response(
+                `<html><body><h1>You are offline</h1><p>Please reconnect to use the app.</p></body></html>`,
+                { status: 503, headers: { 'Content-Type': 'text/html' } }
+              );
             }
             // For other assets, return a simple error response
             return new Response('Offline', { status: 503 });
