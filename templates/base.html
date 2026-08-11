@@ -628,13 +628,18 @@
     // ============================================================
     const APP_VERSION = 'v3';
     const INSTALL_PASSWORD = 'oxsmart2026';
-    const PIN_CODE = '1234'; // 4‑digit PIN
+    const PIN_CODE = '1234';
 
     // ============================================================
-    //  VERSION CHECK – NO REDIRECT LOOP
+    //  VERSION CHECK – ONLY FOR INSTALLED APP (standalone mode)
     // ============================================================
     (function checkVersion() {
-        // If we are already on the reinstall page, skip the redirect.
+        // ⚠️ Skip version check for web version (not installed)
+        if (!window.matchMedia('(display-mode: standalone)').matches) {
+            return;
+        }
+
+        // If already on reinstall page, stop
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('reinstall') === 'true') {
             return;
@@ -642,9 +647,9 @@
 
         const storedVersion = localStorage.getItem('app_version');
         if (storedVersion !== APP_VERSION) {
-            // Clear all app data
-            localStorage.clear();
-            // Show a non‑blocking toast
+            // Clear only the app version (keep other data)
+            localStorage.removeItem('app_version');
+            // Show a toast
             const toast = document.createElement('div');
             toast.textContent = '📱 This version is outdated. Please uninstall the old app and reinstall from the web.';
             toast.style.cssText = `
@@ -656,7 +661,6 @@
                 font-family: -apple-system, BlinkMacSystemFont, sans-serif;
             `;
             document.body.appendChild(toast);
-            // Redirect after a short delay so the toast is visible
             setTimeout(() => {
                 window.location.href = '/?reinstall=true';
             }, 2000);
@@ -1149,11 +1153,11 @@
                 }
             }
 
-            // Reinstall notice
+            // Reinstall notice (only show if reinstall param is set)
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('reinstall') === 'true') {
                 const toast = document.createElement('div');
-                toast.textContent = '📱 Please uninstall the old app, then tap "Install App" to reinstall.';
+                toast.textContent = '📱 Please uninstall the old app from your device, then tap "Install App" to reinstall.';
                 toast.style.cssText = `
                     position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%);
                     background: #FEF3C7; color: #92400E; padding: 16px 24px;
