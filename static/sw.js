@@ -3,18 +3,19 @@
 //  Minimal, robust Service Worker – pre‑cache only static assets
 // ============================================================
 
-const CACHE_NAME = 'oxsmart-v4';  // ⚠️ increment this on every deploy
+const CACHE_NAME = 'oxsmart-v5';  // ⚠️ increment this on every deploy
 
-// ----- Only static assets (no HTML pages) -----
+// ----- Only static assets that actually exist -----
+// (Add any other fonts, images, etc. that you have)
 const STATIC_ASSETS = [
   '/static/css/style.css',
   '/static/js/offline.js',
-  '/static/js/main.js',
-  '/static/js/app.js',       // if present
   '/static/manifest.json',
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png',
-  // Add any other fonts, images, etc.
+  // Add any other assets you need, e.g.:
+  // '/static/fonts/...',
+  // '/static/images/...',
 ];
 
 // ===== INSTALL =====
