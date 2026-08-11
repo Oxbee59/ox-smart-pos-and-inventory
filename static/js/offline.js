@@ -246,14 +246,30 @@ function updatePendingBadge() {
 
 window.addEventListener('online', function() {
     console.log('🌐 Connection restored – syncing all pending items...');
-    syncPendingSales();
-    syncPendingPurchases();
-    syncPendingProductDeletions();
-    syncPendingBatchDeletions();
+    syncAllPending();
 });
+
+// ==================== SYNC ALL (manual) ====================
+
+async function syncAllPending() {
+    if (!navigator.onLine) {
+        console.warn('⛔ Offline – skipping sync');
+        return;
+    }
+    console.log('🔄 Syncing all pending data...');
+    await syncPendingSales();
+    await syncPendingPurchases();
+    await syncPendingProductDeletions();
+    await syncPendingBatchDeletions();
+    updatePendingBadge();
+}
 
 // ==================== BADGE UPDATE ON PAGE LOAD ====================
 
 document.addEventListener('DOMContentLoaded', function() {
     updatePendingBadge();
+    // If online, sync automatically
+    if (navigator.onLine) {
+        syncAllPending();
+    }
 });
