@@ -18,9 +18,11 @@
     <!-- Your custom CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 
+    <!-- ===== SERVICE WORKER WITH CACHE-BUSTING ===== -->
     <script>
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/static/sw.js')
+            // Add version parameter to force fresh fetch
+            navigator.serviceWorker.register('/static/sw.js?v=5')
                 .then(() => console.log('✅ Service Worker registered'))
                 .catch(err => console.log('❌ SW registration failed:', err));
         }
@@ -634,7 +636,7 @@
     //  VERSION CHECK – ONLY FOR INSTALLED APP (standalone mode)
     // ============================================================
     (function checkVersion() {
-        // ⚠️ Skip version check for web version (not installed)
+        // Skip version check for web version (not installed)
         if (!window.matchMedia('(display-mode: standalone)').matches) {
             return;
         }
@@ -647,9 +649,7 @@
 
         const storedVersion = localStorage.getItem('app_version');
         if (storedVersion !== APP_VERSION) {
-            // Clear only the app version (keep other data)
             localStorage.removeItem('app_version');
-            // Show a toast
             const toast = document.createElement('div');
             toast.textContent = '📱 This version is outdated. Please uninstall the old app and reinstall from the web.';
             toast.style.cssText = `
@@ -668,7 +668,7 @@
     })();
 
     // ============================================================
-    //  PIN LOCK SCREEN – ONLY FOR STANDALONE (INSTALLED APP)
+    //  PIN LOCK SCREEN – ONLY FOR STANDALONE
     // ============================================================
     let pinAttempt = '';
     const MAX_PIN_LENGTH = 4;
@@ -692,14 +692,12 @@
         if (value === 'enter') {
             if (pinAttempt.length === MAX_PIN_LENGTH) {
                 if (pinAttempt === PIN_CODE) {
-                    // Correct PIN
                     pinError.textContent = '';
                     localStorage.setItem('pin_unlocked', 'true');
                     localStorage.setItem('pin_unlocked_at', Date.now().toString());
                     pinLockScreen.classList.remove('active');
                     pinAttempt = '';
                     updatePinDots();
-                    // Resume app
                     if (typeof onPinUnlocked === 'function') onPinUnlocked();
                 } else {
                     pinError.textContent = 'Incorrect PIN. Try again.';
@@ -718,14 +716,12 @@
         }
     }
 
-    // Attach keypad events
     document.querySelectorAll('.pin-key').forEach(btn => {
         btn.addEventListener('click', () => {
             handlePinInput(btn.dataset.value);
         });
     });
 
-    // Also support keyboard input
     document.addEventListener('keydown', (e) => {
         if (!pinLockScreen.classList.contains('active')) return;
         if (e.key >= '0' && e.key <= '9') {
@@ -740,21 +736,15 @@
         }
     });
 
-    // Check if PIN is required – SKIP IF NOT STANDALONE
     function checkPinLock() {
-        // Only apply PIN lock if running in standalone mode (installed app)
         if (!window.matchMedia('(display-mode: standalone)').matches) {
-            return true; // unlocked – no PIN needed
+            return true;
         }
-
         const unlocked = localStorage.getItem('pin_unlocked') === 'true';
         const unlockedAt = parseInt(localStorage.getItem('pin_unlocked_at') || '0', 10);
         const now = Date.now();
-        const SESSION_TIMEOUT = 60 * 1000; // 1 minute idle lock (change as needed)
-
-        // If never unlocked or timeout exceeded, show lock
+        const SESSION_TIMEOUT = 60 * 1000;
         if (!unlocked || (now - unlockedAt) > SESSION_TIMEOUT) {
-            // Reset unlock status
             localStorage.removeItem('pin_unlocked');
             localStorage.removeItem('pin_unlocked_at');
             pinLockScreen.classList.add('active');
@@ -766,22 +756,17 @@
         return true;
     }
 
-    // Call this after successful PIN unlock to extend session
     function refreshPinUnlock() {
         localStorage.setItem('pin_unlocked', 'true');
         localStorage.setItem('pin_unlocked_at', Date.now().toString());
     }
 
-    // When PIN is correctly entered, refresh the unlock
-    // Also we can refresh on user activity.
     let activityTimer;
     function resetActivityTimer() {
         clearTimeout(activityTimer);
         if (pinLockScreen.classList.contains('active')) return;
-        // Only reset timer if in standalone mode
         if (!window.matchMedia('(display-mode: standalone)').matches) return;
         activityTimer = setTimeout(() => {
-            // Lock after inactivity
             if (!pinLockScreen.classList.contains('active')) {
                 localStorage.removeItem('pin_unlocked');
                 localStorage.removeItem('pin_unlocked_at');
@@ -793,7 +778,6 @@
         }, SESSION_TIMEOUT);
     }
 
-    // Track user activity to reset timer – only in standalone mode
     ['click', 'touchstart', 'keydown'].forEach(event => {
         document.addEventListener(event, () => {
             if (pinLockScreen.classList.contains('active')) return;
@@ -804,7 +788,7 @@
     });
 
     // ============================================================
-    //  SESSION MANAGEMENT (7‑day expiry) – unchanged
+    //  SESSION MANAGEMENT (7‑day expiry)
     // ============================================================
     const SESSION_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -824,7 +808,7 @@
     }
 
     // ============================================================
-    //  INSTALL PASSWORD LOGIC – unchanged
+    //  INSTALL PASSWORD LOGIC
     // ============================================================
     let deferredPrompt = null;
     const installButton = document.getElementById('installAppBtn');
@@ -903,7 +887,7 @@
     }
 
     // ============================================================
-    //  SIDEBAR / DROPDOWN FUNCTIONS – unchanged
+    //  SIDEBAR / DROPDOWN FUNCTIONS
     // ============================================================
     function toggleSidebar() {
         const sidebar = document.getElementById('sidebar');
@@ -942,7 +926,7 @@
     });
 
     // ============================================================
-    //  LOGOUT – unchanged
+    //  LOGOUT
     // ============================================================
     async function logout() {
         clearSession();
@@ -979,7 +963,7 @@
     }
 
     // ============================================================
-    //  SYNC REMINDER (6 hours) – unchanged
+    //  SYNC REMINDER (6 hours)
     // ============================================================
     const SYNC_INTERVAL = 6 * 60 * 60 * 1000;
 
@@ -1040,7 +1024,7 @@
     }
 
     // ============================================================
-    //  UNIFIED SYNC – unchanged
+    //  UNIFIED SYNC
     // ============================================================
     window.syncAllPending = async function() {
         if (!navigator.onLine) {
@@ -1090,26 +1074,20 @@
     //  INITIALIZATION
     // ============================================================
     document.addEventListener('DOMContentLoaded', function() {
-        // Footer year
         const yearSpan = document.getElementById('footerYear');
         if (yearSpan) yearSpan.textContent = new Date().getFullYear();
 
-        // 1. Check PIN lock (only applies if standalone)
         const pinUnlocked = checkPinLock();
         if (!pinUnlocked) {
-            // PIN screen is active – wait for unlock
             const observer = new MutationObserver(() => {
                 if (!pinLockScreen.classList.contains('active')) {
-                    // PIN unlocked – now proceed
                     refreshPinUnlock();
                     resetActivityTimer();
-                    // Continue with app init
                     initializeApp();
                     observer.disconnect();
                 }
             });
             observer.observe(pinLockScreen, { attributes: true, attributeFilter: ['class'] });
-            // Fallback in case PIN is unlocked immediately
             setTimeout(() => {
                 if (!pinLockScreen.classList.contains('active')) {
                     initializeApp();
@@ -1117,7 +1095,6 @@
                 }
             }, 100);
         } else {
-            // Already unlocked – proceed
             refreshPinUnlock();
             resetActivityTimer();
             initializeApp();
@@ -1157,7 +1134,6 @@
                 }
             }
 
-            // Reinstall notice (only show if reinstall param is set)
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('reinstall') === 'true') {
                 const toast = document.createElement('div');
@@ -1186,7 +1162,7 @@
     });
 
     // ============================================================
-    //  AUTO-SYNC ON RECONNECT – unchanged
+    //  AUTO-SYNC ON RECONNECT
     // ============================================================
     window.addEventListener('online', function() {
         console.log('🌐 Connection restored – syncing all pending items...');
@@ -1196,7 +1172,7 @@
     });
 
     // ============================================================
-    //  SIDEBAR AUTO-CLOSE ON RESIZE – unchanged
+    //  SIDEBAR AUTO-CLOSE ON RESIZE
     // ============================================================
     window.addEventListener('resize', function() {
         if (window.innerWidth >= 768) closeSidebar();
