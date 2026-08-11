@@ -549,6 +549,64 @@
             font-weight: 700;
             text-transform: uppercase;
         }
+
+        /* ===== INSTALL PASSWORD MODAL ===== */
+        #installPasswordModal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        #installPasswordModal.active {
+            display: flex;
+        }
+        .install-modal-box {
+            background: white;
+            border-radius: 1rem;
+            padding: 2rem;
+            max-width: 400px;
+            width: 90%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        .install-modal-box input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ccc;
+            border-radius: 0.5rem;
+            margin: 1rem 0;
+        }
+        .install-modal-box .btn-row {
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+        }
+        .install-modal-box .btn-row button {
+            padding: 0.5rem 1.5rem;
+            border: none;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .install-modal-box .btn-row .cancel-btn {
+            background: #e5e7eb;
+            color: #1f2937;
+        }
+        .install-modal-box .btn-row .confirm-btn {
+            background: #00CFCF;
+            color: white;
+        }
+        .install-modal-box .error-msg {
+            color: #ef4444;
+            font-size: 0.875rem;
+            margin-top: -0.5rem;
+            display: none;
+        }
+        .install-modal-box .error-msg.show {
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -693,7 +751,7 @@
             </a>
             {% endif %}
 
-            <!-- Bottom section: Offline sync, logout – show to all logged-in users -->
+            <!-- Bottom section: Offline sync, install, logout -->
             {% if current_user %}
             <div class="mt-4 flex flex-col gap-2 px-3 py-1">
                 <div class="flex items-center gap-2">
@@ -702,6 +760,12 @@
                         <i class="fas fa-cloud-upload-alt mr-1"></i> Sync Offline
                     </button>
                 </div>
+
+                <!-- ===== CUSTOM INSTALL BUTTON (password protected) ===== -->
+                <button id="installAppBtn" class="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-md transition hidden">
+                    <i class="fas fa-download mr-1"></i> Install App
+                </button>
+
                 <button onclick="clearOfflineData()" class="text-xs bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-md transition">
                     <i class="fas fa-trash mr-1"></i> Clear Offline Data
                 </button>
@@ -758,17 +822,29 @@
     </div>
 </div>
 
+<!-- ===== INSTALL PASSWORD MODAL ===== -->
+<div id="installPasswordModal" class="install-password-modal">
+    <div class="install-modal-box">
+        <h3 class="text-xl font-bold text-gray-800">🔐 Install App</h3>
+        <p class="text-sm text-gray-600 mt-1">Enter the installation password to proceed.</p>
+        <input type="password" id="installPasswordInput" placeholder="Enter password" autocomplete="off">
+        <div id="installErrorMsg" class="error-msg">Incorrect password. Please try again.</div>
+        <div class="btn-row">
+            <button class="cancel-btn" id="installCancelBtn">Cancel</button>
+            <button class="confirm-btn" id="installConfirmBtn">Install</button>
+        </div>
+    </div>
+</div>
+
 <script src="{{ url_for('static', filename='js/offline.js') }}"></script>
 <script>
     // ==================== SESSION MANAGEMENT (7‑day expiry) ====================
-    const SESSION_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+    const SESSION_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
 
     function getStoredSession() {
         const stored = localStorage.getItem('ox_user');
         if (!stored) return null;
-        try {
-            return JSON.parse(stored);
-        } catch { return null; }
+        try { return JSON.parse(stored); } catch { return null; }
     }
 
     function clearSession() {
@@ -777,8 +853,94 @@
 
     function isSessionValid(session) {
         if (!session) return false;
-        if (Date.now() > session.expiresAt) return false;
-        return true;
+        return Date.now() < session.expiresAt;
+    }
+
+    // ==================== INSTALL PASSWORD LOGIC ====================
+    const INSTALL_PASSWORD = 'oxsmart2026'; // Change this to your desired password
+    let deferredPrompt = null;
+    let installButton = document.getElementById('installAppBtn');
+    let passwordModal = document.getElementById('installPasswordModal');
+    let passwordInput = document.getElementById('installPasswordInput');
+    let errorMsg = document.getElementById('installErrorMsg');
+
+    // Listen for the beforeinstallprompt event
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        installButton.classList.remove('hidden');
+        console.log('📲 Install prompt captured – custom button shown.');
+    });
+
+    // Install button click – show password modal
+    installButton.addEventListener('click', () => {
+        if (!deferredPrompt) {
+            alert('Installation is not available. Please try again later.');
+            return;
+        }
+        passwordModal.classList.add('active');
+        passwordInput.value = '';
+        errorMsg.classList.remove('show');
+        passwordInput.focus();
+    });
+
+    // Cancel button
+    document.getElementById('installCancelBtn').addEventListener('click', () => {
+        passwordModal.classList.remove('active');
+        errorMsg.classList.remove('show');
+    });
+
+    // Confirm button – validate password
+    document.getElementById('installConfirmBtn').addEventListener('click', async () => {
+        const entered = passwordInput.value.trim();
+        if (entered === INSTALL_PASSWORD) {
+            errorMsg.classList.remove('show');
+            passwordModal.classList.remove('active');
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const result = await deferredPrompt.userChoice;
+                console.log('User choice:', result.outcome);
+                if (result.outcome === 'accepted') {
+                    console.log('✅ App installed successfully.');
+                    installButton.classList.add('hidden');
+                    sessionStorage.setItem('install_authorized', 'true');
+                } else {
+                    console.log('❌ User dismissed the install prompt.');
+                }
+                deferredPrompt = null;
+            }
+        } else {
+            errorMsg.classList.add('show');
+            passwordInput.value = '';
+            passwordInput.focus();
+        }
+    });
+
+    // Enter key on password input
+    passwordInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            document.getElementById('installConfirmBtn').click();
+        }
+    });
+
+    // Close modal on outside click
+    passwordModal.addEventListener('click', (e) => {
+        if (e.target === passwordModal) {
+            passwordModal.classList.remove('active');
+            errorMsg.classList.remove('show');
+        }
+    });
+
+    // Listen for successful installation
+    window.addEventListener('appinstalled', () => {
+        console.log('✅ App installed event fired.');
+        installButton.classList.add('hidden');
+        deferredPrompt = null;
+    });
+
+    // Hide button if already installed
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+        installButton.classList.add('hidden');
     }
 
     // ==================== EXISTING SIDEBAR / DROPDOWN FUNCTIONS ====================
@@ -834,7 +996,6 @@
                 alert('Logout failed: ' + error.message);
             }
         } else {
-            // Offline – just redirect
             window.location.href = '/login';
         }
     }
@@ -857,7 +1018,7 @@
     }
 
     // ==================== 6-HOUR SYNC REMINDER (OFFLINE-FRIENDLY) ====================
-    const SYNC_INTERVAL = 6 * 60 * 60 * 1000; // 6 hours
+    const SYNC_INTERVAL = 6 * 60 * 60 * 1000;
 
     function getLastSync() {
         const stored = localStorage.getItem('lastSyncTime');
@@ -972,26 +1133,21 @@
 
     // ==================== INITIALIZATION (with session expiry) ====================
     document.addEventListener('DOMContentLoaded', function() {
-        // Update footer year
         const yearSpan = document.getElementById('footerYear');
         if (yearSpan) yearSpan.textContent = new Date().getFullYear();
 
         const currentPath = window.location.pathname;
         const publicPaths = ['/login', '/signup'];
 
-        // 1. Check stored session
         const session = getStoredSession();
         const sessionValid = session && isSessionValid(session);
 
-        // 2. If on a public page and session is valid, redirect to dashboard
         if (publicPaths.includes(currentPath) && sessionValid) {
             window.location.href = '/';
             return;
         }
 
-        // 3. If on a protected page (not public)
         if (!publicPaths.includes(currentPath)) {
-            // If no valid session, clear and redirect to login
             if (!sessionValid) {
                 clearSession();
                 if (!navigator.onLine) {
@@ -1000,8 +1156,6 @@
                 window.location.href = '/login';
                 return;
             }
-
-            // Session is valid – verify with server if online
             if (navigator.onLine) {
                 fetch('/api/auth/check')
                     .then(res => res.json())
@@ -1011,21 +1165,16 @@
                             window.location.href = '/login';
                         }
                     })
-                    .catch(() => {
-                        console.log('⚠️ Could not verify session with server – using cached session.');
-                    });
+                    .catch(() => {});
             }
         }
 
-        // 4. If online, perform initial sync
         if (navigator.onLine) {
             console.log('🌐 Online – performing initial sync...');
             window.syncAllPending();
         } else {
             setTimeout(showSyncReminder, 2000);
         }
-
-        // 5. Show sync reminder after a delay
         setTimeout(showSyncReminder, 4000);
     });
 
