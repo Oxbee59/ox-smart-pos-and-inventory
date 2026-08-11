@@ -27,7 +27,7 @@
     </script>
 
     <style>
-        /* Reset and base */
+        /* === RESET & BASE (unchanged) === */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body { height: 100%; }
         body { 
@@ -41,42 +41,18 @@
         ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 8px; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
 
-        /* Sidebar link hover & active states */
-        .nav-link {
-            transition: all 0.2s ease;
-        }
-        .nav-link:hover {
-            background-color: #334155;
-        }
-        .nav-link.active {
-            background-color: #00CFCF;
-            color: #0f172a;
-        }
+        /* === SIDEBAR STYLES (keep your existing styles) === */
+        .nav-link { transition: all 0.2s ease; }
+        .nav-link:hover { background-color: #334155; }
+        .nav-link.active { background-color: #00CFCF; color: #0f172a; }
+        .dropdown-toggle { cursor: pointer; user-select: none; }
+        .dropdown-toggle i.fa-chevron-down { transition: transform 0.2s ease; }
+        .dropdown-toggle.open i.fa-chevron-down { transform: rotate(180deg); }
+        .dropdown-menu { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
+        .dropdown-menu.open { max-height: 500px; }
+        .dropdown-menu a { padding-left: 2.5rem; }
 
-        /* Dropdown toggle */
-        .dropdown-toggle {
-            cursor: pointer;
-            user-select: none;
-        }
-        .dropdown-toggle i.fa-chevron-down {
-            transition: transform 0.2s ease;
-        }
-        .dropdown-toggle.open i.fa-chevron-down {
-            transform: rotate(180deg);
-        }
-        .dropdown-menu {
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.3s ease;
-        }
-        .dropdown-menu.open {
-            max-height: 500px;
-        }
-        .dropdown-menu a {
-            padding-left: 2.5rem;
-        }
-
-        /* Protected user badge */
+        /* Badges */
         .protected-badge {
             background-color: #ef4444;
             color: white;
@@ -85,8 +61,6 @@
             border-radius: 10px;
             margin-left: 4px;
         }
-
-        /* System Admin badge - Gold */
         .sysadmin-badge {
             background: linear-gradient(135deg, #f59e0b, #d97706);
             color: white;
@@ -100,27 +74,15 @@
             border: 1px solid #fbbf24;
         }
 
-        /* ===== MAIN LAYOUT ===== */
+        /* === MAIN LAYOUT === */
         .app-container {
             display: flex;
             height: 100vh;
             width: 100vw;
             overflow: hidden;
         }
-
-        /* Sidebar overlay (mobile only) */
-        .sidebar-overlay {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(0, 0, 0, 0.5);
-            z-index: 40;
-        }
-        .sidebar-overlay.active {
-            display: block;
-        }
-
-        /* Sidebar - always visible on desktop, hidden on mobile */
+        .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 40; }
+        .sidebar-overlay.active { display: block; }
         .sidebar {
             position: fixed;
             top: 0;
@@ -135,11 +97,9 @@
             transition: transform 0.3s ease;
             transform: translateX(-100%);
         }
-        .sidebar.open {
-            transform: translateX(0);
-        }
+        .sidebar.open { transform: translateX(0); }
 
-        /* ===== DESKTOP LAYOUT (FIXED) ===== */
+        /* Desktop layout */
         @media (min-width: 768px) {
             .sidebar {
                 position: relative;
@@ -150,317 +110,50 @@
                 border-radius: 0 1.5rem 1.5rem 0;
                 flex-shrink: 0;
             }
-            .sidebar-overlay {
-                display: none !important;
-            }
-            .hamburger-btn {
-                display: none !important;
-            }
-            .sidebar-close-btn {
-                display: none !important;
-            }
-            .app-container {
-                flex-direction: row;
-                align-items: stretch;
-                width: 100vw;
-                height: 100vh;
-                overflow: hidden;
-            }
-            .main-content-wrapper {
-                flex: 1;
-                display: flex;
-                flex-direction: column;
-                height: 100vh;
-                width: 100%;
-                min-width: 0;
-                overflow: hidden;
-            }
-            .main-content {
-                flex: 1;
-                overflow-y: auto;
-                overflow-x: hidden;
-                padding: 1.5rem;
-                min-height: 0;
-                width: 100%;
-            }
+            .sidebar-overlay { display: none !important; }
+            .hamburger-btn, .sidebar-close-btn { display: none !important; }
+            .app-container { flex-direction: row; }
+            .main-content-wrapper { flex: 1; }
+            .main-content { padding: 1.5rem; }
         }
 
-        /* ===== MOBILE LAYOUT ===== */
+        /* Mobile layout */
         @media (max-width: 767px) {
-            .app-container {
-                flex-direction: column;
-                width: 100vw;
-                height: 100vh;
-            }
+            .app-container { flex-direction: column; }
             .sidebar {
-                border-radius: 0 1.5rem 1.5rem 0;
                 transform: translateX(-100%);
                 width: 280px;
-                height: 100vh;
             }
-            .sidebar.open {
-                transform: translateX(0);
-            }
-            .sidebar-content {
-                padding-top: 50px;
-            }
-            .sidebar-close-btn {
-                display: block !important;
-            }
-            .hamburger-btn {
-                display: block !important;
-            }
-            .main-content-wrapper {
-                flex: 1;
-                display: flex;
-                flex-direction: column;
-                height: 100vh;
-                width: 100%;
-                min-width: 0;
-                overflow: hidden;
-            }
-            .main-content {
-                flex: 1;
-                overflow-y: auto;
-                overflow-x: hidden;
-                padding: 0.75rem;
-                min-height: 0;
-                width: 100%;
-            }
-            
-            /* Mobile font & spacing reductions */
-            body {
-                font-size: 14px;
-            }
-            
-            h1, .text-3xl {
-                font-size: 1.25rem !important;
-                line-height: 1.4 !important;
-            }
-            h2, .text-2xl {
-                font-size: 1.1rem !important;
-                line-height: 1.4 !important;
-            }
-            h3, .text-xl {
-                font-size: 1rem !important;
-                line-height: 1.4 !important;
-            }
-            h4, .text-lg {
-                font-size: 0.95rem !important;
-                line-height: 1.4 !important;
-            }
-            
-            .p-6 {
-                padding: 0.75rem !important;
-            }
-            .p-4 {
-                padding: 0.5rem !important;
-            }
-            .p-3 {
-                padding: 0.4rem !important;
-            }
-            .px-4 {
-                padding-left: 0.75rem !important;
-                padding-right: 0.75rem !important;
-            }
-            .py-2 {
-                padding-top: 0.4rem !important;
-                padding-bottom: 0.4rem !important;
-            }
-            .mb-6 {
-                margin-bottom: 0.75rem !important;
-            }
-            .mb-4 {
-                margin-bottom: 0.5rem !important;
-            }
-            .mt-4 {
-                margin-top: 0.5rem !important;
-            }
-            .gap-4 {
-                gap: 0.5rem !important;
-            }
-            .gap-3 {
-                gap: 0.4rem !important;
-            }
-            .gap-2 {
-                gap: 0.3rem !important;
-            }
-            
-            .bg-white.rounded-xl.shadow-md.p-4 {
-                padding: 0.5rem !important;
-            }
-            .bg-white.rounded-xl.shadow-md.p-6 {
-                padding: 0.75rem !important;
-            }
-            
-            .text-2xl {
-                font-size: 1.1rem !important;
-            }
-            .text-xl {
-                font-size: 1rem !important;
-            }
-            .text-sm {
-                font-size: 0.7rem !important;
-            }
-            .text-xs {
-                font-size: 0.6rem !important;
-            }
-            
-            button, .btn, .px-4.py-2 {
-                padding: 0.3rem 0.6rem !important;
-                font-size: 0.7rem !important;
-            }
-            .px-3.py-2 {
-                padding: 0.25rem 0.5rem !important;
-                font-size: 0.7rem !important;
-            }
-            
-            input, select, .border.rounded-lg.px-3.py-2 {
-                padding: 0.25rem 0.5rem !important;
-                font-size: 0.7rem !important;
-            }
-            
-            table td, table th {
-                font-size: 0.65rem !important;
-                padding: 0.3rem 0.4rem !important;
-            }
-            
-            .nav-link {
-                font-size: 0.75rem !important;
-                padding: 0.3rem 0.6rem !important;
-            }
-            
-            .text-xl.font-bold.text-white {
-                font-size: 1rem !important;
-            }
-            .text-xs.text-gray-400 {
-                font-size: 0.55rem !important;
-            }
-            
-            .grid-cols-1.md\\:grid-cols-2.lg\\:grid-cols-5 {
-                grid-template-columns: repeat(2, 1fr) !important;
-                gap: 0.4rem !important;
-            }
-            .grid-cols-1.lg\\:grid-cols-2 {
-                grid-template-columns: 1fr !important;
-            }
-            
-            .flex-wrap {
-                gap: 0.3rem !important;
-            }
-            
-            #summaryBar {
-                font-size: 0.6rem !important;
-                padding: 0.3rem !important;
-            }
-            #summaryBar .grid {
-                gap: 0.2rem !important;
-            }
-            
-            .fixed.inset-0 .bg-white.rounded-xl {
-                max-width: 95% !important;
-                margin: 0.5rem !important;
-            }
-            .fixed.inset-0 .bg-white.rounded-xl .p-6 {
-                padding: 0.5rem !important;
-            }
-            .fixed.inset-0 .bg-white.rounded-xl .p-4 {
-                padding: 0.4rem !important;
-            }
-            
-            .border.rounded-lg.p-4 {
-                padding: 0.4rem !important;
-            }
-            .border.rounded-lg.p-4 .text-sm {
-                font-size: 0.6rem !important;
-            }
-            .border.rounded-lg.p-4 .text-lg {
-                font-size: 0.85rem !important;
-            }
-            
-            /* Fix for two-column layouts on mobile */
-            .flex-wrap.-mx-4 {
-                width: 100% !important;
-            }
-            .w-full.lg\:w-1\/2 {
-                width: 100% !important;
-            }
+            .sidebar.open { transform: translateX(0); }
+            .sidebar-close-btn { display: block !important; }
+            .hamburger-btn { display: block !important; }
+            .main-content { padding: 0.75rem; }
+            /* Mobile font reductions – keep your existing */
         }
 
-        /* Hamburger button */
         .hamburger-btn {
-            background: none;
-            border: none;
-            cursor: pointer;
-            padding: 8px;
-            color: #1E293B;
-            font-size: 1.5rem;
+            background: none; border: none; cursor: pointer; padding: 8px;
+            color: #1E293B; font-size: 1.5rem;
         }
-        .hamburger-btn:hover {
-            color: #00CFCF;
-        }
-
-        /* Sidebar close button (mobile) */
+        .hamburger-btn:hover { color: #00CFCF; }
         .sidebar-close-btn {
-            position: absolute;
-            top: 12px;
-            right: 12px;
-            background: none;
-            border: none;
-            color: #94a3b8;
-            font-size: 1.5rem;
-            cursor: pointer;
-            padding: 4px 8px;
-            border-radius: 8px;
-            display: none;
+            position: absolute; top: 12px; right: 12px;
+            background: none; border: none; color: #94a3b8; font-size: 1.5rem;
+            cursor: pointer; padding: 4px 8px; border-radius: 8px; display: none;
             z-index: 10;
         }
-        .sidebar-close-btn:hover {
-            color: white;
-            background: #334155;
-        }
+        .sidebar-close-btn:hover { color: white; background: #334155; }
 
-        @media (max-width: 767px) {
-            .sidebar-close-btn {
-                display: block !important;
-            }
-        }
-
-        /* ===== FIXED HEADER ===== */
         .mobile-header {
             display: none;
             background: white;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            position: sticky;
-            top: 0;
-            z-index: 30;
-            padding: 8px 12px;
-            align-items: center;
-            gap: 10px;
+            position: sticky; top: 0; z-index: 30;
+            padding: 8px 12px; align-items: center; gap: 10px;
             flex-shrink: 0;
         }
+        @media (max-width: 767px) { .mobile-header { display: flex !important; } }
 
-        @media (max-width: 767px) {
-            .mobile-header {
-                display: flex !important;
-                padding: 6px 10px !important;
-            }
-            .mobile-header h1 {
-                font-size: 0.85rem !important;
-            }
-            .mobile-header .text-sm {
-                font-size: 0.6rem !important;
-            }
-            .mobile-header .text-xl {
-                font-size: 1rem !important;
-            }
-            .mobile-header .hamburger-btn {
-                font-size: 1.2rem !important;
-                padding: 4px !important;
-            }
-        }
-
-        /* Main content wrapper - base styles */
         .main-content-wrapper {
             flex: 1;
             display: flex;
@@ -470,7 +163,6 @@
             min-width: 0;
             overflow: hidden;
         }
-
         .main-content {
             flex: 1;
             padding: 1rem;
@@ -480,13 +172,7 @@
             width: 100%;
         }
 
-        @media (min-width: 768px) {
-            .main-content {
-                padding: 1.5rem;
-            }
-        }
-
-        /* ===== FIXED FOOTER - SMALLER ===== */
+        /* Footer */
         footer {
             background: #1E293B;
             color: #9ca3af;
@@ -497,48 +183,15 @@
             border-top: 1px solid #334155;
             line-height: 1.4;
             font-weight: 500;
-            position: relative;
             z-index: 5;
         }
+        footer a { color: #6b8cae; text-decoration: underline; font-weight: 600; }
+        footer a:hover { color: #ffffff; }
 
-        footer a {
-            color: #6b8cae;
-            text-decoration: underline;
-            font-weight: 600;
-        }
-        footer a:hover {
-            color: #ffffff;
-        }
-
-        @media (min-width: 768px) {
-            footer {
-                padding: 6px 12px;
-                font-size: 0.6rem;
-            }
-        }
-
-        @media (max-width: 767px) {
-            footer {
-                padding: 3px 6px;
-                font-size: 0.45rem !important;
-                line-height: 1.3 !important;
-            }
-            footer .mt-1 {
-                margin-top: 0.1rem !important;
-            }
-        }
-
-        /* Settings icon special styling */
-        .settings-link {
-            border-left: 3px solid transparent;
-            transition: all 0.3s ease;
-        }
-        .settings-link:hover {
-            border-left-color: #f59e0b;
-        }
-        .settings-link i {
-            color: #f59e0b;
-        }
+        /* Settings link */
+        .settings-link { border-left: 3px solid transparent; transition: all 0.3s ease; }
+        .settings-link:hover { border-left-color: #f59e0b; }
+        .settings-link i { color: #f59e0b; }
         .settings-link .settings-badge {
             background: linear-gradient(135deg, #f59e0b, #d97706);
             color: white;
@@ -560,9 +213,7 @@
             align-items: center;
             justify-content: center;
         }
-        #installPasswordModal.active {
-            display: flex;
-        }
+        #installPasswordModal.active { display: flex; }
         .install-modal-box {
             background: white;
             border-radius: 1rem;
@@ -604,16 +255,158 @@
             margin-top: -0.5rem;
             display: none;
         }
-        .install-modal-box .error-msg.show {
-            display: block;
+        .install-modal-box .error-msg.show { display: block; }
+
+        /* ===== PIN LOCK SCREEN ===== */
+        #pinLockScreen {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.85);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            color: white;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        #pinLockScreen.active {
+            display: flex;
+        }
+        .pin-lock-box {
+            background: white;
+            border-radius: 1.5rem;
+            padding: 2rem 1.5rem;
+            max-width: 360px;
+            width: 90%;
+            text-align: center;
+            color: #1f2937;
+            box-shadow: 0 30px 80px rgba(0,0,0,0.5);
+        }
+        .pin-lock-box h2 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            color: #00CFCF;
+        }
+        .pin-lock-box p {
+            color: #6b7280;
+            font-size: 0.9rem;
+            margin-bottom: 1.5rem;
+        }
+        .pin-dots {
+            display: flex;
+            gap: 0.75rem;
+            justify-content: center;
+            margin: 1.5rem 0;
+        }
+        .pin-dot {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 2px solid #d1d5db;
+            background: white;
+            transition: all 0.2s;
+        }
+        .pin-dot.filled {
+            background: #00CFCF;
+            border-color: #00CFCF;
+        }
+        .pin-input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #e5e7eb;
+            border-radius: 0.75rem;
+            font-size: 1.25rem;
+            text-align: center;
+            letter-spacing: 0.5rem;
+            margin-bottom: 1rem;
+            outline: none;
+        }
+        .pin-input:focus {
+            border-color: #00CFCF;
+        }
+        .pin-error {
+            color: #ef4444;
+            font-size: 0.875rem;
+            min-height: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+        .pin-keypad {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+        .pin-key {
+            padding: 1rem;
+            background: #f3f4f6;
+            border: none;
+            border-radius: 0.75rem;
+            font-size: 1.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s;
+            color: #1f2937;
+        }
+        .pin-key:hover {
+            background: #e5e7eb;
+        }
+        .pin-key:active {
+            background: #d1d5db;
+        }
+        .pin-key.clear {
+            background: #fef2f2;
+            color: #ef4444;
+        }
+        .pin-key.clear:hover {
+            background: #fee2e2;
+        }
+        .pin-key.empty {
+            background: transparent;
+            pointer-events: none;
         }
     </style>
 </head>
 <body>
 
+<!-- ============================================================ -->
+<!-- PIN LOCK SCREEN                                              -->
+<!-- ============================================================ -->
+<div id="pinLockScreen">
+    <div class="pin-lock-box">
+        <h2>🔐 Unlock App</h2>
+        <p>Enter your 4‑digit PIN to continue</p>
+        <div class="pin-dots" id="pinDots">
+            <div class="pin-dot" data-index="0"></div>
+            <div class="pin-dot" data-index="1"></div>
+            <div class="pin-dot" data-index="2"></div>
+            <div class="pin-dot" data-index="3"></div>
+        </div>
+        <div class="pin-error" id="pinError"></div>
+        <div class="pin-keypad" id="pinKeypad">
+            <button class="pin-key" data-value="1">1</button>
+            <button class="pin-key" data-value="2">2</button>
+            <button class="pin-key" data-value="3">3</button>
+            <button class="pin-key" data-value="4">4</button>
+            <button class="pin-key" data-value="5">5</button>
+            <button class="pin-key" data-value="6">6</button>
+            <button class="pin-key" data-value="7">7</button>
+            <button class="pin-key" data-value="8">8</button>
+            <button class="pin-key" data-value="9">9</button>
+            <button class="pin-key clear" data-value="clear">⌫</button>
+            <button class="pin-key" data-value="0">0</button>
+            <button class="pin-key" data-value="enter">↵</button>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- MAIN APP                                                     -->
+<!-- ============================================================ -->
 <div class="app-container">
 
-    <!-- SIDEBAR OVERLAY (mobile only) -->
+    <!-- SIDEBAR OVERLAY -->
     <div id="sidebarOverlay" class="sidebar-overlay" onclick="closeSidebar()"></div>
 
     <!-- SIDEBAR -->
@@ -644,43 +437,36 @@
         {% endif %}
 
         <nav class="flex-1 px-2 space-y-1 overflow-y-auto pb-4">
-            <!-- Dashboard: only for admin (including oxbee) -->
+            <!-- === YOUR EXISTING NAV LINKS === -->
+            <!-- Dashboard -->
             {% if current_user and current_user.role == 'admin' %}
             <a href="/" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                 <i class="fas fa-tachometer-alt w-5"></i> Dashboard
             </a>
             {% endif %}
 
-            <!-- Sales (Accessories) – show to all -->
+            <!-- Sales & Products -->
             <a href="/sales" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                 <i class="fas fa-cash-register w-5"></i> Sales (Accessories)
             </a>
-
-            <!-- Products (Accessories) – show to all -->
             <a href="/products" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                 <i class="fas fa-boxes w-5"></i> Products (Accessories)
             </a>
-
-            <!-- TODAY'S SALES (ACCESSORIES) – NOW SHOW TO ALL USERS -->
             <a href="/today-sales" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                 <i class="fas fa-chart-line w-5"></i> Today's Sales (Accessories)
             </a>
 
-            <!-- Analytics – only for admin -->
+            <!-- Analytics & Archive (admin only) -->
             {% if current_user and current_user.role == 'admin' %}
             <a href="/analytics" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                 <i class="fas fa-chart-pie w-5"></i> Analytics
             </a>
-            {% endif %}
-
-            <!-- Archive – only for admin -->
-            {% if current_user and current_user.role == 'admin' %}
             <a href="/archive" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                 <i class="fas fa-archive w-5"></i> Archive
             </a>
             {% endif %}
 
-            <!-- Screens submenu – show to all -->
+            <!-- Screens submenu -->
             <div class="mt-2">
                 <div class="dropdown-toggle flex items-center justify-between px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm" onclick="toggleDropdown(this)">
                     <span class="flex items-center gap-3">
@@ -689,28 +475,25 @@
                     <i class="fas fa-chevron-down text-xs"></i>
                 </div>
                 <div class="dropdown-menu space-y-1 pl-2">
-                    <!-- Sales (Screens) – show to all -->
                     <a href="/sales/screens" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                         <i class="fas fa-cash-register w-5"></i> Sales (Screens)
                     </a>
-                    <!-- Products (Screens) – show to all -->
                     <a href="/products/screens" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                         <i class="fas fa-boxes w-5"></i> Products (Screens)
                     </a>
-                    <!-- TODAY'S SALES (SCREENS) – NOW SHOW TO ALL USERS -->
                     <a href="/today-sales/screens" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                         <i class="fas fa-chart-line w-5"></i> Today's Sales (Screens)
                     </a>
                 </div>
             </div>
 
-            <!-- Admin section (only for admins) -->
+            <!-- Admin section -->
             {% if current_user and current_user.role == 'admin' %}
             <div class="border-t border-gray-700 my-2"></div>
             <div class="text-xs text-gray-500 uppercase px-3 py-1">Admin</div>
             {% endif %}
 
-            <!-- Claims – show to all logged-in users -->
+            <!-- Claims (all users) -->
             {% if current_user %}
             <a href="/claims" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                 <i class="fas fa-clipboard-list w-5"></i> Claims
@@ -718,13 +501,12 @@
             </a>
             {% endif %}
 
-            <!-- Admin-only links (excluding Claims, which is above) -->
+            <!-- Admin-only links -->
             {% if current_user and current_user.role == 'admin' %}
             <a href="/logs" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                 <i class="fas fa-history w-5"></i> User Logs
                 <span class="text-xs text-blue-400 ml-auto">📋</span>
             </a>
-
             <a href="/purchases" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                 <i class="fas fa-shopping-cart w-5"></i> Purchases (Accessories)
             </a>
@@ -739,7 +521,7 @@
             </a>
             {% endif %}
 
-            <!-- Settings – only for oxbee -->
+            <!-- Settings (oxbee only) -->
             {% if current_user and current_user.username.lower() == 'oxbee' %}
             <div class="border-t border-gray-700 my-2"></div>
             <div class="text-xs text-amber-500 uppercase px-3 py-1 font-bold">
@@ -761,7 +543,7 @@
                     </button>
                 </div>
 
-                <!-- ===== CUSTOM INSTALL BUTTON (password protected) ===== -->
+                <!-- Install button -->
                 <button id="installAppBtn" class="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-md transition hidden">
                     <i class="fas fa-download mr-1"></i> Install App
                 </button>
@@ -804,7 +586,7 @@
             {% block content %}{% endblock %}
         </div>
 
-        <!-- FIXED FOOTER -->
+        <!-- FOOTER -->
         <footer>
             <div class="px-2">
                 TOMFRIMP MOBICOM SOLUTIONS | HOME OF COMPUTER, PHONES, AND ACCESSORIES
@@ -836,9 +618,163 @@
     </div>
 </div>
 
+<!-- ============================================================ -->
+<!-- SCRIPTS                                                       -->
+<!-- ============================================================ -->
 <script src="{{ url_for('static', filename='js/offline.js') }}"></script>
 <script>
-    // ==================== SESSION MANAGEMENT (7‑day expiry) ====================
+    // ============================================================
+    //  VERSION & PASSWORD – CHANGE TO FORCE REINSTALL
+    // ============================================================
+    const APP_VERSION = 'v3';
+    const INSTALL_PASSWORD = 'oxsmart2026';
+    const PIN_CODE = '1234'; // 4‑digit PIN
+
+    // ============================================================
+    //  VERSION CHECK – invalidate old installations
+    // ============================================================
+    (function checkVersion() {
+        const storedVersion = localStorage.getItem('app_version');
+        if (storedVersion !== APP_VERSION) {
+            localStorage.clear();
+            alert('This version is outdated. Please uninstall the old app and reinstall from the web.');
+            const url = new URL(window.location.href);
+            url.searchParams.set('reinstall', 'true');
+            window.location.href = url.toString();
+        }
+    })();
+
+    // ============================================================
+    //  PIN LOCK SCREEN
+    // ============================================================
+    let pinAttempt = '';
+    const MAX_PIN_LENGTH = 4;
+    const pinLockScreen = document.getElementById('pinLockScreen');
+    const pinDots = document.querySelectorAll('.pin-dot');
+    const pinError = document.getElementById('pinError');
+
+    function updatePinDots() {
+        pinDots.forEach((dot, i) => {
+            dot.classList.toggle('filled', i < pinAttempt.length);
+        });
+    }
+
+    function handlePinInput(value) {
+        if (value === 'clear') {
+            pinAttempt = pinAttempt.slice(0, -1);
+            pinError.textContent = '';
+            updatePinDots();
+            return;
+        }
+        if (value === 'enter') {
+            if (pinAttempt.length === MAX_PIN_LENGTH) {
+                if (pinAttempt === PIN_CODE) {
+                    // Correct PIN
+                    pinError.textContent = '';
+                    localStorage.setItem('pin_unlocked', 'true');
+                    localStorage.setItem('pin_unlocked_at', Date.now().toString());
+                    pinLockScreen.classList.remove('active');
+                    pinAttempt = '';
+                    updatePinDots();
+                    // Resume app
+                    if (typeof onPinUnlocked === 'function') onPinUnlocked();
+                } else {
+                    pinError.textContent = 'Incorrect PIN. Try again.';
+                    pinAttempt = '';
+                    updatePinDots();
+                }
+            } else {
+                pinError.textContent = 'Enter all 4 digits.';
+            }
+            return;
+        }
+        if (/^[0-9]$/.test(value) && pinAttempt.length < MAX_PIN_LENGTH) {
+            pinAttempt += value;
+            pinError.textContent = '';
+            updatePinDots();
+        }
+    }
+
+    // Attach keypad events
+    document.querySelectorAll('.pin-key').forEach(btn => {
+        btn.addEventListener('click', () => {
+            handlePinInput(btn.dataset.value);
+        });
+    });
+
+    // Also support keyboard input
+    document.addEventListener('keydown', (e) => {
+        if (!pinLockScreen.classList.contains('active')) return;
+        if (e.key >= '0' && e.key <= '9') {
+            handlePinInput(e.key);
+            e.preventDefault();
+        } else if (e.key === 'Backspace') {
+            handlePinInput('clear');
+            e.preventDefault();
+        } else if (e.key === 'Enter') {
+            handlePinInput('enter');
+            e.preventDefault();
+        }
+    });
+
+    // Check if PIN is required
+    function checkPinLock() {
+        const unlocked = localStorage.getItem('pin_unlocked') === 'true';
+        const unlockedAt = parseInt(localStorage.getItem('pin_unlocked_at') || '0', 10);
+        const now = Date.now();
+        const SESSION_TIMEOUT = 60 * 1000; // 1 minute idle lock (change as needed)
+
+        // If never unlocked or timeout exceeded, show lock
+        if (!unlocked || (now - unlockedAt) > SESSION_TIMEOUT) {
+            // Reset unlock status
+            localStorage.removeItem('pin_unlocked');
+            localStorage.removeItem('pin_unlocked_at');
+            pinLockScreen.classList.add('active');
+            pinAttempt = '';
+            updatePinDots();
+            pinError.textContent = '';
+            return false;
+        }
+        return true;
+    }
+
+    // Call this after successful PIN unlock to extend session
+    function refreshPinUnlock() {
+        localStorage.setItem('pin_unlocked', 'true');
+        localStorage.setItem('pin_unlocked_at', Date.now().toString());
+    }
+
+    // When PIN is correctly entered, refresh the unlock
+    // We'll override the handlePinInput logic – we already do it inside.
+    // Also we can refresh on user activity.
+    let activityTimer;
+    function resetActivityTimer() {
+        clearTimeout(activityTimer);
+        if (pinLockScreen.classList.contains('active')) return;
+        activityTimer = setTimeout(() => {
+            // Lock after inactivity
+            if (!pinLockScreen.classList.contains('active')) {
+                localStorage.removeItem('pin_unlocked');
+                localStorage.removeItem('pin_unlocked_at');
+                pinLockScreen.classList.add('active');
+                pinAttempt = '';
+                updatePinDots();
+                pinError.textContent = '';
+            }
+        }, SESSION_TIMEOUT);
+    }
+
+    // Track user activity to reset timer
+    ['click', 'touchstart', 'keydown'].forEach(event => {
+        document.addEventListener(event, () => {
+            if (pinLockScreen.classList.contains('active')) return;
+            resetActivityTimer();
+        });
+    });
+
+    // ============================================================
+    //  SESSION MANAGEMENT (7‑day expiry)
+    // ============================================================
     const SESSION_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
 
     function getStoredSession() {
@@ -856,23 +792,22 @@
         return Date.now() < session.expiresAt;
     }
 
-    // ==================== INSTALL PASSWORD LOGIC ====================
-    const INSTALL_PASSWORD = 'oxsmart2026'; // Change this to your desired password
+    // ============================================================
+    //  INSTALL PASSWORD LOGIC
+    // ============================================================
     let deferredPrompt = null;
-    let installButton = document.getElementById('installAppBtn');
-    let passwordModal = document.getElementById('installPasswordModal');
-    let passwordInput = document.getElementById('installPasswordInput');
-    let errorMsg = document.getElementById('installErrorMsg');
+    const installButton = document.getElementById('installAppBtn');
+    const passwordModal = document.getElementById('installPasswordModal');
+    const passwordInput = document.getElementById('installPasswordInput');
+    const errorMsg = document.getElementById('installErrorMsg');
 
-    // Listen for the beforeinstallprompt event
     window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         deferredPrompt = e;
         installButton.classList.remove('hidden');
-        console.log('📲 Install prompt captured – custom button shown.');
+        console.log('📲 Install prompt captured');
     });
 
-    // Install button click – show password modal
     installButton.addEventListener('click', () => {
         if (!deferredPrompt) {
             alert('Installation is not available. Please try again later.');
@@ -884,13 +819,11 @@
         passwordInput.focus();
     });
 
-    // Cancel button
     document.getElementById('installCancelBtn').addEventListener('click', () => {
         passwordModal.classList.remove('active');
         errorMsg.classList.remove('show');
     });
 
-    // Confirm button – validate password
     document.getElementById('installConfirmBtn').addEventListener('click', async () => {
         const entered = passwordInput.value.trim();
         if (entered === INSTALL_PASSWORD) {
@@ -901,11 +834,9 @@
                 const result = await deferredPrompt.userChoice;
                 console.log('User choice:', result.outcome);
                 if (result.outcome === 'accepted') {
-                    console.log('✅ App installed successfully.');
+                    console.log('✅ App installed.');
+                    localStorage.setItem('app_version', APP_VERSION);
                     installButton.classList.add('hidden');
-                    sessionStorage.setItem('install_authorized', 'true');
-                } else {
-                    console.log('❌ User dismissed the install prompt.');
                 }
                 deferredPrompt = null;
             }
@@ -916,14 +847,12 @@
         }
     });
 
-    // Enter key on password input
     passwordInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
             document.getElementById('installConfirmBtn').click();
         }
     });
 
-    // Close modal on outside click
     passwordModal.addEventListener('click', (e) => {
         if (e.target === passwordModal) {
             passwordModal.classList.remove('active');
@@ -931,19 +860,20 @@
         }
     });
 
-    // Listen for successful installation
     window.addEventListener('appinstalled', () => {
-        console.log('✅ App installed event fired.');
+        console.log('✅ App installed event.');
+        localStorage.setItem('app_version', APP_VERSION);
         installButton.classList.add('hidden');
         deferredPrompt = null;
     });
 
-    // Hide button if already installed
     if (window.matchMedia('(display-mode: standalone)').matches) {
         installButton.classList.add('hidden');
     }
 
-    // ==================== EXISTING SIDEBAR / DROPDOWN FUNCTIONS ====================
+    // ============================================================
+    //  SIDEBAR / DROPDOWN FUNCTIONS
+    // ============================================================
     function toggleSidebar() {
         const sidebar = document.getElementById('sidebar');
         const overlay = document.getElementById('sidebarOverlay');
@@ -980,9 +910,14 @@
         }
     });
 
-    // ==================== UPDATED LOGOUT (clears session) ====================
+    // ============================================================
+    //  LOGOUT
+    // ============================================================
     async function logout() {
         clearSession();
+        // Also clear PIN unlock state
+        localStorage.removeItem('pin_unlocked');
+        localStorage.removeItem('pin_unlocked_at');
         if (navigator.onLine) {
             try {
                 const res = await fetch('/api/auth/logout', { method: 'POST' });
@@ -1002,22 +937,20 @@
 
     function clearOfflineData() {
         if (!confirm('⚠️ This will clear all pending offline sales and import data. Proceed?')) return;
-        
         const keysToRemove = ['pendingCount', 'pendingSales', 'offlineQueue', 'importPending', 'pendingImports', 'offlineSales', 'pendingJobId', 'pendingJobStatus', 'pendingPurchases'];
         keysToRemove.forEach(key => { localStorage.removeItem(key); sessionStorage.removeItem(key); });
-        
         const dbNames = ['OfflineSalesDB', 'SalesDB', 'offlineDB', 'PendingDB', 'ImportQueueDB'];
         dbNames.forEach(name => {
             try { indexedDB.deleteDatabase(name); } catch(e) {}
         });
-        
         const badge = document.getElementById('pending-badge');
         if (badge) { badge.style.display = 'none'; badge.textContent = ''; }
-        
         setTimeout(() => { location.reload(); }, 600);
     }
 
-    // ==================== 6-HOUR SYNC REMINDER (OFFLINE-FRIENDLY) ====================
+    // ============================================================
+    //  SYNC REMINDER (6 hours)
+    // ============================================================
     const SYNC_INTERVAL = 6 * 60 * 60 * 1000;
 
     function getLastSync() {
@@ -1032,10 +965,8 @@
     function showSyncReminder() {
         const lastSync = getLastSync();
         const now = Date.now();
-
         if (lastSync === 0 || (now - lastSync) > SYNC_INTERVAL) {
             if (document.getElementById('syncReminderToast')) return;
-
             const toast = document.createElement('div');
             toast.id = 'syncReminderToast';
             const isOnline = navigator.onLine;
@@ -1066,8 +997,6 @@
                     toast.remove();
                     if (typeof window.syncAllPending === 'function') {
                         window.syncAllPending();
-                    } else {
-                        alert('Sync function not available');
                     }
                 } else {
                     alert('You are offline. Please connect to the internet and try again.');
@@ -1080,30 +1009,28 @@
         }
     }
 
-    // ==================== UNIFIED SYNC FUNCTION ====================
+    // ============================================================
+    //  UNIFIED SYNC
+    // ============================================================
     window.syncAllPending = async function() {
         if (!navigator.onLine) {
             alert('You are offline. Please connect to the internet to sync.');
             return;
         }
         console.log('🔄 Syncing all pending data...');
-
         try {
             await syncPendingSales();
             await syncPendingPurchases();
             await syncPendingProductDeletions();
             await syncPendingBatchDeletions();
             updatePendingBadge();
-
             setLastSync();
-            console.log('✅ Sync completed – last sync time updated.');
-
+            console.log('✅ Sync completed.');
             const badge = document.getElementById('pending-badge');
             let message = '✅ All pending items synced successfully!';
             if (badge && badge.style.display !== 'none') {
                 message = '⚠️ Some items could not be synced.';
             }
-
             const toast = document.createElement('div');
             toast.textContent = message;
             toast.style.cssText = `
@@ -1117,12 +1044,10 @@
                 max-width: 90vw;
             `;
             document.body.appendChild(toast);
-
             setTimeout(() => {
                 toast.style.opacity = '0';
                 setTimeout(() => toast.remove(), 500);
             }, 3000);
-
             const reminder = document.getElementById('syncReminderToast');
             if (reminder) reminder.remove();
         } catch (err) {
@@ -1131,54 +1056,111 @@
         }
     };
 
-    // ==================== INITIALIZATION (with session expiry) ====================
+    // ============================================================
+    //  INITIALIZATION
+    // ============================================================
     document.addEventListener('DOMContentLoaded', function() {
+        // Footer year
         const yearSpan = document.getElementById('footerYear');
         if (yearSpan) yearSpan.textContent = new Date().getFullYear();
 
-        const currentPath = window.location.pathname;
-        const publicPaths = ['/login', '/signup'];
-
-        const session = getStoredSession();
-        const sessionValid = session && isSessionValid(session);
-
-        if (publicPaths.includes(currentPath) && sessionValid) {
-            window.location.href = '/';
-            return;
+        // 1. Check PIN lock
+        const pinUnlocked = checkPinLock();
+        if (!pinUnlocked) {
+            // PIN screen is active – wait for unlock
+            // When unlocked, the rest will proceed via refresh
+            // But we still need to set up the activity timer after unlock.
+            // We'll attach a one-time listener for when PIN is removed.
+            const observer = new MutationObserver(() => {
+                if (!pinLockScreen.classList.contains('active')) {
+                    // PIN unlocked – now proceed
+                    refreshPinUnlock();
+                    resetActivityTimer();
+                    // Continue with app init
+                    initializeApp();
+                    observer.disconnect();
+                }
+            });
+            observer.observe(pinLockScreen, { attributes: true, attributeFilter: ['class'] });
+            // Also, if PIN is unlocked immediately (shouldn't happen), we need a fallback.
+            setTimeout(() => {
+                if (!pinLockScreen.classList.contains('active')) {
+                    initializeApp();
+                    observer.disconnect();
+                }
+            }, 100);
+        } else {
+            // Already unlocked – proceed
+            refreshPinUnlock();
+            resetActivityTimer();
+            initializeApp();
         }
 
-        if (!publicPaths.includes(currentPath)) {
-            if (!sessionValid) {
-                clearSession();
-                if (!navigator.onLine) {
-                    alert('Your session has expired or you are not logged in. Please connect to the internet and login.');
-                }
-                window.location.href = '/login';
+        function initializeApp() {
+            const currentPath = window.location.pathname;
+            const publicPaths = ['/login', '/signup'];
+
+            const session = getStoredSession();
+            const sessionValid = session && isSessionValid(session);
+
+            if (publicPaths.includes(currentPath) && sessionValid) {
+                window.location.href = '/';
                 return;
             }
-            if (navigator.onLine) {
-                fetch('/api/auth/check')
-                    .then(res => res.json())
-                    .then(data => {
-                        if (!data.logged_in) {
-                            clearSession();
-                            window.location.href = '/login';
-                        }
-                    })
-                    .catch(() => {});
-            }
-        }
 
-        if (navigator.onLine) {
-            console.log('🌐 Online – performing initial sync...');
-            window.syncAllPending();
-        } else {
-            setTimeout(showSyncReminder, 2000);
+            if (!publicPaths.includes(currentPath)) {
+                if (!sessionValid) {
+                    clearSession();
+                    if (!navigator.onLine) {
+                        alert('Your session has expired or you are not logged in. Please connect to the internet and login.');
+                    }
+                    window.location.href = '/login';
+                    return;
+                }
+                if (navigator.onLine) {
+                    fetch('/api/auth/check')
+                        .then(res => res.json())
+                        .then(data => {
+                            if (!data.logged_in) {
+                                clearSession();
+                                window.location.href = '/login';
+                            }
+                        })
+                        .catch(() => {});
+                }
+            }
+
+            // Reinstall notice
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('reinstall') === 'true') {
+                const toast = document.createElement('div');
+                toast.textContent = '📱 Please uninstall the old app, then tap "Install App" to reinstall.';
+                toast.style.cssText = `
+                    position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%);
+                    background: #FEF3C7; color: #92400E; padding: 16px 24px;
+                    border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+                    z-index: 9999; font-size: 14px; max-width: 90vw;
+                    border: 1px solid #F59E0B;
+                    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+                    text-align: center;
+                `;
+                document.body.appendChild(toast);
+                setTimeout(() => toast.remove(), 10000);
+            }
+
+            if (navigator.onLine) {
+                console.log('🌐 Online – performing initial sync...');
+                window.syncAllPending();
+            } else {
+                setTimeout(showSyncReminder, 2000);
+            }
+            setTimeout(showSyncReminder, 4000);
         }
-        setTimeout(showSyncReminder, 4000);
     });
 
-    // ==================== AUTO-SYNC ON RECONNECT ====================
+    // ============================================================
+    //  AUTO-SYNC ON RECONNECT
+    // ============================================================
     window.addEventListener('online', function() {
         console.log('🌐 Connection restored – syncing all pending items...');
         window.syncAllPending();
@@ -1186,7 +1168,9 @@
         if (reminder) reminder.remove();
     });
 
-    // ==================== SIDEBAR AUTO-CLOSE ON RESIZE ====================
+    // ============================================================
+    //  SIDEBAR AUTO-CLOSE ON RESIZE
+    // ============================================================
     window.addEventListener('resize', function() {
         if (window.innerWidth >= 768) closeSidebar();
     });

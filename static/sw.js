@@ -1,57 +1,44 @@
 // static/sw.js
-const CACHE_NAME = 'oxsmart-v2';  // bump version on every deploy
-const OFFLINE_PAGE = '/offline.html'; // create this page
+// ============================================================
+//  Only cache public assets & pages at install time.
+//  Protected routes (requiring login) are cached on‑demand.
+// ============================================================
 
-// ===== ALL ROUTES FROM YOUR APP =====
-// I've compiled every route from app.py (including sub‑routes)
-const ROUTES = [
+const CACHE_NAME = 'oxsmart-v3';  // ⚠️ increment this on every deploy
+const OFFLINE_PAGE = '/offline.html';
+
+// ----- PUBLIC ROUTES (no login required) -----
+const PUBLIC_ROUTES = [
   '/',
   '/login',
   '/signup',
-  '/dashboard',           // alias for '/'
-  '/products',
-  '/products/screens',
-  '/sales',
-  '/sales/screens',
-  '/purchases',
-  '/purchases/screens',
-  '/analytics',
-  '/today-sales',
-  '/today-sales/screens',
-  '/archive',
-  '/inventory/import',
-  '/admin/users',
-  '/settings',
-  '/claims',
-  '/logs',
-  '/offline',              // if you have one
-  // Add any other custom routes you have
+  '/offline',          // if you have a dedicated offline page
 ];
 
-// ===== STATIC ASSETS =====
+// ----- STATIC ASSETS (always cache) -----
 const STATIC_ASSETS = [
   '/static/css/style.css',
   '/static/js/offline.js',
   '/static/js/main.js',
-  '/static/js/app.js',    // if you have it
+  '/static/js/app.js',       // if present
   '/static/manifest.json',
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png',
-  // Add any other assets (fonts, images, etc.)
+  // Add any other fonts, images, etc.
 ];
 
-// Combine everything to pre‑cache
-const PRECACHE_URLS = [...ROUTES, ...STATIC_ASSETS];
+// Combine into pre‑cache list
+const PRECACHE_URLS = [...PUBLIC_ROUTES, ...STATIC_ASSETS];
 
 // ===== INSTALL =====
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        console.log('📦 Pre‑caching all pages and assets');
+        console.log('📦 Pre‑caching public assets');
         return cache.addAll(PRECACHE_URLS);
       })
-      .then(() => self.skipWaiting()) // activates immediately
+      .then(() => self.skipWaiting())   // force activation
   );
 });
 
@@ -60,14 +47,14 @@ self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(cacheNames => {
       return Promise.all(
-        cacheNames.map(cache => {
-          if (cache !== CACHE_NAME) {
-            console.log('🗑️ Deleting old cache:', cache);
-            return caches.delete(cache);
+        cacheNames.map(cacheName => {
+          if (cacheName !== CACHE_NAME) {
+            console.log('🗑️ Deleting old cache:', cacheName);
+            return caches.delete(cacheName);
           }
         })
       );
-    }).then(() => self.clients.claim()) // takes control immediately
+    }).then(() => self.clients.claim())  // take control immediately
   );
 });
 
@@ -81,20 +68,16 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // ----- API requests (GET) – stale‑while‑revalidate -----
+  // ----- API requests – stale‑while‑revalidate -----
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(
       caches.open(CACHE_NAME).then(cache => {
         return fetch(request)
           .then(networkResponse => {
-            // Update cache with fresh response
             cache.put(request, networkResponse.clone());
             return networkResponse;
           })
-          .catch(() => {
-            // Offline – try cache
-            return cache.match(request);
-          });
+          .catch(() => cache.match(request));
       })
     );
     return;
@@ -114,17 +97,16 @@ self.addEventListener('fetch', event => {
                   return networkResponse;
                 });
               })
-              .catch(() => {}) // ignore network errors
+              .catch(() => {})   // ignore network errors
           );
           return cachedResponse;
         }
 
-        // Not in cache – try network, fallback to offline page
+        // Not in cache – try network, then cache for next time
         return fetch(request)
           .then(networkResponse => {
-            // Cache a copy for next time
-            const responseClone = networkResponse.clone();
-            caches.open(CACHE_NAME).then(cache => cache.put(request, responseClone));
+            const clone = networkResponse.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(request, clone));
             return networkResponse;
           })
           .catch(() => {
@@ -133,7 +115,7 @@ self.addEventListener('fetch', event => {
               return caches.match(OFFLINE_PAGE);
             }
             // For other assets, return a simple error response
-            return new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
+            return new Response('Offline', { status: 503 });
           });
       })
   );
