@@ -2676,6 +2676,187 @@ def api_archive_batches():
     batches = [b for b in purchases if b['name'] == name and b['brand'] == brand]
     return jsonify(batches)
 
+@app.route('/api/sync/all', methods=['GET'])
+@login_required
+def api_sync_all():
+    """Return all data needed for offline sync: products, batches, sales, claims."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        # 1. Products (active, not permanently deleted)
+        cursor.execute("""
+            SELECT id, name, brand, category, cost_price, selling_price, stock, discount
+            FROM products
+            WHERE NOT EXISTS (
+                SELECT 1 FROM deleted_products dp
+                WHERE dp.product_id = products.id
+                AND dp.action = 'PERMANENTLY DELETED'
+                AND dp.source = 'product'
+            )
+        """)
+        products = cursor.fetchall()
+        product_list = [
+            {
+                "id": r[0],
+                "name": r[1],
+                "brand": r[2] or '',
+                "category": r[3] or '',
+                "cost_price": float(r[4]),
+                "selling_price": float(r[5]),
+                "stock": int(r[6]),
+                "discount": float(r[7])
+            }
+            for r in products
+        ]
+
+        # 2. Batches (purchase_batches) – all batches, even those with remaining_quantity=0
+        cursor.execute("""
+            SELECT id, product_id, quantity, remaining_quantity, cost_price,
+                   selling_price, discount, date, action, source,
+                   original_quantity, original_date, original_cost_price,
+                   original_selling_price, original_discount, claimed_quantity
+            FROM purchase_batches
+            ORDER BY id
+        """)
+        batches = cursor.fetchall()
+        batch_list = [
+            {
+                "id": r[0],
+                "product_id": r[1],
+                "quantity": r[2],
+                "remaining_quantity": r[3],
+                "cost_price": float(r[4]),
+                "selling_price": float(r[5]),
+                "discount": float(r[6]),
+                "date": r[7].isoformat() if r[7] else None,
+                "action": r[8] or '',
+                "source": r[9] or '',
+                "original_quantity": r[10],
+                "original_date": r[11].isoformat() if r[11] else None,
+                "original_cost_price": float(r[12]) if r[12] else 0,
+                "original_selling_price": float(r[13]) if r[13] else 0,
+                "original_discount": float(r[14]) if r[14] else 0,
+                "claimed_quantity": r[15] or 0
+            }
+            for r in batches
+        ]
+
+        # 3. Sales (only non‑reversed)
+        cursor.execute("""
+            SELECT id, date, subtotal, discount, total, profit,
+                   reversed, payment_method, cheque_number, user_id
+            FROM sales
+            WHERE reversed = 0
+        """)
+        sales = cursor.fetchall()
+        sales_list = [
+            {
+                "id": r[0],
+                "date": r[1].isoformat() if r[1] else None,
+                "subtotal": float(r[2]),
+                "discount": float(r[3]),
+                "total": float(r[4]),
+                "profit": float(r[5]),
+                "reversed": r[6],
+                "payment_method": r[7] or 'cash',
+                "cheque_number": r[8],
+                "user_id": r[9]
+            }
+            for r in sales
+        ]
+
+        # 4. Sales items
+        cursor.execute("""
+            SELECT id, sale_id, product_id, batch_id, quantity,
+                   selling_price, cost_price, profit
+            FROM sales_items
+        """)
+        items = cursor.fetchall()
+        sales_items_list = [
+            {
+                "id": r[0],
+                "sale_id": r[1],
+                "product_id": r[2],
+                "batch_id": r[3],
+                "quantity": r[4],
+                "selling_price": float(r[5]),
+                "cost_price": float(r[6]),
+                "profit": float(r[7])
+            }
+            for r in items
+        ]
+
+        # 5. Claims (active and resolved? include all)
+        cursor.execute("""
+            SELECT id, product_id, batch_id, product_name, brand,
+                   category, issue_type, description, quantity, status,
+                   created_at, updated_at
+            FROM claims
+        """)
+        claims = cursor.fetchall()
+        claims_list = [
+            {
+                "id": r[0],
+                "product_id": r[1],
+                "batch_id": r[2],
+                "product_name": r[3],
+                "brand": r[4] or '',
+                "category": r[5] or '',
+                "issue_type": r[6],
+                "description": r[7] or '',
+                "quantity": r[8],
+                "status": r[9] or 'active',
+                "created_at": r[10].isoformat() if r[10] else None,
+                "updated_at": r[11].isoformat() if r[11] else None
+            }
+            for r in claims
+        ]
+
+        # 6. Deleted products (for archive – optional but useful)
+        cursor.execute("""
+            SELECT id, name, brand, category, cost_price, selling_price,
+                   stock, discount, action, deleted_at, batch_id,
+                   batch_quantity, batch_remaining, product_id, source
+            FROM deleted_products
+            ORDER BY deleted_at DESC
+        """)
+        deleted = cursor.fetchall()
+        deleted_list = [
+            {
+                "id": r[0],
+                "name": r[1],
+                "brand": r[2] or '',
+                "category": r[3] or '',
+                "cost_price": float(r[4]) if r[4] else 0,
+                "selling_price": float(r[5]) if r[5] else 0,
+                "stock": r[6] or 0,
+                "discount": float(r[7]) if r[7] else 0,
+                "action": r[8] or '',
+                "deleted_at": r[9].isoformat() if r[9] else None,
+                "batch_id": r[10],
+                "batch_quantity": r[11],
+                "batch_remaining": r[12],
+                "product_id": r[13],
+                "source": r[14] or ''
+            }
+            for r in deleted
+        ]
+
+        return jsonify({
+            "products": product_list,
+            "batches": batch_list,
+            "sales": sales_list,
+            "sales_items": sales_items_list,
+            "claims": claims_list,
+            "deleted_products": deleted_list
+        })
+
+    except Exception as e:
+        app.logger.error(f"Sync all error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
 # ===================== IMPORT ENDPOINTS =====================
 import openpyxl
 from openpyxl import load_workbook

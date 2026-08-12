@@ -18,6 +18,13 @@
     <!-- Your custom CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 
+    <!-- ===== OFFLINE DATABASE (Dexie) & SYNC ENGINE ===== -->
+    <!-- Dexie -->
+    <script src="https://cdn.jsdelivr.net/npm/dexie@3.2.4/dist/dexie.min.js"></script>
+    <!-- Your DB and sync scripts – loaded always, but only used in app mode -->
+    <script src="{{ url_for('static', filename='js/db.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/sync.js') }}"></script>
+
     <!-- ===== SERVICE WORKER WITH CACHE-BUSTING ===== -->
     <script>
         if ('serviceWorker' in navigator) {
@@ -546,10 +553,12 @@
                     </button>
                 </div>
 
-                <!-- Install button -->
+                <!-- Install button – only visible to oxbee -->
+                {% if current_user and current_user.username.lower() == 'oxbee' %}
                 <button id="installAppBtn" class="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-md transition hidden">
                     <i class="fas fa-download mr-1"></i> Install App
                 </button>
+                {% endif %}
 
                 <button onclick="clearOfflineData()" class="text-xs bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-md transition">
                     <i class="fas fa-trash mr-1"></i> Clear Offline Data
@@ -627,6 +636,13 @@
 <script src="{{ url_for('static', filename='js/offline.js') }}"></script>
 <script>
     // ============================================================
+    //  APP MODE DETECTION
+    // ============================================================
+    function isAppMode() {
+        return window.matchMedia('(display-mode: standalone)').matches;
+    }
+
+    // ============================================================
     //  VERSION & PASSWORD – CHANGE TO FORCE REINSTALL
     // ============================================================
     const APP_VERSION = 'v3';
@@ -656,9 +672,13 @@
     ];
 
     // ============================================================
-    //  CACHE ALL PAGES FOR OFFLINE USE (post-login)
+    //  CACHE ALL PAGES FOR OFFLINE USE (only in app mode)
     // ============================================================
     async function cacheAllPages() {
+        if (!isAppMode()) {
+            console.log('🌐 Browser mode – skipping page cache.');
+            return;
+        }
         if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) {
             console.warn('⚠️ Service Worker not ready – skipping page cache');
             return;
@@ -668,7 +688,7 @@
                 type: 'CACHE_PAGES',
                 urls: PROTECTED_ROUTES
             });
-            console.log('📦 Sent caching request to Service Worker');
+            console.log('📦 Sent caching request to Service Worker (App mode).');
         } catch (err) {
             console.warn('⚠️ Failed to send caching request:', err);
         }
@@ -678,7 +698,7 @@
     //  VERSION CHECK – ONLY FOR STANDALONE
     // ============================================================
     (function checkVersion() {
-        if (!window.matchMedia('(display-mode: standalone)').matches) return;
+        if (!isAppMode()) return;
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('reinstall') === 'true') return;
         const storedVersion = localStorage.getItem('app_version');
@@ -700,7 +720,7 @@
     })();
 
     // ============================================================
-    //  PIN LOCK – ONLY FOR STANDALONE
+    //  PIN LOCK – ONLY FOR STANDALONE, ONCE PER SESSION (no timeout)
     // ============================================================
     let pinAttempt = '';
     const MAX_PIN_LENGTH = 4;
@@ -726,7 +746,6 @@
                 if (pinAttempt === PIN_CODE) {
                     pinError.textContent = '';
                     localStorage.setItem('pin_unlocked', 'true');
-                    localStorage.setItem('pin_unlocked_at', Date.now().toString());
                     pinLockScreen.classList.remove('active');
                     pinAttempt = '';
                     updatePinDots();
@@ -769,53 +788,21 @@
     });
 
     function checkPinLock() {
-        if (!window.matchMedia('(display-mode: standalone)').matches) return true;
-        const unlocked = localStorage.getItem('pin_unlocked') === 'true';
-        const unlockedAt = parseInt(localStorage.getItem('pin_unlocked_at') || '0', 10);
-        const now = Date.now();
-        const SESSION_TIMEOUT = 60 * 1000;
-        if (!unlocked || (now - unlockedAt) > SESSION_TIMEOUT) {
-            localStorage.removeItem('pin_unlocked');
-            localStorage.removeItem('pin_unlocked_at');
-            pinLockScreen.classList.add('active');
-            pinAttempt = '';
-            updatePinDots();
-            pinError.textContent = '';
-            return false;
+        // Only in standalone mode
+        if (!isAppMode()) return true;
+        // If already unlocked this session, skip
+        if (localStorage.getItem('pin_unlocked') === 'true') {
+            return true;
         }
-        return true;
+        // Otherwise show the lock screen
+        pinLockScreen.classList.add('active');
+        pinAttempt = '';
+        updatePinDots();
+        pinError.textContent = '';
+        return false;
     }
 
-    function refreshPinUnlock() {
-        localStorage.setItem('pin_unlocked', 'true');
-        localStorage.setItem('pin_unlocked_at', Date.now().toString());
-    }
-
-    let activityTimer;
-    function resetActivityTimer() {
-        clearTimeout(activityTimer);
-        if (pinLockScreen.classList.contains('active')) return;
-        if (!window.matchMedia('(display-mode: standalone)').matches) return;
-        activityTimer = setTimeout(() => {
-            if (!pinLockScreen.classList.contains('active')) {
-                localStorage.removeItem('pin_unlocked');
-                localStorage.removeItem('pin_unlocked_at');
-                pinLockScreen.classList.add('active');
-                pinAttempt = '';
-                updatePinDots();
-                pinError.textContent = '';
-            }
-        }, SESSION_TIMEOUT);
-    }
-
-    ['click', 'touchstart', 'keydown'].forEach(event => {
-        document.addEventListener(event, () => {
-            if (pinLockScreen.classList.contains('active')) return;
-            if (window.matchMedia('(display-mode: standalone)').matches) {
-                resetActivityTimer();
-            }
-        });
-    });
+    // No activity timer – stay unlocked for the whole session.
 
     // ============================================================
     //  SESSION MANAGEMENT
@@ -840,6 +827,8 @@
 
     function clearSession() {
         localStorage.removeItem('ox_user');
+        // Also clear PIN unlock flag
+        localStorage.removeItem('pin_unlocked');
     }
 
     function isSessionValid(session) {
@@ -868,82 +857,85 @@
     }
 
     // ============================================================
-    //  INSTALL PASSWORD LOGIC
+    //  INSTALL PASSWORD LOGIC (only if the button exists)
     // ============================================================
     let deferredPrompt = null;
     const installButton = document.getElementById('installAppBtn');
-    const passwordModal = document.getElementById('installPasswordModal');
-    const passwordInput = document.getElementById('installPasswordInput');
-    const errorMsg = document.getElementById('installErrorMsg');
 
-    window.addEventListener('beforeinstallprompt', (e) => {
-        e.preventDefault();
-        deferredPrompt = e;
-        installButton.classList.remove('hidden');
-        console.log('📲 Install prompt captured');
-    });
+    // Only proceed if the button exists (i.e., we are oxbee)
+    if (installButton) {
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            installButton.classList.remove('hidden');
+            console.log('📲 Install prompt captured');
+        });
 
-    installButton.addEventListener('click', () => {
-        if (!deferredPrompt) {
-            alert('Installation is not available. Please try again later.');
-            return;
-        }
-        passwordModal.classList.add('active');
-        passwordInput.value = '';
-        errorMsg.classList.remove('show');
-        passwordInput.focus();
-    });
-
-    document.getElementById('installCancelBtn').addEventListener('click', () => {
-        passwordModal.classList.remove('active');
-        errorMsg.classList.remove('show');
-    });
-
-    document.getElementById('installConfirmBtn').addEventListener('click', async () => {
-        const entered = passwordInput.value.trim();
-        if (entered === INSTALL_PASSWORD) {
-            errorMsg.classList.remove('show');
-            passwordModal.classList.remove('active');
-            if (deferredPrompt) {
-                deferredPrompt.prompt();
-                const result = await deferredPrompt.userChoice;
-                console.log('User choice:', result.outcome);
-                if (result.outcome === 'accepted') {
-                    console.log('✅ App installed.');
-                    localStorage.setItem('app_version', APP_VERSION);
-                    installButton.classList.add('hidden');
-                }
-                deferredPrompt = null;
+        installButton.addEventListener('click', () => {
+            if (!deferredPrompt) {
+                alert('Installation is not available. Please try again later.');
+                return;
             }
-        } else {
-            errorMsg.classList.add('show');
+            const passwordModal = document.getElementById('installPasswordModal');
+            const passwordInput = document.getElementById('installPasswordInput');
+            const errorMsg = document.getElementById('installErrorMsg');
+            passwordModal.classList.add('active');
             passwordInput.value = '';
-            passwordInput.focus();
-        }
-    });
-
-    passwordInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-            document.getElementById('installConfirmBtn').click();
-        }
-    });
-
-    passwordModal.addEventListener('click', (e) => {
-        if (e.target === passwordModal) {
-            passwordModal.classList.remove('active');
             errorMsg.classList.remove('show');
+            passwordInput.focus();
+        });
+
+        document.getElementById('installCancelBtn').addEventListener('click', () => {
+            document.getElementById('installPasswordModal').classList.remove('active');
+            document.getElementById('installErrorMsg').classList.remove('show');
+        });
+
+        document.getElementById('installConfirmBtn').addEventListener('click', async () => {
+            const entered = document.getElementById('installPasswordInput').value.trim();
+            if (entered === INSTALL_PASSWORD) {
+                document.getElementById('installErrorMsg').classList.remove('show');
+                document.getElementById('installPasswordModal').classList.remove('active');
+                if (deferredPrompt) {
+                    deferredPrompt.prompt();
+                    const result = await deferredPrompt.userChoice;
+                    console.log('User choice:', result.outcome);
+                    if (result.outcome === 'accepted') {
+                        console.log('✅ App installed.');
+                        localStorage.setItem('app_version', APP_VERSION);
+                        installButton.classList.add('hidden');
+                    }
+                    deferredPrompt = null;
+                }
+            } else {
+                document.getElementById('installErrorMsg').classList.add('show');
+                document.getElementById('installPasswordInput').value = '';
+                document.getElementById('installPasswordInput').focus();
+            }
+        });
+
+        document.getElementById('installPasswordInput').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                document.getElementById('installConfirmBtn').click();
+            }
+        });
+
+        document.getElementById('installPasswordModal').addEventListener('click', (e) => {
+            if (e.target === document.getElementById('installPasswordModal')) {
+                document.getElementById('installPasswordModal').classList.remove('active');
+                document.getElementById('installErrorMsg').classList.remove('show');
+            }
+        });
+
+        window.addEventListener('appinstalled', () => {
+            console.log('✅ App installed event.');
+            localStorage.setItem('app_version', APP_VERSION);
+            installButton.classList.add('hidden');
+            deferredPrompt = null;
+        });
+
+        if (isAppMode()) {
+            installButton.classList.add('hidden');
         }
-    });
-
-    window.addEventListener('appinstalled', () => {
-        console.log('✅ App installed event.');
-        localStorage.setItem('app_version', APP_VERSION);
-        installButton.classList.add('hidden');
-        deferredPrompt = null;
-    });
-
-    if (window.matchMedia('(display-mode: standalone)').matches) {
-        installButton.classList.add('hidden');
     }
 
     // ============================================================
@@ -989,9 +981,7 @@
     //  LOGOUT
     // ============================================================
     async function logout() {
-        clearSession();
-        localStorage.removeItem('pin_unlocked');
-        localStorage.removeItem('pin_unlocked_at');
+        clearSession(); // also clears pin_unlocked
         if (navigator.onLine) {
             try {
                 await fetch('/api/auth/logout', { method: 'POST' });
@@ -1001,36 +991,48 @@
     }
 
     // ============================================================
-    //  CLEAR OFFLINE DATA
+    //  CLEAR OFFLINE DATA (including Dexie)
     // ============================================================
     function clearOfflineData() {
-        if (!confirm('⚠️ This will clear all pending offline sales and import data. Proceed?')) return;
+        if (!confirm('⚠️ This will clear all pending offline sales, purchases, and local database. Proceed?')) return;
+        // Clear localStorage keys
         const keysToRemove = ['pendingCount', 'pendingSales', 'offlineQueue', 'importPending', 'pendingImports', 'offlineSales', 'pendingJobId', 'pendingJobStatus', 'pendingPurchases'];
         keysToRemove.forEach(key => { localStorage.removeItem(key); sessionStorage.removeItem(key); });
-        const dbNames = ['OfflineSalesDB', 'SalesDB', 'offlineDB', 'PendingDB', 'ImportQueueDB'];
-        dbNames.forEach(name => {
-            try { indexedDB.deleteDatabase(name); } catch(e) {}
-        });
+        // Delete Dexie database (if in app mode and db is available)
+        if (isAppMode() && db) {
+            db.delete().then(() => {
+                console.log('🗑️ Dexie database deleted');
+                setTimeout(() => { location.reload(); }, 600);
+            }).catch(err => console.warn('Error deleting Dexie:', err));
+        } else {
+            const dbNames = ['OfflineSalesDB', 'SalesDB', 'offlineDB', 'PendingDB', 'ImportQueueDB', 'OxSmartOfflineDB'];
+            dbNames.forEach(name => {
+                try { indexedDB.deleteDatabase(name); } catch(e) {}
+            });
+            setTimeout(() => { location.reload(); }, 600);
+        }
         const badge = document.getElementById('pending-badge');
         if (badge) { badge.style.display = 'none'; badge.textContent = ''; }
-        setTimeout(() => { location.reload(); }, 600);
     }
 
     // ============================================================
-    //  SYNC REMINDER (6 hours)
+    //  SYNC REMINDER (only in app mode)
     // ============================================================
     const SYNC_INTERVAL = 6 * 60 * 60 * 1000;
 
     function getLastSync() {
+        if (!isAppMode()) return Date.now(); // always fresh in browser mode
         const stored = localStorage.getItem('lastSyncTime');
         return stored ? parseInt(stored, 10) : 0;
     }
 
     function setLastSync() {
+        if (!isAppMode()) return;
         localStorage.setItem('lastSyncTime', Date.now().toString());
     }
 
     function showSyncReminder() {
+        if (!isAppMode()) return;
         const lastSync = getLastSync();
         const now = Date.now();
         if (lastSync === 0 || (now - lastSync) > SYNC_INTERVAL) {
@@ -1078,22 +1080,34 @@
     }
 
     // ============================================================
-    //  UNIFIED SYNC
+    //  UNIFIED SYNC (only in app mode)
     // ============================================================
     window.syncAllPending = async function() {
+        if (!isAppMode()) {
+            console.log('🌐 Browser mode – sync is not needed.');
+            return;
+        }
         if (!navigator.onLine) {
             alert('You are offline. Please connect to the internet to sync.');
             return;
         }
         console.log('🔄 Syncing all pending data...');
         try {
-            await syncPendingSales();
-            await syncPendingPurchases();
-            await syncPendingProductDeletions();
-            await syncPendingBatchDeletions();
+            // If the Dexie sync functions are available, use them
+            if (typeof pushPending === 'function' && typeof pullData === 'function') {
+                await pushPending();
+                await pullData();
+                console.log('✅ Dexie sync completed.');
+            } else {
+                // Fallback to old localStorage sync functions if they exist
+                if (typeof syncPendingSales === 'function') await syncPendingSales();
+                if (typeof syncPendingPurchases === 'function') await syncPendingPurchases();
+                if (typeof syncPendingProductDeletions === 'function') await syncPendingProductDeletions();
+                if (typeof syncPendingBatchDeletions === 'function') await syncPendingBatchDeletions();
+                console.log('✅ Legacy sync completed.');
+            }
             updatePendingBadge();
             setLastSync();
-            console.log('✅ Sync completed.');
             const badge = document.getElementById('pending-badge');
             let message = '✅ All pending items synced successfully!';
             if (badge && badge.style.display !== 'none') {
@@ -1125,19 +1139,18 @@
     };
 
     // ============================================================
-    //  INITIALIZATION (FIXED)
+    //  INITIALIZATION
     // ============================================================
     document.addEventListener('DOMContentLoaded', function() {
         const yearSpan = document.getElementById('footerYear');
         if (yearSpan) yearSpan.textContent = new Date().getFullYear();
 
-        // PIN lock
+        // Check PIN lock (only if app mode)
         const pinUnlocked = checkPinLock();
         if (!pinUnlocked) {
+            // Wait for PIN to be entered
             const observer = new MutationObserver(() => {
                 if (!pinLockScreen.classList.contains('active')) {
-                    refreshPinUnlock();
-                    resetActivityTimer();
                     initializeApp();
                     observer.disconnect();
                 }
@@ -1150,8 +1163,6 @@
                 }
             }, 100);
         } else {
-            refreshPinUnlock();
-            resetActivityTimer();
             initializeApp();
         }
 
@@ -1196,50 +1207,74 @@
                 isLoggedIn = true;
             }
 
-            // If we have a valid session, cache all protected pages for offline use
+            // If we have a valid session, run offline setup only in app mode
             if (isLoggedIn) {
-                // Cache all pages (only if online, otherwise the SW will serve cached)
-                // We'll still send the message to ensure they are cached when back online
-                cacheAllPages();
+                if (isAppMode()) {
+                    // App mode: full offline setup
+                    if (navigator.onLine) {
+                        if (typeof fullSync === 'function') {
+                            try {
+                                await fullSync();
+                                console.log('✅ Full sync completed (App mode).');
+                            } catch (e) {
+                                console.warn('Full sync failed:', e);
+                            }
+                        } else {
+                            console.warn('fullSync not defined – using fallback');
+                            await window.syncAllPending();
+                        }
+                        // Set up periodic sync every 5 minutes (only in app mode)
+                        setInterval(() => {
+                            if (navigator.onLine && typeof fullSync === 'function') {
+                                fullSync();
+                            }
+                        }, 5 * 60 * 1000);
+                    } else {
+                        setTimeout(showSyncReminder, 2000);
+                    }
+                    // Cache pages for offline reading
+                    cacheAllPages();
+                } else {
+                    // Browser mode: skip Dexie and offline features
+                    console.log('🌐 Browser mode – running online-only.');
+                }
             }
 
-            // Reinstall notice
-            const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.get('reinstall') === 'true') {
-                const toast = document.createElement('div');
-                toast.textContent = '📱 Please uninstall the old app from your device, then tap "Install App" to reinstall.';
-                toast.style.cssText = `
-                    position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%);
-                    background: #FEF3C7; color: #92400E; padding: 16px 24px;
-                    border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-                    z-index: 9999; font-size: 14px; max-width: 90vw;
-                    border: 1px solid #F59E0B;
-                    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-                    text-align: center;
-                `;
-                document.body.appendChild(toast);
-                setTimeout(() => toast.remove(), 10000);
+            // Reinstall notice (only in app mode)
+            if (isAppMode()) {
+                const urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.get('reinstall') === 'true') {
+                    const toast = document.createElement('div');
+                    toast.textContent = '📱 Please uninstall the old app from your device, then tap "Install App" to reinstall.';
+                    toast.style.cssText = `
+                        position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%);
+                        background: #FEF3C7; color: #92400E; padding: 16px 24px;
+                        border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+                        z-index: 9999; font-size: 14px; max-width: 90vw;
+                        border: 1px solid #F59E0B;
+                        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+                        text-align: center;
+                    `;
+                    document.body.appendChild(toast);
+                    setTimeout(() => toast.remove(), 10000);
+                }
             }
-
-            if (navigator.onLine) {
-                console.log('🌐 Online – performing initial sync...');
-                window.syncAllPending();
-            } else {
-                setTimeout(showSyncReminder, 2000);
-            }
-            setTimeout(showSyncReminder, 4000);
         }
     });
 
     // ============================================================
-    //  AUTO-SYNC ON RECONNECT
+    //  AUTO-SYNC ON RECONNECT (only in app mode)
     // ============================================================
     window.addEventListener('online', function() {
+        if (!isAppMode()) return;
         console.log('🌐 Connection restored – syncing all pending items...');
-        window.syncAllPending();
+        if (typeof fullSync === 'function') {
+            fullSync().catch(err => console.warn('fullSync error:', err));
+        } else {
+            window.syncAllPending();
+        }
         const reminder = document.getElementById('syncReminderToast');
         if (reminder) reminder.remove();
-        // Try to cache pages again when back online
         cacheAllPages();
     });
 
@@ -1249,6 +1284,33 @@
     window.addEventListener('resize', function() {
         if (window.innerWidth >= 768) closeSidebar();
     });
+
+    // ============================================================
+    //  UPDATE PENDING BADGE (from Dexie, only in app mode)
+    // ============================================================
+    async function updatePendingBadge() {
+        if (!isAppMode()) {
+            const badge = document.getElementById('pending-badge');
+            if (badge) { badge.style.display = 'none'; }
+            return;
+        }
+        if (!db) return;
+        try {
+            const count = await db.pending_ops.where('synced').equals(0).count();
+            const badge = document.getElementById('pending-badge');
+            if (badge) {
+                if (count > 0) {
+                    badge.style.display = 'inline-block';
+                    badge.textContent = count + ' pending';
+                } else {
+                    badge.style.display = 'none';
+                    badge.textContent = '';
+                }
+            }
+        } catch (e) {
+            console.warn('Error updating pending badge:', e);
+        }
+    }
 </script>
 </body>
 </html>

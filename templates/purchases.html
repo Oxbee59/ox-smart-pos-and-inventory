@@ -6,7 +6,7 @@
     ⚠️ You are offline – showing cached accessory purchases. New purchases will be saved and synced when you reconnect.
 </div>
 
-<!-- Cache banner -->
+<!-- Cache banner (only for app mode) -->
 <div id="cacheBanner" class="mb-4 bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded hidden">
     ⚠️ Showing cached data (last updated: <span id="cacheTimestamp"></span>). 
     <button onclick="refreshData()" class="underline font-bold">Click here to refresh</button>
@@ -335,7 +335,6 @@
     let caseSensitive = false;
     let pendingUpdatePayload = null;
     let pendingUpdateBatchId = null;
-    // New variables for second modal
     let pendingCreatePayload = null;
     let pendingCreateBatchId = null;
 
@@ -742,7 +741,6 @@
             document.getElementById('historyModal').classList.remove('hidden');
             document.body.style.overflow = 'hidden';
 
-            // Store update history for toggle
             window._updateHistory = updateHistory;
         } catch (error) {
             alert('Error loading history: ' + error.message);
@@ -763,7 +761,7 @@
         document.body.style.overflow = '';
     }
 
-    // ---------- Load purchases (with filter params) ----------
+    // ======================== LOAD PURCHASES ========================
     async function loadPurchases(forceRefresh = false) {
         if (isLoading) return;
         isLoading = true;
@@ -772,13 +770,56 @@
             isDataFresh = false;
             try { localStorage.removeItem(CACHE_KEY); localStorage.removeItem(CACHE_TIMESTAMP_KEY); } catch(e) {}
         }
+
         let purchases = [];
         let fromCache = false;
 
-        if (navigator.onLine) {
+        // --- APP MODE: READ FROM DEXIE ---
+        if (isAppMode() && db) {
+            try {
+                // Read batches from Dexie
+                const batches = await db.batches.where('product_id').above(0).toArray();
+                // Get product names
+                const productIds = [...new Set(batches.map(b => b.product_id))];
+                const products = await db.products.where('id').anyOf(productIds).toArray();
+                const productMap = {};
+                products.forEach(p => productMap[p.id] = p);
+                // Enrich batches
+                purchases = batches.map(b => ({
+                    batch_id: b.id,
+                    name: productMap[b.product_id]?.name || 'Unknown',
+                    brand: productMap[b.product_id]?.brand || '',
+                    category: productMap[b.product_id]?.category || '',
+                    quantity: b.quantity,
+                    remaining_quantity: b.remaining_quantity,
+                    cost_price: b.cost_price,
+                    discount: b.discount,
+                    selling_price: b.selling_price,
+                    total_cost: b.cost_price * b.quantity - b.discount,
+                    date: b.date,
+                    action: b.action,
+                    source: b.source,
+                    claimed_quantity: b.claimed_quantity || 0,
+                    original_quantity: b.original_quantity,
+                    original_date: b.original_date,
+                    original_cost_price: b.original_cost_price,
+                    original_selling_price: b.original_selling_price
+                }));
+                // Filter category
+                purchases = purchases.filter(p => p.category !== 'Screen'); // exclude screens
+                fromCache = true;
+                isDataFresh = false; // Dexie data is local, not necessarily fresh
+                console.log('📦 Loaded purchases from Dexie (App mode)');
+            } catch (err) {
+                console.warn('Failed to load from Dexie, falling back to API:', err);
+                // fall through to online fetch
+            }
+        }
+
+        // --- BROWSER MODE or FALLBACK: FETCH FROM SERVER ---
+        if (purchases.length === 0 && navigator.onLine) {
             try {
                 let url = '/api/purchases?exclude_category=Screen';
-                // Add filter parameters if present
                 const fromDate = document.getElementById('fromDate').value;
                 const toDate = document.getElementById('toDate').value;
                 const dateType = document.getElementById('dateType').value;
@@ -792,12 +833,11 @@
                     if (Array.isArray(purchases)) {
                         cachePurchases(purchases);
                         isDataFresh = true;
-                        currentFilteredData = purchases;
+                        fromCache = false;
                         console.log('✅ Data loaded from API (fresh)');
-                        const pending = getPendingPurchases();
-                        if (pending.length > 0) {
-                            console.log(`📦 ${pending.length} pending purchases found - syncing automatically...`);
-                            await syncAllPendingSilently();
+                        // If in app mode, also update Dexie in background
+                        if (isAppMode() && typeof pullData === 'function') {
+                            pullData().catch(e => console.warn('Background pullData failed:', e));
                         }
                     } else {
                         throw new Error('Invalid data format');
@@ -811,66 +851,28 @@
                 const cached = loadCachedPurchases();
                 if (cached && Array.isArray(cached)) {
                     purchases = cached;
-                    currentFilteredData = cached;
                     isDataFresh = false;
                 } else {
                     purchases = [];
-                    currentFilteredData = [];
-                    isDataFresh = false;
                 }
             }
-        } else {
-            fromCache = true;
+        } else if (purchases.length === 0 && !navigator.onLine) {
+            // Offline and no Dexie data? Use localStorage cache
             const cached = loadCachedPurchases();
             if (cached && Array.isArray(cached)) {
                 purchases = cached;
-                currentFilteredData = cached;
-                isDataFresh = false;
-            } else {
-                purchases = [];
-                currentFilteredData = [];
+                fromCache = true;
                 isDataFresh = false;
             }
         }
 
         currentPurchases = purchases;
-        renderList(currentPurchases, fromCache);
+        currentFilteredData = purchases;
+        renderList(purchases, fromCache);
         updateCacheBanner();
         updatePendingBadge();
         checkForBatchEdit();
         isLoading = false;
-    }
-
-    async function syncAllPendingSilently() {
-        const pending = getPendingPurchases();
-        if (pending.length === 0) return;
-        let successCount = 0, failCount = 0;
-        for (let i = pending.length - 1; i >= 0; i--) {
-            const item = pending[i];
-            try {
-                let url = '/api/purchases';
-                let method = 'POST';
-                if (item.type === 'update' && item.batchId) {
-                    url = `/api/purchases/${item.batchId}`;
-                    method = 'PUT';
-                }
-                const res = await fetch(url, {
-                    method: method,
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(item.data)
-                });
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data.success) { pending.splice(i, 1); successCount++; }
-                    else { failCount++; }
-                } else { failCount++; }
-            } catch (error) { failCount++; }
-        }
-        if (successCount > 0 || failCount > 0) {
-            savePendingPurchases(pending);
-            updatePendingBadge();
-            console.log(`📦 Sync results: ${successCount} success, ${failCount} failed`);
-        }
     }
 
     // ---------- Render list with enhanced badges ----------
@@ -890,11 +892,8 @@
             const soldQty = (p.quantity || 0) - (p.remaining_quantity || 0);
             const claimedCost = claimedQty * (p.cost_price || 0);
             const soldBadge = soldQty > 0 ? `<span class="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded ml-2">📊 ${soldQty} Sold</span>` : '';
-
             const isUpdated = (p.action !== 'added');
-            const updatedBadge = isUpdated ?
-                `<span class="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded ml-2">🔄 Updated</span>` :
-                '';
+            const updatedBadge = isUpdated ? `<span class="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded ml-2">🔄 Updated</span>` : '';
 
             return `
             <div class="border rounded-lg p-4 hover:shadow transition">
@@ -931,12 +930,11 @@
         updateSummary(purchases);
     }
 
-    // ---------- Summary – FIXED CAPITAL = Total Cost – Claimed Cost ----------
+    // ---------- Summary – CORRECTED TOTAL COST & CAPITAL ----------
     function updateSummary(purchases) {
         let totalQty = 0, totalRemaining = 0, totalCost = 0, totalDiscount = 0, totalSelling = 0, totalProfit = 0;
-        let totalClaimed = 0, totalGood = 0, totalClaimedCost = 0, totalSold = 0;
+        let totalCapital = 0, totalClaimed = 0, totalGood = 0, totalClaimedCost = 0, totalSold = 0;
         const totalBatches = purchases ? purchases.length : 0;
-
         if (purchases && purchases.length > 0) {
             purchases.forEach(p => {
                 const itemQty = p.quantity || 0;
@@ -946,7 +944,6 @@
                 const itemDiscount = p.discount || 0;
                 const claimed = p.claimed_quantity || 0;
                 const sold = itemQty - remainingQty;
-
                 totalQty += itemQty;
                 totalRemaining += remainingQty;
                 totalSold += sold;
@@ -956,14 +953,14 @@
                 totalClaimed += claimed;
                 totalGood += remainingQty - claimed;
                 totalClaimedCost += claimed * itemCost;
-
                 const itemProfit = (itemSelling - itemCost) * itemQty - itemDiscount;
                 totalProfit += itemProfit;
+                // Capital: use adjusted capital (total cost - claimed cost)
+                // We'll compute after loop
             });
         }
-
-        // ✅ FIX: Capital = Total Cost – Claimed Cost (matches PDF "Adjusted Capital")
-        const totalCapital = totalCost - totalClaimedCost;
+        // Capital = Total Cost – Claimed Cost
+        totalCapital = totalCost - totalClaimedCost;
 
         const isOffline = !navigator.onLine;
         const isCached = !isDataFresh && !isOffline;
@@ -999,7 +996,7 @@
         `;
     }
 
-    // ---------- Save pending purchase ----------
+    // ---------- Save pending purchase (legacy localStorage) ----------
     function savePendingPurchase(payload, actionType, batchId) {
         let pending = getPendingPurchases();
         pending.push({
@@ -1055,7 +1052,6 @@
                 const costChanged = Math.abs(purchase.cost_price - payload.cost_price) > 0.001;
                 const sellingChanged = Math.abs(purchase.selling_price - payload.selling_price) > 0.001;
                 const discountChanged = Math.abs((purchase.discount || 0) - payload.discount) > 0.001;
-                // 🔥 Identity changed: case-sensitive comparison now
                 const identityChanged = (
                     purchase.name !== payload.name ||
                     purchase.brand !== payload.brand ||
@@ -1074,19 +1070,101 @@
         await doSubmitPurchase(payload, editMode ? 'auto' : 'add', editBatchId);
     }
 
+    // ---------- Core submit logic (conditional Dexie vs API) ----------
     async function doSubmitPurchase(payload, actionType, batchId) {
-        let url = '/api/purchases';
-        let method = 'POST';
-        if (actionType === 'update' || (editMode && batchId)) {
-            url = `/api/purchases/${batchId}`;
-            method = 'PUT';
-            payload.update_mode = actionType === 'create' ? 'create' : 'update';
-            // If we have a keep_sold_with_old flag in the payload, pass it
-            if (typeof payload.keep_sold_with_old !== 'undefined') {
-                // It's already set; we'll include it
+        const isApp = isAppMode();
+
+        // =========== APP MODE: WRITE TO DEXIE + QUEUE ===========
+        if (isApp && db) {
+            try {
+                let localBatchId = batchId;
+                if (actionType === 'add' || actionType === 'create') {
+                    // Generate temporary ID
+                    const tempId = Date.now() + '_' + Math.random().toString(36).substr(2,6);
+                    localBatchId = tempId;
+                    // Find product by name/brand
+                    const product = await db.products.where({ name: payload.name, brand: payload.brand }).first();
+                    if (!product) {
+                        alert('Product not found locally. Please sync first or create the product online.');
+                        return;
+                    }
+                    // Add batch locally
+                    await db.batches.add({
+                        id: tempId,
+                        product_id: product.id,
+                        quantity: payload.quantity,
+                        remaining_quantity: payload.quantity,
+                        cost_price: payload.cost_price,
+                        selling_price: payload.selling_price,
+                        discount: payload.discount,
+                        date: new Date().toISOString(),
+                        action: 'added',
+                        source: payload.source || 'Unknown',
+                        claimed_quantity: 0,
+                        original_quantity: payload.quantity,
+                        original_date: new Date().toISOString(),
+                        original_cost_price: payload.cost_price,
+                        original_selling_price: payload.selling_price,
+                        original_discount: payload.discount
+                    });
+                    // Update product stock locally
+                    await db.products.update(product.id, { stock: (product.stock || 0) + payload.quantity });
+                } else if (actionType === 'update' || actionType === 'auto') {
+                    // Update existing batch locally
+                    const oldBatch = await db.batches.get(batchId);
+                    if (!oldBatch) throw new Error('Batch not found locally');
+                    const soldQty = oldBatch.quantity - oldBatch.remaining_quantity;
+                    const newRemaining = payload.quantity - soldQty;
+                    await db.batches.update(batchId, {
+                        quantity: payload.quantity,
+                        remaining_quantity: Math.max(newRemaining, 0),
+                        cost_price: payload.cost_price,
+                        selling_price: payload.selling_price,
+                        discount: payload.discount,
+                        action: 'updated',
+                        source: payload.source || 'Unknown'
+                    });
+                }
+
+                // Queue the operation
+                await db.pending_ops.add({
+                    operation: actionType === 'add' ? 'add' : 'update',
+                    table: 'batches',
+                    record_id: localBatchId,
+                    payload: payload,
+                    timestamp: new Date().toISOString(),
+                    attempts: 0,
+                    synced: 0
+                });
+
+                // If online, try to sync immediately
+                if (navigator.onLine) {
+                    await pushPending();
+                }
+
+                alert('Purchase saved locally' + (navigator.onLine ? ' and synced.' : '. Will sync when online.'));
+                resetForm();
+                loadPurchases();
+                return;
+            } catch (err) {
+                console.error('Dexie write error:', err);
+                alert('Error saving locally: ' + err.message);
+                return;
             }
         }
+
+        // =========== BROWSER MODE: USE API ===========
         try {
+            let url = '/api/purchases';
+            let method = 'POST';
+            if (actionType === 'update' || (editMode && batchId)) {
+                url = `/api/purchases/${batchId}`;
+                method = 'PUT';
+                payload.update_mode = actionType === 'create' ? 'create' : 'update';
+                if (typeof payload.keep_sold_with_old !== 'undefined') {
+                    // keep as is
+                }
+            }
             const res = await fetch(url, {
                 method: method,
                 headers: { 'Content-Type': 'application/json' },
@@ -1100,10 +1178,6 @@
             if (data.success) {
                 alert(editMode ? '✅ Accessory purchase updated!' : '✅ Accessory purchase added!');
                 resetForm();
-                if (window.history && window.history.pushState) {
-                    const newUrl = window.location.pathname;
-                    window.history.pushState({}, '', newUrl);
-                }
                 editMode = false;
                 editBatchId = null;
                 loadPurchases(true);
@@ -1121,7 +1195,6 @@
     }
 
     // ====== MODAL EVENT LISTENERS ======
-    // Update Mode – Update button
     document.getElementById('updateModeUpdateBtn').addEventListener('click', function() {
         document.getElementById('updateModeModal').classList.add('hidden');
         if (pendingUpdatePayload && pendingUpdateBatchId) {
@@ -1131,7 +1204,6 @@
         }
     });
 
-    // Update Mode – Create new batch button → show second modal
     document.getElementById('updateModeCreateBtn').addEventListener('click', function() {
         document.getElementById('updateModeModal').classList.add('hidden');
         if (pendingUpdatePayload && pendingUpdateBatchId) {
@@ -1141,14 +1213,12 @@
         }
     });
 
-    // Update Mode – Cancel button
     document.getElementById('updateModeCancelBtn').addEventListener('click', function() {
         document.getElementById('updateModeModal').classList.add('hidden');
         pendingUpdatePayload = null;
         pendingUpdateBatchId = null;
     });
 
-    // Create Batch Modal – Proceed
     document.getElementById('createBatchProceedBtn').addEventListener('click', function() {
         const keepSold = document.getElementById('keepSoldWithOld').checked;
         document.getElementById('createBatchModal').classList.add('hidden');
@@ -1160,28 +1230,21 @@
         }
     });
 
-    // Create Batch Modal – Cancel
     document.getElementById('createBatchCancelBtn').addEventListener('click', function() {
         document.getElementById('createBatchModal').classList.add('hidden');
         pendingCreatePayload = null;
         pendingCreateBatchId = null;
-        // Re-open first modal so user can choose again
         document.getElementById('updateModeModal').classList.remove('hidden');
     });
 
     // ---------- Edit / Reset ----------
     function editPurchase(batchId) {
-        console.log('✏️ Editing purchase:', batchId);
         const purchase = currentPurchases.find(p => p.batch_id === batchId);
         if (!purchase) {
-            console.warn('Purchase not found:', batchId);
             alert(`❌ Batch #${batchId} not found. It may have been deleted.`);
             return;
         }
-        console.log('📦 Purchase data:', purchase);
         const soldQty = (purchase.quantity || 0) - (purchase.remaining_quantity || 0);
-        if (soldQty > 0) console.log(`📊 This batch has ${soldQty} units sold. Sold history will be preserved.`);
-
         document.getElementById('name').value = purchase.name || '';
         document.getElementById('brand').value = purchase.brand || '';
         document.getElementById('category').value = purchase.category || 'Accessory';
@@ -1241,29 +1304,24 @@
         loadPurchases(true);
     }
 
-    // ========== ✅ UPDATED FILTER FUNCTION – with auto‑enable & proper error handling ==========
+    // ========== FILTER FUNCTION ==========
     async function filterPurchases() {
         let fromDate = document.getElementById('fromDate').value;
         let toDate = document.getElementById('toDate').value;
         let dateType = document.getElementById('dateType').value;
         let showUpdatedOnly = document.getElementById('showUpdatedOnly').checked;
 
-        // 🆕 Auto‑enable "Show only updated" when Date Type = "Last Update Date"
         if (dateType === 'updated' && !showUpdatedOnly) {
             showUpdatedOnly = true;
             document.getElementById('showUpdatedOnly').checked = true;
-            console.log('🔄 Auto-enabled "Show only updated" because Date Type is "Last Update Date".');
         }
 
-        // Case 1: Both dates provided – use the full filter endpoint
         if (fromDate && toDate) {
             try {
                 let url = `/api/purchases/filter?start_date=${fromDate}&end_date=${toDate}&exclude_category=Screen&date_type=${dateType}&show_updated_only=${showUpdatedOnly}`;
-                console.log('🔍 Filter URL (with dates):', url);
                 const res = await fetch(url);
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const data = await res.json();
-                console.log('🔍 Filter API returned:', data.length, 'items');
                 applyFilterResult(data);
             } catch (err) {
                 console.error('Filter error:', err);
@@ -1273,15 +1331,12 @@
             return;
         }
 
-        // Case 2: No dates, but "Show only updated" is checked
         if (showUpdatedOnly) {
             try {
                 let url = `/api/purchases?exclude_category=Screen&show_updated_only=true`;
-                console.log('🔍 Filter URL (updated only):', url);
                 const res = await fetch(url);
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const data = await res.json();
-                console.log('🔍 Updated-only API returned:', data.length, 'items');
                 applyFilterResult(data);
             } catch (err) {
                 console.error('Filter error:', err);
@@ -1291,12 +1346,10 @@
             return;
         }
 
-        // Case 3: No dates, no updated-only – show message and load all
         alert('Please select a date range or check "Show only updated".');
         await loadPurchases();
     }
 
-    // Helper to apply filter result
     function applyFilterResult(data) {
         if (Array.isArray(data)) {
             currentPurchases = data;
@@ -1313,7 +1366,6 @@
         }
     }
 
-    // Helper to load cached data on error
     function loadCachedData() {
         const cached = loadCachedPurchases();
         if (cached && Array.isArray(cached)) {
@@ -1326,7 +1378,7 @@
         }
     }
 
-    // ---------- PDF – FIXED CAPITAL (Total Cost – Claimed Cost) ----------
+    // ---------- PDF ----------
     async function generatePDF() {
         if (!navigator.onLine) {
             alert('PDF generation requires internet. Please connect and try again.');
@@ -1340,7 +1392,7 @@
             return;
         }
 
-        let totalQty = 0, totalCost = 0, totalDiscount = 0, totalSelling = 0, totalProfit = 0;
+        let totalQty = 0, totalCost = 0, totalDiscount = 0, totalSelling = 0, totalProfit = 0, totalCapital = 0;
         let totalClaimed = 0, totalClaimedCost = 0, totalRemaining = 0, totalSold = 0;
         purchasesToExport.forEach(p => {
             const itemQty = p.quantity || 0;
@@ -1361,8 +1413,6 @@
             const itemProfit = (itemSelling - itemCost) * itemQty - itemDiscount;
             totalProfit += itemProfit;
         });
-
-        // ✅ Capital = Total Cost – Claimed Cost (matches summary)
         const adjustedCapital = totalCost - totalClaimedCost;
         const soldPercentage = totalQty > 0 ? ((totalSold / totalQty) * 100) : 0;
 
@@ -1382,7 +1432,7 @@
                         total_discount: totalDiscount,
                         total_selling: totalSelling,
                         total_profit: totalProfit,
-                        total_capital: totalCost - totalClaimedCost,  // old name kept for compatibility
+                        total_capital: totalCost - totalClaimedCost,
                         adjusted_capital: adjustedCapital,
                         total_claimed: totalClaimed,
                         total_claimed_cost: totalClaimedCost,
@@ -1391,7 +1441,6 @@
                     }
                 })
             });
-
             if (!res.ok) {
                 let errorMsg = `HTTP ${res.status}`;
                 try {
@@ -1400,7 +1449,6 @@
                 } catch (_) {}
                 throw new Error(errorMsg);
             }
-
             const blob = await res.blob();
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -1416,7 +1464,7 @@
         }
     }
 
-    // ---------- NEW UNIFIED PRODUCT SEARCH (for both Name and Brand) ----------
+    // ---------- SUGGESTIONS (unchanged) ----------
     let nameTimeout, brandTimeout, catTimeout, sourceTimeout;
 
     async function fetchProductSuggestions(inputId, suggestionsId) {
@@ -1554,7 +1602,6 @@
             if (e.key === 'Enter') applyAdvancedSearch();
         });
 
-        // Name and Brand use the unified product search
         document.getElementById('name').addEventListener('input', function() {
             clearTimeout(nameTimeout);
             nameTimeout = setTimeout(() => fetchProductSuggestions('name', 'nameSuggestions'), 300);
