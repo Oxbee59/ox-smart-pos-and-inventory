@@ -4,6 +4,7 @@ from services.product_service import get_all_products as get_all_products_servic
 import os
 import uuid
 import threading
+from flask import send_from_directory
 
 # ---------- IMPORT PURCHASE SERVICES ----------
 from services.purchase_service import (
@@ -180,6 +181,10 @@ def parse_date_cell(value):
 # ===================== CREATE APP =====================
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "temporary-dev-key")
+
+@app.route('/sw.js')
+def service_worker():
+    return send_from_directory('static', 'sw.js')
 
 # ===================== CLAIM SERVICES (imported after app created) =====================
 from services.claim_service import (

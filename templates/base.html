@@ -28,7 +28,8 @@
     <!-- ===== SERVICE WORKER WITH CACHE-BUSTING ===== -->
     <script>
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/static/sw.js?v=5')
+            // Register from root so it controls all pages
+            navigator.serviceWorker.register('/sw.js?v=6')
                 .then(() => console.log('✅ Service Worker registered'))
                 .catch(err => console.log('❌ SW registration failed:', err));
         }
@@ -672,19 +673,24 @@
     ];
 
     // ============================================================
-    //  CACHE ALL PAGES FOR OFFLINE USE (only in app mode)
+    //  IMPROVED CACHE ALL PAGES (WAITS FOR SW READY)
     // ============================================================
     async function cacheAllPages() {
         if (!isAppMode()) {
             console.log('🌐 Browser mode – skipping page cache.');
             return;
         }
-        if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) {
-            console.warn('⚠️ Service Worker not ready – skipping page cache');
+        if (!('serviceWorker' in navigator)) {
+            console.warn('⚠️ Service Worker not supported');
             return;
         }
         try {
-            navigator.serviceWorker.controller.postMessage({
+            const registration = await navigator.serviceWorker.ready;
+            if (!registration.active) {
+                console.warn('⚠️ No active service worker');
+                return;
+            }
+            registration.active.postMessage({
                 type: 'CACHE_PAGES',
                 urls: PROTECTED_ROUTES
             });

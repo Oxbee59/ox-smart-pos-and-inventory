@@ -4,7 +4,7 @@
 //  + on‑demand page caching via postMessage
 // ============================================================
 
-const CACHE_NAME = 'oxsmart-v5';  // ⚠️ increment this on every deploy
+const CACHE_NAME = 'oxsmart-v6';  // ⚠️ increment this on every deploy
 
 // ----- Only static assets that actually exist -----
 // (Add any other fonts, images, etc. that you have)
