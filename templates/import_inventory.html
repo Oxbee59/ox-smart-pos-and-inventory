@@ -1,6 +1,11 @@
 {% extends 'base.html' %}
 
 {% block content %}
+<!-- Offline banner -->
+<div id="offlineBanner" class="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded hidden">
+    ⚠️ You are offline – cannot upload or import. Please connect to the internet to perform imports.
+</div>
+
 <h1 class="text-3xl font-bold text-gray-800 mb-6">📥 Import Data</h1>
 
 <!-- ========== PURCHASE IMPORT CARD ========== -->
@@ -52,7 +57,7 @@
         <div class="flex items-center gap-4">
             <input type="file" id="purchaseFileInput" name="file" accept=".xlsx,.xls" required
                    class="border border-gray-300 rounded-md px-3 py-2 focus:ring focus:ring-indigo-200">
-            <button type="submit" class="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-md">
+            <button type="submit" id="purchaseSubmitBtn" class="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-md">
                 Upload & Import
             </button>
         </div>
@@ -121,7 +126,7 @@
         <div class="flex items-center gap-4">
             <input type="file" id="salesFileInput" name="file" accept=".xlsx,.xls" required
                    class="border border-gray-300 rounded-md px-3 py-2 focus:ring focus:ring-indigo-200">
-            <button type="submit" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-md">
+            <button type="submit" id="salesSubmitBtn" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-md">
                 Upload & Import
             </button>
         </div>
@@ -142,6 +147,34 @@
 </div>
 
 <script>
+    // ---- Offline banner and UI control ----
+    function updateOfflineBanner() {
+        const banner = document.getElementById('offlineBanner');
+        const isOnline = navigator.onLine;
+        if (!isOnline) {
+            banner.classList.remove('hidden');
+        } else {
+            banner.classList.add('hidden');
+        }
+        // Disable upload buttons and file inputs when offline
+        ['purchaseSubmitBtn', 'salesSubmitBtn'].forEach(id => {
+            const btn = document.getElementById(id);
+            if (btn) {
+                btn.disabled = !isOnline;
+                btn.classList.toggle('opacity-50', !isOnline);
+                btn.classList.toggle('cursor-not-allowed', !isOnline);
+            }
+        });
+        ['purchaseFileInput', 'salesFileInput'].forEach(id => {
+            const input = document.getElementById(id);
+            if (input) {
+                input.disabled = !isOnline;
+            }
+        });
+    }
+    window.addEventListener('online', updateOfflineBanner);
+    window.addEventListener('offline', updateOfflineBanner);
+
     // ---- Utility: start polling for a given job ID ----
     function startPolling(jobId, type, statusTextId, progressBarId, counterId, resultDivId, cancelBtnId, progressId) {
         const statusText = document.getElementById(statusTextId);
@@ -160,12 +193,17 @@
         // Show progress container
         progressContainer.classList.remove('hidden');
         cancelBtn.classList.remove('hidden');
-        resultDiv.innerHTML = ''; // clear old result
+        resultDiv.innerHTML = '';
         progressBar.style.width = '0%';
         let previousPercent = 0;
 
         // Poll function
         const poll = async () => {
+            // If offline, just wait and do nothing – we'll retry when online
+            if (!navigator.onLine) {
+                statusText.textContent = '⏳ Offline – waiting for connection...';
+                return;
+            }
             try {
                 const resp = await fetch(`/api/import/progress/${jobId}`);
                 const data = await resp.json();
@@ -225,7 +263,7 @@
                             ${message || `Imported ${imported} records.`}
                         </div>`;
 
-                        // ---- AUTOMATIC VERIFICATION REPORT (if present) ----
+                        // Verification report
                         const verification = result.verification;
                         if (verification) {
                             if (verification.error) {
@@ -252,7 +290,7 @@
                                 html += `</div>`;
                             }
                         } else {
-                            // No verification – show manual verify button (for sales import)
+                            // No verification – show manual verify button
                             html += `<div class="mt-4">
                                 <button id="verifyBtn_${type}" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md">
                                     🔍 Verify Import
@@ -272,7 +310,7 @@
                         </div>`;
                     }
 
-                    // Show skipped rows and download report
+                    // Skipped rows and download report
                     if (skipped && skipped.length > 0) {
                         html += `<div class="mt-4">
                             <h4 class="font-semibold text-gray-700">⚠️ Skipped rows (${skipped.length})</h4>
@@ -320,7 +358,7 @@
 
                     resultDiv.innerHTML = html;
 
-                    // Attach manual verify button (if present)
+                    // Attach manual verify button
                     const verifyBtn = document.getElementById(`verifyBtn_${type}`);
                     if (verifyBtn) {
                         const fileInputId = (type === 'purchase') ? 'purchaseFileInput' : 'salesFileInput';
@@ -330,28 +368,35 @@
                         });
                     }
 
-                    // Remove job ID from storage when done
+                    // Remove job ID from storage
                     const storageKey = (type === 'purchase') ? 'purchaseJobId' : 'salesJobId';
                     sessionStorage.removeItem(storageKey);
+                    localStorage.removeItem(storageKey);
                     // Hide progress container after a delay
                     setTimeout(() => {
                         progressContainer.classList.add('hidden');
                     }, 5000);
                 } else {
-                    // Still processing: update status text
+                    // Still processing
                     statusText.textContent = 'Processing...';
                 }
             } catch (err) {
-                clearInterval(window[`${type}PollInterval`]);
-                window[`${type}PollInterval`] = null;
-                cancelBtn.classList.add('hidden');
-                resultDiv.innerHTML = `<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-                    <strong>❌ Polling error:</strong> ${err.message}
-                </div>`;
-                progressContainer.classList.add('hidden');
-                // Remove job ID from storage on error
-                const storageKey = (type === 'purchase') ? 'purchaseJobId' : 'salesJobId';
-                sessionStorage.removeItem(storageKey);
+                // If we get a network error, we assume we're offline or server unreachable
+                if (err.message.includes('fetch') || err.message.includes('NetworkError')) {
+                    // Don't clear interval – we'll retry when online
+                    statusText.textContent = '⏳ Waiting for connection...';
+                } else {
+                    clearInterval(window[`${type}PollInterval`]);
+                    window[`${type}PollInterval`] = null;
+                    cancelBtn.classList.add('hidden');
+                    resultDiv.innerHTML = `<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+                        <strong>❌ Polling error:</strong> ${err.message}
+                    </div>`;
+                    progressContainer.classList.add('hidden');
+                    const storageKey = (type === 'purchase') ? 'purchaseJobId' : 'salesJobId';
+                    sessionStorage.removeItem(storageKey);
+                    localStorage.removeItem(storageKey);
+                }
             }
         };
 
@@ -427,7 +472,7 @@
         }
     }
 
-    // ---- Helper function to set up the import form with sessionStorage support ----
+    // ---- Helper function to set up the import form with sessionStorage and localStorage support ----
     function setupImportForm(formId, fileInputId, progressId, progressBarId, resultId, endpoint, targetRadioName, statusTextId, counterId, cancelBtnId, type) {
         const form = document.getElementById(formId);
         const fileInput = document.getElementById(fileInputId);
@@ -441,9 +486,16 @@
         let isCancelling = false;
         const storageKey = (type === 'purchase') ? 'purchaseJobId' : 'salesJobId';
 
-        // On page load, check if there's a stored job ID for this type
+        // On page load, check for stored job ID (first in sessionStorage, then localStorage)
         (function init() {
-            const storedJobId = sessionStorage.getItem(storageKey);
+            let storedJobId = sessionStorage.getItem(storageKey);
+            if (!storedJobId) {
+                storedJobId = localStorage.getItem(storageKey);
+                if (storedJobId) {
+                    // Restore from localStorage into sessionStorage
+                    sessionStorage.setItem(storageKey, storedJobId);
+                }
+            }
             if (storedJobId) {
                 progress.classList.remove('hidden');
                 resultDiv.innerHTML = '';
@@ -499,7 +551,9 @@
                 }
 
                 const jobId = data.job_id;
+                // Store in both sessionStorage (for current tab) and localStorage (for other tabs)
                 sessionStorage.setItem(storageKey, jobId);
+                localStorage.setItem(storageKey, jobId);
                 startPolling(jobId, type, statusTextId, progressBarId, counterId, resultId, cancelBtnId, progressId);
 
             } catch (err) {
@@ -509,11 +563,12 @@
                     <strong>❌ Error:</strong> ${err.message}
                 </div>`;
                 sessionStorage.removeItem(storageKey);
+                localStorage.removeItem(storageKey);
             }
         });
 
         cancelBtn.addEventListener('click', async () => {
-            const jobId = sessionStorage.getItem(storageKey);
+            const jobId = sessionStorage.getItem(storageKey) || localStorage.getItem(storageKey);
             if (!jobId || isCancelling) return;
             if (!confirm('Are you sure you want to cancel this import? The data already imported will remain.')) {
                 return;
@@ -570,5 +625,10 @@
         'salesCancelBtn',
         'sales'
     );
+
+    // ---- Initial offline state check ----
+    document.addEventListener('DOMContentLoaded', function() {
+        updateOfflineBanner();
+    });
 </script>
 {% endblock %}

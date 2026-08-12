@@ -91,21 +91,31 @@
     window.addEventListener('online', updateOfflineBanner);
     window.addEventListener('offline', updateOfflineBanner);
 
-    // ---------- Caching helpers ----------
+    // ---------- Robust caching helpers ----------
+    const CACHE_MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
+
     function cacheData(key, data) {
         try {
             localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }));
-        } catch(e) {}
+        } catch(e) { console.warn('Cache write failed:', e); }
     }
-    function getCachedData(key, maxAgeMinutes = 60) {
+
+    function getCachedData(key) {
         try {
             const raw = localStorage.getItem(key);
             if (!raw) return null;
             const parsed = JSON.parse(raw);
-            const ageMinutes = (Date.now() - parsed.timestamp) / (1000 * 60);
-            if (ageMinutes > maxAgeMinutes) return null;
+            const ageMs = Date.now() - parsed.timestamp;
+            if (ageMs > CACHE_MAX_AGE) {
+                // Stale – remove and return null
+                localStorage.removeItem(key);
+                return null;
+            }
             return parsed.data;
-        } catch(e) { return null; }
+        } catch(e) {
+            console.warn('Cache read failed:', e);
+            return null;
+        }
     }
 
     // ---------- Main ----------
@@ -167,6 +177,13 @@
         return colors[status] || '#6B7280';
     }
 
+    // Get cache key for archive
+    function getArchiveCacheKey() {
+        const status = document.getElementById('statusFilter').value;
+        const searchTerm = document.getElementById('searchInput').value.trim();
+        return `archive_${status}_${searchTerm}`;
+    }
+
     // Reset and load from beginning
     function resetAndLoad() {
         currentPage = 1;
@@ -207,7 +224,7 @@
             
             // Cache the data (only if it's page 1)
             if (currentPage === 1) {
-                cacheData(`archive_${status}_${searchTerm}`, data);
+                cacheData(getArchiveCacheKey(), data);
             }
             
             // Update pagination info
@@ -249,9 +266,7 @@
         } catch (error) {
             console.warn('Error fetching archive data:', error);
             // Try cache as fallback
-            const status = document.getElementById('statusFilter').value;
-            const searchTerm = document.getElementById('searchInput').value.trim();
-            const cacheKey = `archive_${status}_${searchTerm}`;
+            const cacheKey = getArchiveCacheKey();
             const cached = getCachedData(cacheKey);
             if (cached && cached.items && cached.items.length > 0) {
                 allItems = cached.items;
@@ -261,10 +276,11 @@
                 document.getElementById('statsBar').classList.remove('hidden');
                 document.getElementById('shownCount').textContent = allItems.length;
                 document.getElementById('totalCount').textContent = totalItems;
+                const container = document.getElementById('archiveList');
                 const note = document.createElement('div');
                 note.className = 'text-xs text-gray-400 text-center mt-2';
                 note.innerText = '⚠️ Data may be outdated (offline)';
-                document.getElementById('archiveList').appendChild(note);
+                container.appendChild(note);
             } else {
                 const container = document.getElementById('archiveList');
                 container.innerHTML = `
@@ -472,7 +488,7 @@
         document.getElementById('claimsModal').classList.add('hidden');
     }
 
-    // View batches modal
+    // View batches modal (with caching)
     async function viewBatches(name, brand) {
         const modalTitle = document.getElementById('batchModalTitle');
         const container = document.getElementById('batchList');

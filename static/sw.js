@@ -1,6 +1,7 @@
 // static/sw.js
 // ============================================================
 //  Minimal, robust Service Worker – pre‑cache only static assets
+//  + on‑demand page caching via postMessage
 // ============================================================
 
 const CACHE_NAME = 'oxsmart-v5';  // ⚠️ increment this on every deploy
@@ -120,4 +121,31 @@ self.addEventListener('fetch', event => {
           });
       })
   );
+});
+
+// ===== MESSAGE HANDLER – cache protected pages on demand =====
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'CACHE_PAGES') {
+    const urls = event.data.urls || [];
+    if (urls.length === 0) return;
+    event.waitUntil(
+      caches.open(CACHE_NAME).then(async (cache) => {
+        for (const url of urls) {
+          try {
+            // Fetch with credentials so the session cookie is sent
+            const response = await fetch(url, { credentials: 'include' });
+            if (response.ok) {
+              await cache.put(url, response);
+              console.log(`📦 Cached: ${url}`);
+            } else {
+              console.warn(`❌ Failed to cache ${url}: ${response.status}`);
+            }
+          } catch (err) {
+            console.warn(`❌ Error caching ${url}:`, err);
+          }
+        }
+        console.log('✅ All pages cached successfully');
+      })
+    );
+  }
 });

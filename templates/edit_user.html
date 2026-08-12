@@ -1,6 +1,11 @@
 {% extends 'base.html' %}
 
 {% block content %}
+<!-- Offline banner -->
+<div id="offlineBanner" class="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded hidden">
+    ⚠️ You are offline – showing cached user data. Changes will be saved when you reconnect.
+</div>
+
 <div class="flex items-center gap-2 mb-6">
     <a href="/admin/users" class="text-indigo-600 hover:text-indigo-800 hover:underline">← Back to Users</a>
     <h1 class="text-3xl font-bold text-gray-800 ml-4">✏️ Edit User</h1>
@@ -115,6 +120,55 @@
 </div>
 
 <script>
+    // ---------- Offline banner ----------
+    function updateOfflineBanner() {
+        const banner = document.getElementById('offlineBanner');
+        if (!navigator.onLine) {
+            banner.classList.remove('hidden');
+        } else {
+            banner.classList.add('hidden');
+        }
+        // Disable action buttons when offline
+        const actions = ['updateRoleBtn', 'resetPasswordBtn', 'deleteUserBtn'];
+        actions.forEach(id => {
+            const btn = document.getElementById(id);
+            if (btn) {
+                if (!navigator.onLine) {
+                    btn.disabled = true;
+                    btn.classList.add('opacity-50', 'cursor-not-allowed');
+                } else {
+                    btn.disabled = false;
+                    btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                }
+            }
+        });
+    }
+    window.addEventListener('online', updateOfflineBanner);
+    window.addEventListener('offline', updateOfflineBanner);
+
+    // ---------- Cache helpers ----------
+    const USER_CACHE_KEY = 'edit_user_' + document.getElementById('editUserData').dataset.userId;
+    const CACHE_MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
+
+    function cacheUserData(data) {
+        try {
+            localStorage.setItem(USER_CACHE_KEY, JSON.stringify({ data, timestamp: Date.now() }));
+        } catch (e) { console.warn('Cache write failed:', e); }
+    }
+
+    function getCachedUserData() {
+        try {
+            const raw = localStorage.getItem(USER_CACHE_KEY);
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            if (Date.now() - parsed.timestamp > CACHE_MAX_AGE) {
+                localStorage.removeItem(USER_CACHE_KEY);
+                return null;
+            }
+            return parsed.data;
+        } catch (e) { console.warn('Cache read failed:', e); return null; }
+    }
+
     // Get data from data attributes
     const userId = parseInt(document.getElementById('editUserData').dataset.userId);
     const isOxbee = document.getElementById('editUserData').dataset.isOxbee === 'true';
@@ -139,39 +193,77 @@
     function closeErrorModal() {
         document.getElementById('errorModal').classList.add('hidden');
     }
-    // Close modal on background click
     document.getElementById('errorModal').addEventListener('click', function(e) {
         if (e.target === this) closeErrorModal();
     });
 
-    // ---------- Load user data ----------
+    // ---------- Load user data (with cache) ----------
     async function loadUser() {
-        try {
-            const res = await fetch(`/api/admin/users/${userId}`);
-            const data = await res.json();
-            
-            if (data.success) {
-                const user = data.user;
-                document.getElementById('userName').textContent = user.username;
-                document.getElementById('userIdDisplay').textContent = user.id;
-                document.getElementById('userCreated').textContent = user.created_at ? new Date(user.created_at).toLocaleString() : 'N/A';
-                
-                // Set role badge
-                const badge = document.getElementById('userRoleBadge');
-                if (user.role === 'admin') {
-                    badge.textContent = 'Admin';
-                    badge.className = 'px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800';
-                } else {
-                    badge.textContent = 'User';
-                    badge.className = 'px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800';
+        updateOfflineBanner();
+        let user = null;
+        let fromCache = false;
+
+        // Try network first (if online)
+        if (navigator.onLine) {
+            try {
+                const res = await fetch(`/api/admin/users/${userId}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.success) {
+                        user = data.user;
+                        cacheUserData(user);
+                    }
                 }
-                
-                document.getElementById('roleSelect').value = user.role;
-            } else {
-                showMessage('Error loading user: ' + data.error, 'red');
+            } catch (e) {
+                console.warn('Network request failed, using cache if available:', e);
             }
-        } catch (error) {
-            showMessage('Failed to load user: ' + error.message, 'red');
+        }
+
+        // If no user from network, try cache
+        if (!user) {
+            const cached = getCachedUserData();
+            if (cached) {
+                user = cached;
+                fromCache = true;
+                // Show note that we're using cached data
+                const msg = document.getElementById('actionMessage');
+                msg.textContent = '📦 Showing cached user data (offline)';
+                msg.className = 'text-sm text-orange-500 mt-4';
+                setTimeout(() => { msg.textContent = ''; }, 5000);
+            }
+        }
+
+        if (!user) {
+            // No data at all
+            document.getElementById('userName').textContent = 'User not found';
+            document.getElementById('userIdDisplay').textContent = userId;
+            document.getElementById('userCreated').textContent = 'N/A';
+            document.getElementById('userRoleBadge').textContent = 'Unknown';
+            showMessage('Could not load user data. Please connect to the internet and refresh.', 'red');
+            return;
+        }
+
+        // Display user data
+        document.getElementById('userName').textContent = user.username;
+        document.getElementById('userIdDisplay').textContent = user.id;
+        document.getElementById('userCreated').textContent = user.created_at ? new Date(user.created_at).toLocaleString() : 'N/A';
+
+        const badge = document.getElementById('userRoleBadge');
+        if (user.role === 'admin') {
+            badge.textContent = 'Admin';
+            badge.className = 'px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800';
+        } else {
+            badge.textContent = 'User';
+            badge.className = 'px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800';
+        }
+        document.getElementById('roleSelect').value = user.role;
+
+        if (fromCache) {
+            // Add a small note in the user info area
+            const note = document.createElement('p');
+            note.className = 'text-xs text-orange-400 mt-1';
+            note.textContent = '⚠️ Data may be outdated (offline)';
+            document.getElementById('userInfo').appendChild(note);
         }
     }
 
@@ -189,10 +281,14 @@
             showMessage('Cannot modify the system administrator!', 'red');
             return;
         }
-        
+        if (!navigator.onLine) {
+            showMessage('You are offline. Please connect to the internet to change roles.', 'red');
+            return;
+        }
+
         const newRole = document.getElementById('roleSelect').value;
         if (!confirm(`Change this user's role to "${newRole}"?`)) return;
-        
+
         try {
             const res = await fetch(`/api/admin/users/${userId}/role`, {
                 method: 'PUT',
@@ -217,15 +313,19 @@
             showMessage('Cannot modify the system administrator!', 'red');
             return;
         }
-        
+        if (!navigator.onLine) {
+            showMessage('You are offline. Please connect to the internet to reset passwords.', 'red');
+            return;
+        }
+
         const newPassword = document.getElementById('newPassword').value;
         if (!newPassword || newPassword.length < 4) {
             showMessage('Password must be at least 4 characters.', 'red');
             return;
         }
-        
+
         if (!confirm(`Reset password for this user to "${newPassword}"?`)) return;
-        
+
         try {
             const res = await fetch(`/api/admin/users/${userId}/password`, {
                 method: 'PUT',
@@ -248,6 +348,10 @@
     document.getElementById('viewPasswordBtn').addEventListener('click', async function() {
         const display = document.getElementById('passwordHashDisplay');
         if (display.classList.contains('hidden')) {
+            if (!navigator.onLine) {
+                showMessage('Cannot fetch password hash offline.', 'red');
+                return;
+            }
             try {
                 const res = await fetch(`/api/admin/users/${userId}`);
                 const data = await res.json();
@@ -270,10 +374,14 @@
             showMessage('Cannot delete the system administrator!', 'red');
             return;
         }
-        
+        if (!navigator.onLine) {
+            showMessage('You are offline. Please connect to the internet to delete users.', 'red');
+            return;
+        }
+
         if (!confirm('⚠️ Are you sure you want to delete this user? This cannot be undone!')) return;
         if (!confirm('Really? This will permanently delete the user and all their data.')) return;
-        
+
         try {
             const res = await fetch(`/api/admin/users/${userId}`, { method: 'DELETE' });
             const data = await res.json();
@@ -283,7 +391,6 @@
                     window.location.href = '/admin/users';
                 }, 1000);
             } else {
-                // ✅ Use the modal for detailed errors
                 showErrorModal('Cannot delete user', data.error || 'Unknown error');
             }
         } catch (error) {
@@ -299,6 +406,14 @@
     });
 
     // ---------- Initial load ----------
-    loadUser();
+    document.addEventListener('DOMContentLoaded', function() {
+        updateOfflineBanner();
+        loadUser();
+    });
+
+    // Refresh when back online
+    window.addEventListener('online', function() {
+        loadUser();
+    });
 </script>
 {% endblock %}

@@ -135,6 +135,8 @@ def update_product(
 
     keep_sold_with_old:
       - If True (default): the new batch inherits the remaining stock from the old batch.
+        The old batch's remaining_quantity is zeroed out since that stock now lives
+        on the new batch — otherwise it gets counted twice in stock/capital totals.
       - If False: the new batch gets the full new quantity (fresh stock), and the old batch is depleted.
     """
     quantity = int(quantity)
@@ -314,6 +316,13 @@ def update_product(
                     if keep_sold_with_old:
                         new_batch_qty = current_remaining
                         new_batch_remaining = current_remaining
+                        # FIX: the unsold stock is moving to the new batch — zero the old
+                        # batch's remaining_quantity so it isn't counted on both rows.
+                        cursor.execute("""
+                            UPDATE purchase_batches
+                            SET remaining_quantity = 0, action = 'remaining_moved_to_new_batch'
+                            WHERE id = %s
+                        """, (batch_id,))
                     else:
                         new_batch_qty = quantity
                         new_batch_remaining = quantity
@@ -352,6 +361,12 @@ def update_product(
                     if keep_sold_with_old:
                         new_batch_qty = current_remaining
                         new_batch_remaining = current_remaining
+                        # FIX: same double-counting guard as above
+                        cursor.execute("""
+                            UPDATE purchase_batches
+                            SET remaining_quantity = 0, action = 'remaining_moved_to_new_batch'
+                            WHERE id = %s
+                        """, (batch_id,))
                     else:
                         new_batch_qty = quantity
                         new_batch_remaining = quantity
@@ -381,6 +396,12 @@ def update_product(
                 if keep_sold_with_old:
                     new_batch_qty = current_remaining
                     new_batch_remaining = current_remaining
+                    # FIX: same double-counting guard as above
+                    cursor.execute("""
+                        UPDATE purchase_batches
+                        SET remaining_quantity = 0, action = 'remaining_moved_to_new_batch'
+                        WHERE id = %s
+                    """, (batch_id,))
                 else:
                     new_batch_qty = quantity
                     new_batch_remaining = quantity

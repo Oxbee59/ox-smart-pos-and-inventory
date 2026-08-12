@@ -11,6 +11,11 @@
     </div>
 </div>
 
+<!-- Offline banner -->
+<div id="offlineBanner" class="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded hidden">
+    ⚠️ You are offline – showing cached user data. Changes will be saved when you reconnect.
+</div>
+
 <!-- Hidden input to store current user ID -->
 <input type="hidden" id="currentUserId" value="{{ current_user.id|default(0) }}">
 <input type="hidden" id="currentUsername" value="{{ current_user.username|default('') }}">
@@ -83,6 +88,43 @@
 </div>
 
 <script>
+    // ---------- Offline banner ----------
+    function updateOfflineBanner() {
+        const banner = document.getElementById('offlineBanner');
+        if (!navigator.onLine) banner.classList.remove('hidden');
+        else banner.classList.add('hidden');
+    }
+    window.addEventListener('online', updateOfflineBanner);
+    window.addEventListener('offline', updateOfflineBanner);
+
+    // ---------- Cache helpers ----------
+    const USERS_CACHE_KEY = 'admin_users_cache';
+    const CACHE_TIMESTAMP_KEY = 'admin_users_cache_timestamp';
+    const CACHE_MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
+
+    function cacheUsers(users) {
+        try {
+            localStorage.setItem(USERS_CACHE_KEY, JSON.stringify(users));
+            localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
+        } catch (e) {}
+    }
+
+    function getCachedUsers() {
+        try {
+            const raw = localStorage.getItem(USERS_CACHE_KEY);
+            const timestamp = parseInt(localStorage.getItem(CACHE_TIMESTAMP_KEY) || '0');
+            if (!raw) return null;
+            // Check age
+            if (Date.now() - timestamp > CACHE_MAX_AGE) {
+                // Stale – remove and return null
+                localStorage.removeItem(USERS_CACHE_KEY);
+                localStorage.removeItem(CACHE_TIMESTAMP_KEY);
+                return null;
+            }
+            return JSON.parse(raw);
+        } catch (e) { return null; }
+    }
+
     // Get the logged-in user's ID and username from the hidden input
     const currentUserId = parseInt(document.getElementById('currentUserId').value) || 0;
     const currentUsername = document.getElementById('currentUsername').value || '';
@@ -112,12 +154,26 @@
         if (e.target === this) closeErrorModal();
     });
 
+    // ---------- Fetch users (with cache fallback) ----------
     async function fetchUsers() {
-        const res = await fetch('/api/admin/users');
-        if (!res.ok) throw new Error('Failed to fetch users');
-        return res.json();
+        updateOfflineBanner();
+        try {
+            const res = await fetch('/api/admin/users');
+            if (!res.ok) throw new Error('Failed to fetch users');
+            const users = await res.json();
+            cacheUsers(users);
+            return users;
+        } catch (err) {
+            console.warn('⚠️ Network failed – using cached users', err.message);
+            const cached = getCachedUsers();
+            if (cached) {
+                return cached;
+            }
+            throw new Error('No cached users available. Please connect to the internet and refresh.');
+        }
     }
 
+    // ---------- Render table ----------
     function getStatusBadge(role, isProtected) {
         if (isProtected) {
             return '<span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">🔒 Protected</span>';
@@ -128,10 +184,17 @@
         return '<span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">User</span>';
     }
 
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
     function renderUsers(users) {
         const tbody = document.getElementById('usersTableBody');
         tbody.innerHTML = '';
-        if (users.length === 0) {
+        if (!users || users.length === 0) {
             tbody.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-gray-500">No users found.</td></tr>`;
             return;
         }
@@ -153,7 +216,6 @@
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${user.created_at ? new Date(user.created_at).toLocaleString() : '—'}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                    <!-- Edit Button (all users except protected) -->
                     <a href="/admin/users/${user.id}/edit" 
                        class="text-blue-600 hover:text-blue-900 ${isProtected ? 'opacity-50 cursor-not-allowed' : ''}"
                        ${isProtected ? 'onclick="return false;" title="Cannot edit system administrator"' : ''}>
@@ -177,9 +239,13 @@
             tbody.appendChild(tr);
         });
 
-        // Attach event listeners for role toggle
+        // Attach event listeners for role toggle (only if online)
         document.querySelectorAll('.role-toggle').forEach(btn => {
             btn.addEventListener('click', async function() {
+                if (!navigator.onLine) {
+                    alert('You are offline. Please connect to the internet to change roles.');
+                    return;
+                }
                 const userId = this.dataset.id;
                 const newRole = this.dataset.role;
                 if (!confirm(`Change role to "${newRole}"?`)) return;
@@ -201,9 +267,13 @@
             });
         });
 
-        // Attach event listeners for delete
+        // Attach event listeners for delete (only if online)
         document.querySelectorAll('.delete-user').forEach(btn => {
             btn.addEventListener('click', async function() {
+                if (!navigator.onLine) {
+                    alert('You are offline. Please connect to the internet to delete users.');
+                    return;
+                }
                 const userId = this.dataset.id;
                 if (!confirm('Delete this user? This cannot be undone.')) return;
                 if (!confirm('Are you sure? This action is permanent.')) return;
@@ -213,7 +283,6 @@
                     if (data.success) {
                         loadUsers();
                     } else {
-                        // Show the detailed error from the backend
                         showErrorModal('Cannot delete user', data.error || 'Unknown error');
                     }
                 } catch (err) {
@@ -223,14 +292,6 @@
         });
     }
 
-    // Simple escape function to prevent XSS
-    function escapeHtml(text) {
-        if (!text) return '';
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
     async function loadUsers() {
         try {
             const users = await fetchUsers();
@@ -238,13 +299,17 @@
         } catch (err) {
             console.error(err);
             document.getElementById('usersTableBody').innerHTML =
-                `<tr><td colspan="5" class="text-center py-4 text-red-500">Failed to load users: ${err.message}</td></tr>`;
+                `<tr><td colspan="5" class="text-center py-4 text-red-500">${err.message}</td></tr>`;
         }
     }
 
-    // Create user form submission
+    // ---------- Create user form submission ----------
     document.getElementById('createUserForm').addEventListener('submit', async (e) => {
         e.preventDefault();
+        if (!navigator.onLine) {
+            alert('You are offline. Please connect to the internet to create users.');
+            return;
+        }
         const username = document.getElementById('newUsername').value.trim();
         const password = document.getElementById('newPassword').value.trim();
         const role = document.getElementById('newRole').value;
@@ -268,7 +333,7 @@
                 msg.textContent = 'User created successfully!';
                 document.getElementById('newUsername').value = '';
                 document.getElementById('newPassword').value = '';
-                loadUsers();
+                loadUsers(); // refresh list
             } else {
                 msg.className = 'text-red-500';
                 msg.textContent = 'Error: ' + (data.error || 'Unknown error');
@@ -279,7 +344,15 @@
         }
     });
 
-    // Initial load
-    loadUsers();
+    // ---------- Initial load ----------
+    document.addEventListener('DOMContentLoaded', function() {
+        updateOfflineBanner();
+        loadUsers();
+    });
+
+    // Refresh when coming online
+    window.addEventListener('online', function() {
+        loadUsers(); // reload fresh data when back online
+    });
 </script>
 {% endblock %}

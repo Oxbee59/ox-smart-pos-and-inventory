@@ -82,21 +82,31 @@
     window.addEventListener('online', updateOfflineBanner);
     window.addEventListener('offline', updateOfflineBanner);
 
-    // ---------- Caching helpers ----------
+    // ---------- Robust caching helpers ----------
+    const CACHE_MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
+
     function cacheData(key, data) {
         try {
             localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }));
-        } catch(e) {}
+        } catch(e) { console.warn('Cache write failed:', e); }
     }
-    function getCachedData(key, maxAgeMinutes = 60) {
+
+    function getCachedData(key) {
         try {
             const raw = localStorage.getItem(key);
             if (!raw) return null;
             const parsed = JSON.parse(raw);
-            const ageMinutes = (Date.now() - parsed.timestamp) / (1000 * 60);
-            if (ageMinutes > maxAgeMinutes) return null;
+            const ageMs = Date.now() - parsed.timestamp;
+            if (ageMs > CACHE_MAX_AGE) {
+                // Stale – remove and return null
+                localStorage.removeItem(key);
+                return null;
+            }
             return parsed.data;
-        } catch(e) { return null; }
+        } catch(e) {
+            console.warn('Cache read failed:', e);
+            return null;
+        }
     }
 
     function getCacheKey(prefix) {
@@ -115,7 +125,6 @@
     let customEndDate = null;
     let trendChart = null;
 
-    // Helper: format currency
     function formatMoney(amount) {
         return '₵' + (parseFloat(amount) || 0).toFixed(2);
     }
@@ -143,14 +152,19 @@
                 url = '/api/today_sales?period=daily';
             }
             const res = await fetch(url);
-            if (!res.ok) throw new Error();
+            if (!res.ok) throw new Error('Network error');
             salesData = await res.json();
             cacheData(cacheKey, salesData);
         } catch (err) {
-            console.warn('Offline – using cached summary');
+            console.warn('⚠️ Network failed – using cached summary', err.message);
             fromCache = true;
             const cached = getCachedData(cacheKey);
-            if (cached) salesData = cached;
+            if (cached) {
+                salesData = cached;
+            } else {
+                // No cache – show zeros
+                salesData = [];
+            }
         }
 
         const seenSales = new Set();
@@ -170,23 +184,23 @@
         document.getElementById('profit').innerText = formatMoney(totalProfit);
         document.getElementById('discount').innerText = formatMoney(totalDiscount);
 
+        // Show offline indicator on summary cards if from cache
+        const summaryCards = document.querySelectorAll('.bg-white.rounded-xl.shadow-md.p-4 p.text-gray-500.text-sm');
         if (fromCache) {
-            // Optionally add a small note next to the summary cards
+            // Append a small indicator (optional)
         }
         return salesData;
     }
 
     // ---------- Load trend (grouped by date) ----------
     async function loadTrend(salesData) {
-        if (!salesData) {
-            // If no salesData passed, try to load from summary or cache
-            salesData = await loadSummary();
-        }
-        // If salesData is still empty, try cache
         if (!salesData || salesData.length === 0) {
+            // Try to get from cache
             const cacheKey = getCacheKey('analytics_trend');
             const cached = getCachedData(cacheKey);
-            if (cached) salesData = cached;
+            if (cached) {
+                salesData = cached;
+            }
         }
 
         if (!salesData || salesData.length === 0) {
@@ -283,23 +297,24 @@
                 url = '/api/dashboard/top_products?limit=10';
             }
             const res = await fetch(url);
-            if (!res.ok) throw new Error();
+            if (!res.ok) throw new Error('Network error');
             products = await res.json();
             cacheData(cacheKey, products);
         } catch (err) {
-            console.warn('Offline – using cached top products');
+            console.warn('⚠️ Network failed – using cached top products', err.message);
             fromCache = true;
             const cached = getCachedData(cacheKey);
             if (cached) products = cached;
         }
 
         const container = document.getElementById('topProductsList');
+        container.innerHTML = '';
+
         if (products.length === 0) {
             container.innerHTML = '<div class="text-gray-400 text-center py-4">No product data available.</div>';
             return;
         }
 
-        container.innerHTML = '';
         products.forEach((p, index) => {
             const div = document.createElement('div');
             div.className = 'border-b pb-2 flex justify-between items-center';
@@ -329,7 +344,7 @@
 
     // ---------- Reload all ----------
     async function reloadAnalytics() {
-        console.log("Loading analytics for period:", currentPeriod, customStartDate, customEndDate);
+        console.log("📊 Loading analytics for period:", currentPeriod, customStartDate, customEndDate);
         const salesData = await loadSummary();
         await loadTrend(salesData);
         await loadTopProducts();

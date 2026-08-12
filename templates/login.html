@@ -45,26 +45,27 @@
 
 <script>
     // ============================================================
-    //  OFFLINE SESSION CHECK – ONLY redirect if server session exists
+    //  OFFLINE SESSION CHECK – redirect to dashboard if valid session exists
     // ============================================================
     (function() {
-        if (!navigator.onLine) return;
-
         const storedUser = localStorage.getItem('ox_user');
-        if (!storedUser) return;
-
-        fetch('/api/auth/check')
-            .then(res => res.json())
-            .then(data => {
-                if (data.logged_in) {
+        if (storedUser) {
+            try {
+                const session = JSON.parse(storedUser);
+                // Check if session is still valid (not expired)
+                if (session.expiresAt && Date.now() < session.expiresAt) {
+                    // Valid session – redirect to dashboard, even if offline
                     window.location.href = '/';
+                    return;
                 } else {
+                    // Expired – clear it
                     localStorage.removeItem('ox_user');
                 }
-            })
-            .catch(() => {
-                console.warn('Could not verify session, staying on login.');
-            });
+            } catch (e) {
+                localStorage.removeItem('ox_user');
+            }
+        }
+        // If we get here, no valid session – stay on login page.
     })();
 
     // ============================================================

@@ -200,11 +200,12 @@
     window.addEventListener('online', updateOfflineBanner);
     window.addEventListener('offline', updateOfflineBanner);
 
-    // Cache
+    // Cache – now with 24‑hour expiry (1440 minutes)
     const CACHE_KEY_SUMMARY = 'dashboard_summary';
     const CACHE_KEY_TOP = 'dashboard_top_products';
     const CACHE_KEY_HISTORY = 'dashboard_sales_history';
     const CACHE_KEY_TIMESTAMP = 'dashboard_last_fetch';
+    const CACHE_MAX_AGE_MINUTES = 1440; // 24 hours
 
     function cacheData(key, data) {
         try {
@@ -213,7 +214,7 @@
         } catch (e) {}
     }
 
-    function loadCache(key, maxAgeMinutes = 60) {
+    function loadCache(key, maxAgeMinutes = CACHE_MAX_AGE_MINUTES) {
         try {
             const raw = localStorage.getItem(key);
             if (!raw) return null;
