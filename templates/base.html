@@ -634,6 +634,47 @@
     const PIN_CODE = '1234';
 
     // ============================================================
+    //  LIST OF PROTECTED ROUTES TO CACHE FOR OFFLINE USE
+    // ============================================================
+    const PROTECTED_ROUTES = [
+        '/',
+        '/products',
+        '/products/screens',
+        '/sales',
+        '/sales/screens',
+        '/purchases',
+        '/purchases/screens',
+        '/analytics',
+        '/today-sales',
+        '/today-sales/screens',
+        '/archive',
+        '/claims',
+        '/logs',
+        '/admin/users',
+        '/settings',
+        '/inventory/import',
+    ];
+
+    // ============================================================
+    //  CACHE ALL PAGES FOR OFFLINE USE (post-login)
+    // ============================================================
+    async function cacheAllPages() {
+        if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) {
+            console.warn('⚠️ Service Worker not ready – skipping page cache');
+            return;
+        }
+        try {
+            navigator.serviceWorker.controller.postMessage({
+                type: 'CACHE_PAGES',
+                urls: PROTECTED_ROUTES
+            });
+            console.log('📦 Sent caching request to Service Worker');
+        } catch (err) {
+            console.warn('⚠️ Failed to send caching request:', err);
+        }
+    }
+
+    // ============================================================
     //  VERSION CHECK – ONLY FOR STANDALONE
     // ============================================================
     (function checkVersion() {
@@ -1132,9 +1173,11 @@
             const session = getStoredSession();
             const sessionValid = isSessionValid(session);
 
+            let isLoggedIn = false;
+
             if (serverSession !== null) {
                 if (serverSession.logged_in) {
-                    // Valid session – proceed
+                    isLoggedIn = true;
                 } else {
                     clearSession();
                     window.location.href = '/login';
@@ -1150,6 +1193,14 @@
                     window.location.href = '/login';
                     return;
                 }
+                isLoggedIn = true;
+            }
+
+            // If we have a valid session, cache all protected pages for offline use
+            if (isLoggedIn) {
+                // Cache all pages (only if online, otherwise the SW will serve cached)
+                // We'll still send the message to ensure they are cached when back online
+                cacheAllPages();
             }
 
             // Reinstall notice
@@ -1188,6 +1239,8 @@
         window.syncAllPending();
         const reminder = document.getElementById('syncReminderToast');
         if (reminder) reminder.remove();
+        // Try to cache pages again when back online
+        cacheAllPages();
     });
 
     // ============================================================
