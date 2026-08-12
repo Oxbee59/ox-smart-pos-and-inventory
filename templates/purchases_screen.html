@@ -931,11 +931,12 @@
         updateSummary(purchases);
     }
 
-    // ---------- Summary – CORRECTED TOTAL COST & CAPITAL ----------
+    // ---------- Summary – FIXED CAPITAL = Total Cost – Claimed Cost ----------
     function updateSummary(purchases) {
         let totalQty = 0, totalRemaining = 0, totalCost = 0, totalDiscount = 0, totalSelling = 0, totalProfit = 0;
-        let totalCapital = 0, totalClaimed = 0, totalGood = 0, totalClaimedCost = 0, totalSold = 0;
+        let totalClaimed = 0, totalGood = 0, totalClaimedCost = 0, totalSold = 0;
         const totalBatches = purchases ? purchases.length : 0;
+
         if (purchases && purchases.length > 0) {
             purchases.forEach(p => {
                 const itemQty = p.quantity || 0;
@@ -945,22 +946,24 @@
                 const itemDiscount = p.discount || 0;
                 const claimed = p.claimed_quantity || 0;
                 const sold = itemQty - remainingQty;
+
                 totalQty += itemQty;
                 totalRemaining += remainingQty;
                 totalSold += sold;
-                // ✅ CORRECT totalCost = cost × quantity
                 totalCost += itemCost * itemQty;
                 totalDiscount += itemDiscount;
                 totalSelling += itemSelling * itemQty;
                 totalClaimed += claimed;
                 totalGood += remainingQty - claimed;
                 totalClaimedCost += claimed * itemCost;
+
                 const itemProfit = (itemSelling - itemCost) * itemQty - itemDiscount;
                 totalProfit += itemProfit;
-                // ✅ CORRECT capital = (remaining - claimed) × cost
-                totalCapital += (remainingQty - claimed) * itemCost;
             });
         }
+
+        // ✅ FIX: Capital = Total Cost – Claimed Cost (matches PDF "Adjusted Capital")
+        const totalCapital = totalCost - totalClaimedCost;
 
         const isOffline = !navigator.onLine;
         const isCached = !isDataFresh && !isOffline;
@@ -1323,7 +1326,7 @@
         }
     }
 
-    // ---------- PDF – CORRECTED TOTAL COST & CAPITAL ----------
+    // ---------- PDF – FIXED CAPITAL (Total Cost – Claimed Cost) ----------
     async function generatePDF() {
         if (!navigator.onLine) {
             alert('PDF generation requires internet. Please connect and try again.');
@@ -1337,7 +1340,7 @@
             return;
         }
 
-        let totalQty = 0, totalCost = 0, totalDiscount = 0, totalSelling = 0, totalProfit = 0, totalCapital = 0;
+        let totalQty = 0, totalCost = 0, totalDiscount = 0, totalSelling = 0, totalProfit = 0;
         let totalClaimed = 0, totalClaimedCost = 0, totalRemaining = 0, totalSold = 0;
         purchasesToExport.forEach(p => {
             const itemQty = p.quantity || 0;
@@ -1350,7 +1353,6 @@
             totalQty += itemQty;
             totalRemaining += remainingQty;
             totalSold += sold;
-            // ✅ Correct totalCost
             totalCost += itemCost * itemQty;
             totalDiscount += itemDiscount;
             totalSelling += itemSelling * itemQty;
@@ -1358,10 +1360,10 @@
             totalClaimedCost += claimed * itemCost;
             const itemProfit = (itemSelling - itemCost) * itemQty - itemDiscount;
             totalProfit += itemProfit;
-            // ✅ Capital per batch
-            totalCapital += (remainingQty - claimed) * itemCost;
         });
-        const adjustedCapital = totalCapital;
+
+        // ✅ Capital = Total Cost – Claimed Cost (matches summary)
+        const adjustedCapital = totalCost - totalClaimedCost;
         const soldPercentage = totalQty > 0 ? ((totalSold / totalQty) * 100) : 0;
 
         try {
@@ -1380,7 +1382,7 @@
                         total_discount: totalDiscount,
                         total_selling: totalSelling,
                         total_profit: totalProfit,
-                        total_capital: totalCapital,
+                        total_capital: totalCost - totalClaimedCost,  // old name kept for compatibility
                         adjusted_capital: adjustedCapital,
                         total_claimed: totalClaimed,
                         total_claimed_cost: totalClaimedCost,
@@ -1390,7 +1392,6 @@
                 })
             });
 
-            // ✅ Check for HTTP errors and parse JSON error message
             if (!res.ok) {
                 let errorMsg = `HTTP ${res.status}`;
                 try {
