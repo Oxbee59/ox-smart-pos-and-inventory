@@ -673,13 +673,9 @@
     ];
 
     // ============================================================
-    //  IMPROVED CACHE ALL PAGES (WAITS FOR SW READY)
+    //  CACHE ALL PAGES FOR OFFLINE USE (BOTH BROWSER & APP MODE)
     // ============================================================
     async function cacheAllPages() {
-        if (!isAppMode()) {
-            console.log('🌐 Browser mode – skipping page cache.');
-            return;
-        }
         if (!('serviceWorker' in navigator)) {
             console.warn('⚠️ Service Worker not supported');
             return;
@@ -694,7 +690,7 @@
                 type: 'CACHE_PAGES',
                 urls: PROTECTED_ROUTES
             });
-            console.log('📦 Sent caching request to Service Worker (App mode).');
+            console.log('📦 Sent caching request to Service Worker.');
         } catch (err) {
             console.warn('⚠️ Failed to send caching request:', err);
         }
@@ -1213,10 +1209,13 @@
                 isLoggedIn = true;
             }
 
-            // If we have a valid session, run offline setup only in app mode
+            // If we have a valid session, run offline setup
             if (isLoggedIn) {
+                // Always cache pages for offline reading (browser & app mode)
+                cacheAllPages();
+
                 if (isAppMode()) {
-                    // App mode: full offline setup
+                    // App mode: full offline data sync with Dexie
                     if (navigator.onLine) {
                         if (typeof fullSync === 'function') {
                             try {
@@ -1238,11 +1237,14 @@
                     } else {
                         setTimeout(showSyncReminder, 2000);
                     }
-                    // Cache pages for offline reading
-                    cacheAllPages();
                 } else {
-                    // Browser mode: skip Dexie and offline features
-                    console.log('🌐 Browser mode – running online-only.');
+                    // Browser mode: no Dexie sync, but pending operations (sales, claims) are still synced via localStorage
+                    if (navigator.onLine) {
+                        // Use the legacy pending sync for browser mode (sales, claims, etc.)
+                        if (typeof window.syncAllPending === 'function') {
+                            await window.syncAllPending();
+                        }
+                    }
                 }
             }
 
@@ -1281,6 +1283,7 @@
         }
         const reminder = document.getElementById('syncReminderToast');
         if (reminder) reminder.remove();
+        // Re-cache pages when coming online
         cacheAllPages();
     });
 

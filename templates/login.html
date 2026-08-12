@@ -45,18 +45,51 @@
 
 <script>
     // ============================================================
-    //  FIX: Clear any stored session on login page
-    //  (If we are here, the server rejected our session, so it's invalid)
+    //  SMART SESSION CHECK – redirect if valid, otherwise clear stale
     // ============================================================
     (function() {
-        // Remove stale session to prevent redirect loops
-        localStorage.removeItem('ox_user');
-        localStorage.removeItem('pin_unlocked');
-        // Also remove any other old pending flags that might cause issues
-        try {
-            localStorage.removeItem('pending-sync-timestamp');
-            localStorage.removeItem('offline-sync-timestamp');
-        } catch(e) {}
+        const storedUser = localStorage.getItem('ox_user');
+        if (storedUser) {
+            try {
+                const session = JSON.parse(storedUser);
+                const isExpired = session.expiresAt && Date.now() >= session.expiresAt;
+                
+                // If online, verify with server
+                if (navigator.onLine) {
+                    fetch('/api/auth/check', { credentials: 'include' })
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.logged_in) {
+                                // Server says we're logged in – redirect
+                                window.location.href = '/';
+                            } else {
+                                // Server says not logged in – clear stale session
+                                localStorage.removeItem('ox_user');
+                                localStorage.removeItem('pin_unlocked');
+                                // Reload to show login form (no redirect)
+                                window.location.reload();
+                            }
+                        })
+                        .catch(() => {
+                            // Offline or server error: if session is not expired, redirect anyway (trust stored session)
+                            if (!isExpired) {
+                                window.location.href = '/';
+                            } else {
+                                localStorage.removeItem('ox_user');
+                            }
+                        });
+                } else {
+                    // Offline: if session is not expired, redirect to dashboard
+                    if (!isExpired) {
+                        window.location.href = '/';
+                    } else {
+                        localStorage.removeItem('ox_user');
+                    }
+                }
+            } catch (e) {
+                localStorage.removeItem('ox_user');
+            }
+        }
     })();
 
     // ============================================================
