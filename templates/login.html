@@ -45,27 +45,18 @@
 
 <script>
     // ============================================================
-    //  OFFLINE SESSION CHECK – redirect to dashboard if valid session exists
+    //  FIX: Clear any stored session on login page
+    //  (If we are here, the server rejected our session, so it's invalid)
     // ============================================================
     (function() {
-        const storedUser = localStorage.getItem('ox_user');
-        if (storedUser) {
-            try {
-                const session = JSON.parse(storedUser);
-                // Check if session is still valid (not expired)
-                if (session.expiresAt && Date.now() < session.expiresAt) {
-                    // Valid session – redirect to dashboard, even if offline
-                    window.location.href = '/';
-                    return;
-                } else {
-                    // Expired – clear it
-                    localStorage.removeItem('ox_user');
-                }
-            } catch (e) {
-                localStorage.removeItem('ox_user');
-            }
-        }
-        // If we get here, no valid session – stay on login page.
+        // Remove stale session to prevent redirect loops
+        localStorage.removeItem('ox_user');
+        localStorage.removeItem('pin_unlocked');
+        // Also remove any other old pending flags that might cause issues
+        try {
+            localStorage.removeItem('pending-sync-timestamp');
+            localStorage.removeItem('offline-sync-timestamp');
+        } catch(e) {}
     })();
 
     // ============================================================
