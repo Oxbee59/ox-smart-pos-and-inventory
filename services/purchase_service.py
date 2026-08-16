@@ -823,18 +823,23 @@ def get_source_suggestions(keyword):
 
 
 # ============================================================
-#  NEW: UNIFIED SEARCH BY NAME OR BRAND (NO LIMIT – ALL RESULTS)
+#  NEW: UNIFIED SEARCH BY NAME OR BRAND (WITH CATEGORY FILTER)
 # ============================================================
 
-def search_products_by_name_or_brand(keyword):
+def search_products_by_name_or_brand(keyword, category=None, exclude_category=None):
     """
     Search products by name or brand (case-insensitive) – returns ALL matching results.
     Used for the product name / brand autocomplete.
+
+    Parameters:
+        keyword (str): the search term
+        category (str, optional): if provided, filter results by this exact category
+        exclude_category (str, optional): if provided, exclude products with this category
     """
     conn = get_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute("""
+        query = """
             SELECT DISTINCT p.name, p.brand, p.category
             FROM products p
             WHERE (p.name ILIKE %s OR p.brand ILIKE %s)
@@ -844,8 +849,16 @@ def search_products_by_name_or_brand(keyword):
                 AND dp.action IN ('PERMANENTLY DELETED', 'PRODUCT DELETED')
                 AND dp.source = 'product'
             )
-            ORDER BY p.name ASC
-        """, (f'%{keyword}%', f'%{keyword}%'))
+        """
+        params = [f'%{keyword}%', f'%{keyword}%']
+        if category:
+            query += " AND p.category = %s"
+            params.append(category)
+        if exclude_category:
+            query += " AND p.category != %s"
+            params.append(exclude_category)
+        query += " ORDER BY p.name ASC"
+        cursor.execute(query, params)
         rows = cursor.fetchall()
         return [
             {"name": r[0], "brand": r[1] or "", "category": r[2] or ""}

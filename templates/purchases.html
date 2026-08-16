@@ -48,8 +48,8 @@
         </div>
         <div>
             <label class="block text-sm font-medium text-gray-700">Category</label>
-            <input type="text" id="category" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" autocomplete="off" value="Accessory" readonly>
-            <div id="categorySuggestions" class="absolute z-10 bg-white border rounded-lg shadow-lg hidden"></div>
+            <input type="text" id="category" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" autocomplete="off" placeholder="e.g. Accessory, Phone" value="Accessory">
+            <div id="categorySuggestions" class="absolute z-10 bg-white border rounded-lg shadow-lg hidden max-h-60 overflow-y-auto w-full"></div>
         </div>
         <div>
             <label class="block text-sm font-medium text-gray-700">Quantity</label>
@@ -1273,7 +1273,7 @@
     function resetForm() {
         document.getElementById('name').value = '';
         document.getElementById('brand').value = '';
-        document.getElementById('category').value = '';
+        document.getElementById('category').value = 'Accessory';
         document.getElementById('quantity').value = '';
         document.getElementById('cost_price').value = '';
         document.getElementById('discount').value = '';
@@ -1464,7 +1464,7 @@
         }
     }
 
-    // ---------- SUGGESTIONS (unchanged) ----------
+    // ---------- SUGGESTIONS (with category exclusion) ----------
     let nameTimeout, brandTimeout, catTimeout, sourceTimeout;
 
     async function fetchProductSuggestions(inputId, suggestionsId) {
@@ -1478,7 +1478,8 @@
             return;
         }
         try {
-            const res = await fetch(`/api/purchases/suggestions/product?q=${encodeURIComponent(q)}`);
+            // 🔥 Exclude Screen category from product suggestions
+            const res = await fetch(`/api/purchases/suggestions/product?q=${encodeURIComponent(q)}&exclude_category=Screen`);
             if (!res.ok) throw new Error();
             const suggestions = await res.json();
             const box = document.getElementById(suggestionsId);
@@ -1511,6 +1512,7 @@
         document.getElementById('brandSuggestions').classList.add('hidden');
     };
 
+    // Category suggestions already exclude Screen (via endpoint)
     async function fetchCategorySuggestions() {
         if (!navigator.onLine) {
             document.getElementById('categorySuggestions').classList.add('hidden');
@@ -1602,6 +1604,7 @@
             if (e.key === 'Enter') applyAdvancedSearch();
         });
 
+        // Product name & brand suggestions with exclude_category
         document.getElementById('name').addEventListener('input', function() {
             clearTimeout(nameTimeout);
             nameTimeout = setTimeout(() => fetchProductSuggestions('name', 'nameSuggestions'), 300);

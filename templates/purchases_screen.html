@@ -1467,7 +1467,7 @@
         }
     }
 
-    // ---------- SUGGESTIONS (unchanged) ----------
+    // ---------- SUGGESTIONS (filtered to Screen only) ----------
     let nameTimeout, brandTimeout, catTimeout, sourceTimeout;
 
     async function fetchProductSuggestions(inputId, suggestionsId) {
@@ -1481,7 +1481,8 @@
             return;
         }
         try {
-            const res = await fetch(`/api/purchases/suggestions/product?q=${encodeURIComponent(q)}`);
+            // 🔥 Only Screen products
+            const res = await fetch(`/api/purchases/suggestions/product?q=${encodeURIComponent(q)}&category=Screen`);
             if (!res.ok) throw new Error();
             const suggestions = await res.json();
             const box = document.getElementById(suggestionsId);
@@ -1514,6 +1515,7 @@
         document.getElementById('brandSuggestions').classList.add('hidden');
     };
 
+    // Category suggestions – also filter to Screen only
     async function fetchCategorySuggestions() {
         if (!navigator.onLine) {
             document.getElementById('categorySuggestions').classList.add('hidden');
@@ -1605,6 +1607,7 @@
             if (e.key === 'Enter') applyAdvancedSearch();
         });
 
+        // Product name & brand suggestions – category=Screen
         document.getElementById('name').addEventListener('input', function() {
             clearTimeout(nameTimeout);
             nameTimeout = setTimeout(() => fetchProductSuggestions('name', 'nameSuggestions'), 300);

@@ -1036,13 +1036,14 @@ def api_purchases_pdf():
         from_date = data.get('from_date', '')
         to_date = data.get('to_date', '')
         totals = data.get('totals', {})
-        
+
         buffer = io.BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=15, leftMargin=15,
+        doc = SimpleDocTemplate(buffer, pagesize=landscape(A4),
+                                rightMargin=15, leftMargin=15,
                                 topMargin=20, bottomMargin=20)
         styles = getSampleStyleSheet()
         elements = []
-        
+
         elements.append(Paragraph("📦 Purchases Report", styles["Title"]))
         elements.append(Spacer(1, 6))
         elements.append(Paragraph(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", styles["Normal"]))
@@ -1050,13 +1051,52 @@ def api_purchases_pdf():
             elements.append(Paragraph(f"Date Range: {from_date} → {to_date}", styles["Normal"]))
         elements.append(Spacer(1, 12))
 
-        # Table headers
-        table_data = [["ID", "Name", "Brand", "Qty", "Remaining", "Sold", "Claimed", "Cost", "Discount", "Total", "Selling", "Source", "Date/Time"]]
+        # ---------- Table setup with wider columns and wrapping ----------
+        # Column widths (in cm) – Name and Brand get more space
+        col_widths = [
+            1.2,   # ID
+            5.5,   # Name  ← increased
+            3.5,   # Brand ← increased
+            1.2,   # Qty
+            1.2,   # Remaining
+            1.2,   # Sold
+            1.2,   # Claimed
+            1.8,   # Cost
+            1.8,   # Discount
+            2.2,   # Total
+            2.2,   # Selling
+            2.2,   # Source
+            2.5    # Date/Time
+        ]
+
+        # Define a style for table cells (wraps text)
+        from reportlab.lib.styles import ParagraphStyle
+        from reportlab.platypus import Paragraph
+        from reportlab.lib.enums import TA_LEFT
+
+        cell_style = ParagraphStyle(
+            'CellStyle',
+            fontName='Helvetica',
+            fontSize=7,
+            leading=8,
+            alignment=TA_LEFT,
+            wordWrap='CJK'  # allows wrapping of long text
+        )
+
+        # Header row (as Paragraph objects for consistency)
+        headers = [
+            "ID", "Name", "Brand", "Qty", "Remaining",
+            "Sold", "Claimed", "Cost", "Discount", "Total",
+            "Selling", "Source", "Date/Time"
+        ]
+        header_cells = [Paragraph(h, styles['Heading4']) for h in headers]
+
+        # Data rows
+        table_data = [header_cells]
         total_qty = total_cost = total_discount = total_selling = total_claimed = total_claimed_cost = total_sold_summary = 0
-        row_colors = [colors.whitesmoke, colors.lightgrey]
 
         for p in purchases:
-            # Convert date string safely
+            # Safely convert date
             date_str = p.get('date', '')
             if date_str:
                 try:
@@ -1067,55 +1107,58 @@ def api_purchases_pdf():
                         date_str = str(date_str)[:16]
                 except:
                     date_str = str(date_str)[:16]
-            
+
             qty = p.get("quantity", 0)
             remaining = p.get("remaining_quantity", 0)
             claimed = p.get("claimed_quantity", 0)
             sold = qty - remaining
             cost = p.get("cost_price", 0)
-            claimed_cost = claimed * cost
 
-            table_data.append([
-                p.get("batch_id", ''),
-                p.get("name", ''),
-                p.get("brand", ''),
-                qty,
-                remaining,
-                sold,
-                claimed,
-                f"₵{cost:.2f}",
-                f"₵{p.get('discount', 0):.2f}",
-                f"₵{p.get('total_cost', 0):.2f}",
-                f"₵{p.get('selling_price', 0):.2f}",
-                p.get('source', 'Unknown'),
-                date_str
-            ])
+            # Build a row of Paragraph objects (wrapped)
+            row = [
+                Paragraph(str(p.get("batch_id", '')), cell_style),
+                Paragraph(str(p.get("name", '')), cell_style),
+                Paragraph(str(p.get("brand", '')), cell_style),
+                Paragraph(str(qty), cell_style),
+                Paragraph(str(remaining), cell_style),
+                Paragraph(str(sold), cell_style),
+                Paragraph(str(claimed), cell_style),
+                Paragraph(f"₵{cost:.2f}", cell_style),
+                Paragraph(f"₵{p.get('discount', 0):.2f}", cell_style),
+                Paragraph(f"₵{p.get('total_cost', 0):.2f}", cell_style),
+                Paragraph(f"₵{p.get('selling_price', 0):.2f}", cell_style),
+                Paragraph(str(p.get('source', 'Unknown')), cell_style),
+                Paragraph(date_str, cell_style)
+            ]
+            table_data.append(row)
+
+            # Accumulate totals
             total_qty += qty
             total_cost += p.get("total_cost", 0)
             total_discount += p.get("discount", 0)
             total_selling += p.get("selling_price", 0) * qty
             total_claimed += claimed
-            total_claimed_cost += claimed_cost
+            total_claimed_cost += claimed * cost
             total_sold_summary += sold
 
-        # Build table (same as before, but with safe handling)
-        table = Table(table_data, repeatRows=1, hAlign='LEFT',
-                      colWidths=[1.5*cm, 4*cm, 3*cm, 1.5*cm, 1.5*cm, 1.5*cm, 1.5*cm, 2*cm, 2*cm, 2.5*cm, 2.5*cm, 2.5*cm, 3*cm])
+        # Build the table
+        table = Table(table_data, repeatRows=1, hAlign='LEFT', colWidths=col_widths)
         style = TableStyle([
-            ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#00CFCF")),
-            ("TEXTCOLOR", (0,0), (-1,0), colors.whitesmoke),
-            ("ALIGN", (3,1), (-2,-1), "CENTER"),
-            ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-            ("GRID", (0,0), (-1,-1), 0.4, colors.black),
-            ("FONTSIZE", (0,0), (-1,-1), 7),
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#00CFCF")),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+            ('ALIGN', (3,1), (-2,-1), 'CENTER'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('GRID', (0,0), (-1,-1), 0.4, colors.black),
+            ('FONTSIZE', (0,0), (-1,-1), 7),
         ])
+        # Alternate row colors
         for i in range(1, len(table_data)):
-            style.add("BACKGROUND", (0,i), (-1,i), row_colors[i%2])
+            style.add('BACKGROUND', (0,i), (-1,i), colors.whitesmoke if i%2==0 else colors.lightgrey)
         table.setStyle(style)
         elements.append(table)
         elements.append(Spacer(1, 12))
 
-        # Summary
+        # ---------- Summary section (unchanged) ----------
         elements.append(Paragraph("📊 Summary", styles["Heading2"]))
         elements.append(Spacer(1, 6))
         total_batches = len(purchases)
@@ -1171,12 +1214,12 @@ def api_purchases_pdf():
         return send_file(buffer, as_attachment=True,
                          download_name=f"Purchases_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
                          mimetype='application/pdf')
+
     except Exception as e:
         print(f"❌ PDF generation error: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
-
 # ===================== PURCHASE HISTORY API =====================
 @app.route('/api/purchases/<int:batch_id>/history', methods=['GET'])
 @login_required
@@ -1267,12 +1310,17 @@ def api_suggest_source():
 @login_required
 def api_suggest_product():
     q = request.args.get('q', '').strip()
+    category = request.args.get('category', '').strip()
+    exclude_category = request.args.get('exclude_category', '').strip()
     if not q:
         return jsonify([])
     from services.purchase_service import search_products_by_name_or_brand
-    results = search_products_by_name_or_brand(q)
+    results = search_products_by_name_or_brand(
+        keyword=q,
+        category=category if category else None,
+        exclude_category=exclude_category if exclude_category else None
+    )
     return jsonify(results)
-
 # ===================== PRODUCT API =====================
 # ===================== PRODUCT API =====================
 @app.route('/api/products', methods=['GET'])
@@ -1828,6 +1876,7 @@ def api_today_sales():
         return jsonify({'error': str(e), 'trace': traceback.format_exc()}), 500
     finally:
         conn.close()
+
 @app.route('/api/today_sales/pdf', methods=['POST'])
 @login_required
 def api_today_sales_pdf():
@@ -1835,21 +1884,24 @@ def api_today_sales_pdf():
     sales_data = data.get('sales_data', [])
     period_text = data.get('period_text', 'Sales Report')
     summary = data.get('summary', '')
-    is_admin = data.get('is_admin', False)   # <-- get from frontend
+    is_admin = data.get('is_admin', False)
 
     if not sales_data:
         return jsonify({'error': 'No data to export'}), 400
 
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=landscape(A4),
-                           rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20)
-    elements = []
+                            rightMargin=15, leftMargin=15,
+                            topMargin=20, bottomMargin=20)
     styles = getSampleStyleSheet()
+    elements = []
+
     elements.append(Paragraph("Sales Report", styles['Title']))
     elements.append(Spacer(1, 0.2*cm))
     elements.append(Paragraph(period_text, styles['Normal']))
     elements.append(Spacer(1, 0.2*cm))
 
+    # ---------- Compute totals first ----------
     seen_sales = set()
     total_sales = 0.0
     total_discount = 0.0
@@ -1859,83 +1911,116 @@ def api_today_sales_pdf():
     momo_total = 0.0
     cheque_total = 0.0
 
-    # First pass: compute totals and net profit
     for sale in sales_data:
-        sale_id = sale['sale_id']
+        sale_id = sale.get('sale_id')
         if sale_id not in seen_sales:
-            total_sales += sale['total']
-            total_discount += sale['discount']
-            total_profit += sale['net_profit'] or 0
+            total_sales += sale.get('total', 0)
+            total_discount += sale.get('discount', 0)
+            total_profit += sale.get('net_profit', 0)
             seen_sales.add(sale_id)
             method = (sale.get('payment_method', 'cash') or 'cash').lower()
             if method == 'cash' or method == '':
-                cash_total += sale['total']
+                cash_total += sale.get('total', 0)
             elif method == 'momo':
-                momo_total += sale['total']
+                momo_total += sale.get('total', 0)
             elif method == 'cheque':
-                cheque_total += sale['total']
+                cheque_total += sale.get('total', 0)
             else:
-                cash_total += sale['total']
+                cash_total += sale.get('total', 0)
         total_items += sale.get('quantity', 0)
 
-    # Build header and rows depending on admin status
+    # ---------- Prepare table with text wrapping ----------
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.platypus import Paragraph
+    from reportlab.lib.enums import TA_LEFT
+
+    cell_style = ParagraphStyle(
+        'CellStyle',
+        fontName='Helvetica',
+        fontSize=7,
+        leading=8,
+        alignment=TA_LEFT,
+        wordWrap='CJK'
+    )
+    header_style = ParagraphStyle(
+        'HeaderStyle',
+        fontName='Helvetica-Bold',
+        fontSize=8,
+        leading=10,
+        alignment=TA_LEFT,
+        wordWrap='CJK'
+    )
+
+    # Define headers and column widths (in cm) – adjusted for readability
     if is_admin:
         headers = ["Name", "Brand", "Category", "Qty", "Price", "Subtotal",
-                   "Discount", "Total", "Profit", "Batch", "Cost", "Sale Date", "Payment", "Status", "User"]
+                   "Discount", "Total", "Profit", "Batch", "Cost", "Sale Date",
+                   "Payment", "Status", "User"]
+        col_widths = [4.0, 3.0, 2.0, 1.2, 1.8, 2.0, 1.8, 2.0, 1.8, 1.8, 1.8, 2.5, 2.0, 1.8, 2.0]
     else:
         headers = ["Name", "Brand", "Category", "Qty", "Price", "Subtotal",
                    "Discount", "Total", "Batch", "Sale Date", "Payment", "Status", "User"]
+        col_widths = [4.5, 3.5, 2.5, 1.2, 1.8, 2.0, 1.8, 2.0, 1.8, 2.8, 2.0, 2.0, 2.0]
 
-    table_data = [headers]
+    # Create header cells
+    header_cells = [Paragraph(h, header_style) for h in headers]
+
+    # Data rows
+    table_data = [header_cells]
 
     for sale in sales_data:
-        # For each item, compute item profit (only needed for admin view)
-        item_profit = (sale['selling_price'] - sale['cost_price']) * sale['quantity'] if is_admin else 0
+        item_profit = (sale.get('selling_price', 0) - sale.get('cost_price', 0)) * sale.get('quantity', 0) if is_admin else 0
         status = "Deleted Batch" if sale.get('is_deleted_batch') else "Active"
         payment_display = sale.get('payment_method', 'cash').upper()
         if sale.get('cheque_number'):
             payment_display += f" #{sale['cheque_number']}"
 
         row = [
-            sale['name'],
-            sale['brand'],
-            sale['category'],
-            str(sale['quantity']),
-            f"₵{sale['selling_price']:.2f}",
-            f"₵{sale['subtotal']:.2f}",
-            f"₵{sale['discount']:.2f}",
-            f"₵{sale['total']:.2f}"
+            Paragraph(str(sale.get('name', '')), cell_style),
+            Paragraph(str(sale.get('brand', '')), cell_style),
+            Paragraph(str(sale.get('category', '')), cell_style),
+            Paragraph(str(sale.get('quantity', 0)), cell_style),
+            Paragraph(f"₵{sale.get('selling_price', 0):.2f}", cell_style),
+            Paragraph(f"₵{sale.get('subtotal', 0):.2f}", cell_style),
+            Paragraph(f"₵{sale.get('discount', 0):.2f}", cell_style),
+            Paragraph(f"₵{sale.get('total', 0):.2f}", cell_style),
         ]
 
         if is_admin:
-            row.append(f"₵{item_profit:.2f}")           # Profit per item
-            row.append(str(sale['batch_id']) if sale['batch_id'] != -1 else "DELETED")
-            row.append(f"₵{sale['cost_price']:.2f}")
+            row.append(Paragraph(f"₵{item_profit:.2f}", cell_style))
+            row.append(Paragraph(str(sale.get('batch_id', -1) if sale.get('batch_id', -1) != -1 else 'DELETED'), cell_style))
+            row.append(Paragraph(f"₵{sale.get('cost_price', 0):.2f}", cell_style))
         else:
-            row.append(str(sale['batch_id']) if sale['batch_id'] != -1 else "DELETED")
+            row.append(Paragraph(str(sale.get('batch_id', -1) if sale.get('batch_id', -1) != -1 else 'DELETED'), cell_style))
 
         # Common fields
         row.extend([
-            sale['sale_date'],
-            payment_display,
-            status,
-            sale.get('username', 'Unknown')
+            Paragraph(str(sale.get('sale_date', '')), cell_style),
+            Paragraph(payment_display, cell_style),
+            Paragraph(status, cell_style),
+            Paragraph(str(sale.get('username', 'Unknown')), cell_style)
         ])
+
         table_data.append(row)
 
-    # Build table
-    table = Table(table_data, repeatRows=1)
-    table.setStyle(TableStyle([
+    # Build the table
+    table = Table(table_data, repeatRows=1, hAlign='LEFT', colWidths=col_widths)
+    style = TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#1E3A5F")),
         ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
         ('GRID', (0,0), (-1,-1), 0.5, colors.black),
-        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-        ('ALIGN', (3,1), (-1,-1), 'CENTER'),
         ('FONTSIZE', (0,0), (-1,-1), 7),
-    ]))
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('ALIGN', (3,1), (-1,-1), 'CENTER'),
+    ])
+    # Alternate row colors
+    for i in range(1, len(table_data)):
+        bg = colors.whitesmoke if i % 2 == 0 else colors.lightgrey
+        style.add('BACKGROUND', (0,i), (-1,i), bg)
+    table.setStyle(style)
     elements.append(table)
 
-    # Summary section
+    # ---------- Summary section ----------
     elements.append(Spacer(1, 0.5*cm))
     elements.append(Paragraph("📊 Summary", styles["Heading2"]))
     elements.append(Spacer(1, 0.2*cm))
