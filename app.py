@@ -1055,8 +1055,8 @@ def api_purchases_pdf():
         # Column widths (in cm) – Name and Brand get more space
         col_widths = [
             1.2,   # ID
-            5.5,   # Name  ← increased
-            3.5,   # Brand ← increased
+            5.5,   # Name
+            3.5,   # Brand
             1.2,   # Qty
             1.2,   # Remaining
             1.2,   # Sold
@@ -1071,8 +1071,9 @@ def api_purchases_pdf():
 
         # Define a style for table cells (wraps text)
         from reportlab.lib.styles import ParagraphStyle
-        from reportlab.platypus import Paragraph
         from reportlab.lib.enums import TA_LEFT
+
+        # Paragraph is already imported globally – DO NOT import it again here
 
         cell_style = ParagraphStyle(
             'CellStyle',
@@ -1080,7 +1081,7 @@ def api_purchases_pdf():
             fontSize=7,
             leading=8,
             alignment=TA_LEFT,
-            wordWrap='CJK'  # allows wrapping of long text
+            wordWrap='CJK'
         )
 
         # Header row (as Paragraph objects for consistency)
@@ -1158,7 +1159,7 @@ def api_purchases_pdf():
         elements.append(table)
         elements.append(Spacer(1, 12))
 
-        # ---------- Summary section (unchanged) ----------
+        # ---------- Summary section ----------
         elements.append(Paragraph("📊 Summary", styles["Heading2"]))
         elements.append(Spacer(1, 6))
         total_batches = len(purchases)
@@ -1931,8 +1932,9 @@ def api_today_sales_pdf():
 
     # ---------- Prepare table with text wrapping ----------
     from reportlab.lib.styles import ParagraphStyle
-    from reportlab.platypus import Paragraph
     from reportlab.lib.enums import TA_LEFT
+
+    # Paragraph is already imported globally – DO NOT import it again here
 
     cell_style = ParagraphStyle(
         'CellStyle',
