@@ -1052,7 +1052,6 @@ def api_purchases_pdf():
         elements.append(Spacer(1, 12))
 
         # ---------- Table setup with wider columns and wrapping ----------
-        # Column widths (in cm) – Name and Brand get more space
         col_widths = [
             1.2,   # ID
             5.5,   # Name
@@ -1069,7 +1068,6 @@ def api_purchases_pdf():
             2.5    # Date/Time
         ]
 
-        # Define a style for table cells (wraps text)
         from reportlab.lib.styles import ParagraphStyle
         from reportlab.lib.enums import TA_LEFT
 
@@ -1084,7 +1082,6 @@ def api_purchases_pdf():
             wordWrap='CJK'
         )
 
-        # Header row (as Paragraph objects for consistency)
         headers = [
             "ID", "Name", "Brand", "Qty", "Remaining",
             "Sold", "Claimed", "Cost", "Discount", "Total",
@@ -1092,12 +1089,10 @@ def api_purchases_pdf():
         ]
         header_cells = [Paragraph(h, styles['Heading4']) for h in headers]
 
-        # Data rows
         table_data = [header_cells]
         total_qty = total_cost = total_discount = total_selling = total_claimed = total_claimed_cost = total_sold_summary = 0
 
         for p in purchases:
-            # Safely convert date
             date_str = p.get('date', '')
             if date_str:
                 try:
@@ -1115,7 +1110,6 @@ def api_purchases_pdf():
             sold = qty - remaining
             cost = p.get("cost_price", 0)
 
-            # Build a row of Paragraph objects (wrapped)
             row = [
                 Paragraph(str(p.get("batch_id", '')), cell_style),
                 Paragraph(str(p.get("name", '')), cell_style),
@@ -1133,7 +1127,6 @@ def api_purchases_pdf():
             ]
             table_data.append(row)
 
-            # Accumulate totals
             total_qty += qty
             total_cost += p.get("total_cost", 0)
             total_discount += p.get("discount", 0)
@@ -1142,7 +1135,6 @@ def api_purchases_pdf():
             total_claimed_cost += claimed * cost
             total_sold_summary += sold
 
-        # Build the table
         table = Table(table_data, repeatRows=1, hAlign='LEFT', colWidths=col_widths)
         style = TableStyle([
             ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#00CFCF")),
@@ -1152,21 +1144,34 @@ def api_purchases_pdf():
             ('GRID', (0,0), (-1,-1), 0.4, colors.black),
             ('FONTSIZE', (0,0), (-1,-1), 7),
         ])
-        # Alternate row colors
         for i in range(1, len(table_data)):
             style.add('BACKGROUND', (0,i), (-1,i), colors.whitesmoke if i%2==0 else colors.lightgrey)
         table.setStyle(style)
         elements.append(table)
         elements.append(Spacer(1, 12))
 
-        # ---------- Summary section ----------
+        # ---------- Summary section with safe numeric handling ----------
         elements.append(Paragraph("📊 Summary", styles["Heading2"]))
         elements.append(Spacer(1, 6))
+
         total_batches = len(purchases)
         total_remaining = total_qty - total_sold_summary
         total_sold = total_sold_summary
-        adjusted_capital = totals.get('adjusted_capital', total_cost - total_claimed_cost) if totals else total_cost - total_claimed_cost
-        total_profit = totals.get('total_profit', total_selling - (total_cost - total_discount)) if totals else total_selling - (total_cost - total_discount)
+
+        # Safely get adjusted_capital – fallback to computed value if missing/None
+        adjusted_capital = totals.get('adjusted_capital')
+        if adjusted_capital is None:
+            adjusted_capital = total_cost - total_claimed_cost
+        else:
+            adjusted_capital = float(adjusted_capital)
+
+        # Safely get total_profit – fallback to computed value if missing/None
+        total_profit = totals.get('total_profit')
+        if total_profit is None:
+            total_profit = total_selling - (total_cost - total_discount)
+        else:
+            total_profit = float(total_profit)
+
         total_good = total_remaining - total_claimed
         sold_percentage = (total_sold / total_qty * 100) if total_qty > 0 else 0
 
@@ -1202,6 +1207,7 @@ def api_purchases_pdf():
         ]))
         elements.append(summary_table)
 
+        # Now total_profit is guaranteed to be a float
         profit_color = colors.green if total_profit >= 0 else colors.red
         profit_status = "📈 PROFIT" if total_profit >= 0 else "📉 LOSS"
         elements.append(Spacer(1, 6))
@@ -1902,7 +1908,7 @@ def api_today_sales_pdf():
     elements.append(Paragraph(period_text, styles['Normal']))
     elements.append(Spacer(1, 0.2*cm))
 
-    # ---------- Compute totals first ----------
+    # ---------- Compute totals with safe conversion ----------
     seen_sales = set()
     total_sales = 0.0
     total_discount = 0.0
@@ -1915,20 +1921,22 @@ def api_today_sales_pdf():
     for sale in sales_data:
         sale_id = sale.get('sale_id')
         if sale_id not in seen_sales:
-            total_sales += sale.get('total', 0)
-            total_discount += sale.get('discount', 0)
-            total_profit += sale.get('net_profit', 0)
+            # Safely convert values to float, defaulting to 0.0
+            total_sales += float(sale.get('total', 0) or 0)
+            total_discount += float(sale.get('discount', 0) or 0)
+            total_profit += float(sale.get('net_profit', 0) or 0)
             seen_sales.add(sale_id)
             method = (sale.get('payment_method', 'cash') or 'cash').lower()
+            sale_total = float(sale.get('total', 0) or 0)
             if method == 'cash' or method == '':
-                cash_total += sale.get('total', 0)
+                cash_total += sale_total
             elif method == 'momo':
-                momo_total += sale.get('total', 0)
+                momo_total += sale_total
             elif method == 'cheque':
-                cheque_total += sale.get('total', 0)
+                cheque_total += sale_total
             else:
-                cash_total += sale.get('total', 0)
-        total_items += sale.get('quantity', 0)
+                cash_total += sale_total
+        total_items += int(sale.get('quantity', 0) or 0)
 
     # ---------- Prepare table with text wrapping ----------
     from reportlab.lib.styles import ParagraphStyle
@@ -1971,7 +1979,15 @@ def api_today_sales_pdf():
     table_data = [header_cells]
 
     for sale in sales_data:
-        item_profit = (sale.get('selling_price', 0) - sale.get('cost_price', 0)) * sale.get('quantity', 0) if is_admin else 0
+        # Safely parse numeric values
+        selling_price = float(sale.get('selling_price', 0) or 0)
+        cost_price = float(sale.get('cost_price', 0) or 0)
+        quantity = int(sale.get('quantity', 0) or 0)
+        subtotal = float(sale.get('subtotal', 0) or 0)
+        discount = float(sale.get('discount', 0) or 0)
+        total = float(sale.get('total', 0) or 0)
+        item_profit = (selling_price - cost_price) * quantity if is_admin else 0
+
         status = "Deleted Batch" if sale.get('is_deleted_batch') else "Active"
         payment_display = sale.get('payment_method', 'cash').upper()
         if sale.get('cheque_number'):
@@ -1981,19 +1997,21 @@ def api_today_sales_pdf():
             Paragraph(str(sale.get('name', '')), cell_style),
             Paragraph(str(sale.get('brand', '')), cell_style),
             Paragraph(str(sale.get('category', '')), cell_style),
-            Paragraph(str(sale.get('quantity', 0)), cell_style),
-            Paragraph(f"₵{sale.get('selling_price', 0):.2f}", cell_style),
-            Paragraph(f"₵{sale.get('subtotal', 0):.2f}", cell_style),
-            Paragraph(f"₵{sale.get('discount', 0):.2f}", cell_style),
-            Paragraph(f"₵{sale.get('total', 0):.2f}", cell_style),
+            Paragraph(str(quantity), cell_style),
+            Paragraph(f"₵{selling_price:.2f}", cell_style),
+            Paragraph(f"₵{subtotal:.2f}", cell_style),
+            Paragraph(f"₵{discount:.2f}", cell_style),
+            Paragraph(f"₵{total:.2f}", cell_style),
         ]
 
         if is_admin:
             row.append(Paragraph(f"₵{item_profit:.2f}", cell_style))
-            row.append(Paragraph(str(sale.get('batch_id', -1) if sale.get('batch_id', -1) != -1 else 'DELETED'), cell_style))
-            row.append(Paragraph(f"₵{sale.get('cost_price', 0):.2f}", cell_style))
+            batch_id = sale.get('batch_id', -1)
+            row.append(Paragraph(str(batch_id if batch_id != -1 else 'DELETED'), cell_style))
+            row.append(Paragraph(f"₵{cost_price:.2f}", cell_style))
         else:
-            row.append(Paragraph(str(sale.get('batch_id', -1) if sale.get('batch_id', -1) != -1 else 'DELETED'), cell_style))
+            batch_id = sale.get('batch_id', -1)
+            row.append(Paragraph(str(batch_id if batch_id != -1 else 'DELETED'), cell_style))
 
         # Common fields
         row.extend([
@@ -2037,6 +2055,7 @@ def api_today_sales_pdf():
         ["📝 Cheque Payments", f"₵{cheque_total:.2f}"]
     ]
     if is_admin:
+        # total_profit is already a float
         summary_data.insert(4, ["📈 Net Profit", f"₵{total_profit:.2f}"])
 
     summary_table = Table(summary_data, colWidths=[6*cm, 6*cm], hAlign='CENTER')
@@ -2059,7 +2078,6 @@ def api_today_sales_pdf():
     return send_file(buffer, as_attachment=True,
                      download_name=f"SalesReport_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
                      mimetype='application/pdf')
-
 # ===================== ANALYTICS API =====================
 @app.route('/api/analytics/summary', methods=['GET'])
 @login_required
