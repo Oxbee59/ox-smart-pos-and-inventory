@@ -229,11 +229,12 @@ def update_user_password(user_id: int, new_password: str) -> bool:
         return_connection(conn)
 
 
-# ---------------- DELETE USER (IMPROVED WITH DEPENDENCY CHECK) ----------------
+# ---------------- DELETE USER (FIXED FOR user_settings) ----------------
 def delete_user(user_id: int):
     """
     Delete a user. Returns dict with success and error message.
     Checks for dependent records (sales, and optionally purchases if the column exists).
+    Also deletes user_settings and user_logs before the user.
     """
     conn = get_connection()
     cursor = conn.cursor()
@@ -252,20 +253,40 @@ def delete_user(user_id: int):
         
         # 2. Optionally check purchases if the column exists
         #    (Skip if you haven't added user_id to purchases yet)
-        #    Uncomment the lines below if you later add user_id to purchases.
-        #
         # cursor.execute("SELECT COUNT(*) FROM purchases WHERE user_id = %s", (user_id,))
         # purchases_count = cursor.fetchone()[0]
         # if purchases_count > 0:
-        #     return {
-        #         "success": False,
-        #         "error": f"Cannot delete user. They have {purchases_count} purchase(s) associated."
-        #     }
+        #     return {"success": False, "error": f"Cannot delete user. They have {purchases_count} purchase(s)."}
         
-        # 3. Delete user logs first (to avoid FK violations)
+        # 3. Delete from user_settings if table exists
+        try:
+            # Check if user_settings table exists
+            cursor.execute("""
+                SELECT EXISTS (
+                    SELECT 1 FROM information_schema.tables 
+                    WHERE table_name = 'user_settings'
+                )
+            """)
+            table_exists = cursor.fetchone()[0]
+            if table_exists:
+                # Check if user_id column exists
+                cursor.execute("""
+                    SELECT EXISTS (
+                        SELECT 1 FROM information_schema.columns 
+                        WHERE table_name = 'user_settings' AND column_name = 'user_id'
+                    )
+                """)
+                column_exists = cursor.fetchone()[0]
+                if column_exists:
+                    cursor.execute("DELETE FROM user_settings WHERE user_id = %s", (user_id,))
+        except Exception as e:
+            # If any error, log but continue (table might not exist or other issue)
+            print(f"⚠️ Could not delete from user_settings: {e}")
+        
+        # 4. Delete user logs
         cursor.execute("DELETE FROM user_logs WHERE user_id = %s", (user_id,))
         
-        # 4. Delete the user
+        # 5. Delete the user
         cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
         conn.commit()
         return {"success": True}
