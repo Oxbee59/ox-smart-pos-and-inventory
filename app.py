@@ -1051,27 +1051,26 @@ def api_purchases_pdf():
             elements.append(Paragraph(f"Date Range: {from_date} → {to_date}", styles["Normal"]))
         elements.append(Spacer(1, 12))
 
-        # ---------- Table setup with wider columns and wrapping ----------
+        # ---------- Adjusted column widths (in cm) with padding accounted ----------
         col_widths = [
-            1.2,   # ID
-            5.5,   # Name
-            3.5,   # Brand
-            1.2,   # Qty
-            1.2,   # Remaining
-            1.2,   # Sold
-            1.2,   # Claimed
-            1.8,   # Cost
-            1.8,   # Discount
-            2.2,   # Total
-            2.2,   # Selling
-            2.2,   # Source
-            2.5    # Date/Time
+            1.0,   # ID
+            4.5,   # Name  (reduced from 5.5)
+            3.0,   # Brand (reduced from 3.5)
+            1.0,   # Qty
+            1.0,   # Remaining
+            1.0,   # Sold
+            1.0,   # Claimed
+            1.5,   # Cost
+            1.5,   # Discount
+            2.0,   # Total
+            2.0,   # Selling
+            2.0,   # Source
+            2.0    # Date/Time  (reduced from 2.5)
         ]
+        # Sum ≈ 24.5 cm, leaves room for padding
 
         from reportlab.lib.styles import ParagraphStyle
         from reportlab.lib.enums import TA_LEFT
-
-        # Paragraph is already imported globally – DO NOT import it again here
 
         cell_style = ParagraphStyle(
             'CellStyle',
@@ -1093,6 +1092,7 @@ def api_purchases_pdf():
         total_qty = total_cost = total_discount = total_selling = total_claimed = total_claimed_cost = total_sold_summary = 0
 
         for p in purchases:
+            # Safely convert date
             date_str = p.get('date', '')
             if date_str:
                 try:
@@ -1135,7 +1135,8 @@ def api_purchases_pdf():
             total_claimed_cost += claimed * cost
             total_sold_summary += sold
 
-        table = Table(table_data, repeatRows=1, hAlign='LEFT', colWidths=col_widths)
+        # Build table with minimal padding
+        table = Table(table_data, repeatRows=1, splitByRow=1, hAlign='LEFT', colWidths=col_widths)
         style = TableStyle([
             ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#00CFCF")),
             ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
@@ -1143,6 +1144,9 @@ def api_purchases_pdf():
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
             ('GRID', (0,0), (-1,-1), 0.4, colors.black),
             ('FONTSIZE', (0,0), (-1,-1), 7),
+            # Reduce padding to save horizontal space
+            ('LEFTPADDING', (0,0), (-1,-1), 2),
+            ('RIGHTPADDING', (0,0), (-1,-1), 2),
         ])
         for i in range(1, len(table_data)):
             style.add('BACKGROUND', (0,i), (-1,i), colors.whitesmoke if i%2==0 else colors.lightgrey)
@@ -1158,14 +1162,12 @@ def api_purchases_pdf():
         total_remaining = total_qty - total_sold_summary
         total_sold = total_sold_summary
 
-        # Safely get adjusted_capital – fallback to computed value if missing/None
         adjusted_capital = totals.get('adjusted_capital')
         if adjusted_capital is None:
             adjusted_capital = total_cost - total_claimed_cost
         else:
             adjusted_capital = float(adjusted_capital)
 
-        # Safely get total_profit – fallback to computed value if missing/None
         total_profit = totals.get('total_profit')
         if total_profit is None:
             total_profit = total_selling - (total_cost - total_discount)
@@ -1207,7 +1209,6 @@ def api_purchases_pdf():
         ]))
         elements.append(summary_table)
 
-        # Now total_profit is guaranteed to be a float
         profit_color = colors.green if total_profit >= 0 else colors.red
         profit_status = "📈 PROFIT" if total_profit >= 0 else "📉 LOSS"
         elements.append(Spacer(1, 6))
@@ -1921,7 +1922,6 @@ def api_today_sales_pdf():
     for sale in sales_data:
         sale_id = sale.get('sale_id')
         if sale_id not in seen_sales:
-            # Safely convert values to float, defaulting to 0.0
             total_sales += float(sale.get('total', 0) or 0)
             total_discount += float(sale.get('discount', 0) or 0)
             total_profit += float(sale.get('net_profit', 0) or 0)
@@ -1942,8 +1942,6 @@ def api_today_sales_pdf():
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.enums import TA_LEFT
 
-    # Paragraph is already imported globally – DO NOT import it again here
-
     cell_style = ParagraphStyle(
         'CellStyle',
         fontName='Helvetica',
@@ -1961,25 +1959,23 @@ def api_today_sales_pdf():
         wordWrap='CJK'
     )
 
-    # Define headers and column widths (in cm) – adjusted for readability
+    # ---------- Adjusted column widths (in cm) – reduce to fit within printable area ----------
     if is_admin:
         headers = ["Name", "Brand", "Category", "Qty", "Price", "Subtotal",
                    "Discount", "Total", "Profit", "Batch", "Cost", "Sale Date",
                    "Payment", "Status", "User"]
-        col_widths = [4.0, 3.0, 2.0, 1.2, 1.8, 2.0, 1.8, 2.0, 1.8, 1.8, 1.8, 2.5, 2.0, 1.8, 2.0]
+        # Reduced widths
+        col_widths = [3.5, 2.5, 1.8, 1.0, 1.5, 1.8, 1.5, 1.8, 1.5, 1.5, 1.5, 2.2, 1.8, 1.5, 1.8]
     else:
         headers = ["Name", "Brand", "Category", "Qty", "Price", "Subtotal",
                    "Discount", "Total", "Batch", "Sale Date", "Payment", "Status", "User"]
-        col_widths = [4.5, 3.5, 2.5, 1.2, 1.8, 2.0, 1.8, 2.0, 1.8, 2.8, 2.0, 2.0, 2.0]
+        # Reduced widths
+        col_widths = [4.0, 3.0, 2.0, 1.0, 1.5, 1.8, 1.5, 1.8, 1.5, 2.5, 1.8, 1.5, 1.8]
 
-    # Create header cells
     header_cells = [Paragraph(h, header_style) for h in headers]
-
-    # Data rows
     table_data = [header_cells]
 
     for sale in sales_data:
-        # Safely parse numeric values
         selling_price = float(sale.get('selling_price', 0) or 0)
         cost_price = float(sale.get('cost_price', 0) or 0)
         quantity = int(sale.get('quantity', 0) or 0)
@@ -2013,7 +2009,6 @@ def api_today_sales_pdf():
             batch_id = sale.get('batch_id', -1)
             row.append(Paragraph(str(batch_id if batch_id != -1 else 'DELETED'), cell_style))
 
-        # Common fields
         row.extend([
             Paragraph(str(sale.get('sale_date', '')), cell_style),
             Paragraph(payment_display, cell_style),
@@ -2023,8 +2018,8 @@ def api_today_sales_pdf():
 
         table_data.append(row)
 
-    # Build the table
-    table = Table(table_data, repeatRows=1, hAlign='LEFT', colWidths=col_widths)
+    # ---------- Build table with reduced padding and splitByRow ----------
+    table = Table(table_data, repeatRows=1, splitByRow=1, hAlign='LEFT', colWidths=col_widths)
     style = TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#1E3A5F")),
         ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
@@ -2032,8 +2027,9 @@ def api_today_sales_pdf():
         ('FONTSIZE', (0,0), (-1,-1), 7),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ('ALIGN', (3,1), (-1,-1), 'CENTER'),
+        ('LEFTPADDING', (0,0), (-1,-1), 2),
+        ('RIGHTPADDING', (0,0), (-1,-1), 2),
     ])
-    # Alternate row colors
     for i in range(1, len(table_data)):
         bg = colors.whitesmoke if i % 2 == 0 else colors.lightgrey
         style.add('BACKGROUND', (0,i), (-1,i), bg)
@@ -2055,7 +2051,6 @@ def api_today_sales_pdf():
         ["📝 Cheque Payments", f"₵{cheque_total:.2f}"]
     ]
     if is_admin:
-        # total_profit is already a float
         summary_data.insert(4, ["📈 Net Profit", f"₵{total_profit:.2f}"])
 
     summary_table = Table(summary_data, colWidths=[6*cm, 6*cm], hAlign='CENTER')
