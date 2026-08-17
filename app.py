@@ -1039,7 +1039,7 @@ def api_purchases_pdf():
 
         buffer = io.BytesIO()
         doc = SimpleDocTemplate(buffer, pagesize=landscape(A4),
-                                rightMargin=15, leftMargin=15,
+                                rightMargin=12, leftMargin=12,
                                 topMargin=20, bottomMargin=20)
         styles = getSampleStyleSheet()
         elements = []
@@ -1051,23 +1051,23 @@ def api_purchases_pdf():
             elements.append(Paragraph(f"Date Range: {from_date} → {to_date}", styles["Normal"]))
         elements.append(Spacer(1, 12))
 
-        # ---------- Adjusted column widths (in cm) with padding accounted ----------
+        # Final column widths (in cm) – tight fit
         col_widths = [
-            1.0,   # ID
-            4.5,   # Name  (reduced from 5.5)
-            3.0,   # Brand (reduced from 3.5)
-            1.0,   # Qty
-            1.0,   # Remaining
-            1.0,   # Sold
-            1.0,   # Claimed
-            1.5,   # Cost
-            1.5,   # Discount
-            2.0,   # Total
-            2.0,   # Selling
-            2.0,   # Source
-            2.0    # Date/Time  (reduced from 2.5)
+            0.8,   # ID
+            4.0,   # Name
+            2.5,   # Brand
+            0.8,   # Qty
+            0.8,   # Remaining
+            0.8,   # Sold
+            0.8,   # Claimed
+            1.2,   # Cost
+            1.2,   # Discount
+            1.8,   # Total
+            1.8,   # Selling
+            1.8,   # Source
+            1.8    # Date/Time
         ]
-        # Sum ≈ 24.5 cm, leaves room for padding
+        # Sum ≈ 20.2 cm → safe
 
         from reportlab.lib.styles import ParagraphStyle
         from reportlab.lib.enums import TA_LEFT
@@ -1075,10 +1075,18 @@ def api_purchases_pdf():
         cell_style = ParagraphStyle(
             'CellStyle',
             fontName='Helvetica',
+            fontSize=6,
+            leading=7,
+            alignment=TA_LEFT,
+            wordWrap='LTR'
+        )
+        header_style = ParagraphStyle(
+            'HeaderStyle',
+            fontName='Helvetica-Bold',
             fontSize=7,
             leading=8,
             alignment=TA_LEFT,
-            wordWrap='CJK'
+            wordWrap='LTR'
         )
 
         headers = [
@@ -1086,13 +1094,12 @@ def api_purchases_pdf():
             "Sold", "Claimed", "Cost", "Discount", "Total",
             "Selling", "Source", "Date/Time"
         ]
-        header_cells = [Paragraph(h, styles['Heading4']) for h in headers]
+        header_cells = [Paragraph(h, header_style) for h in headers]
 
         table_data = [header_cells]
         total_qty = total_cost = total_discount = total_selling = total_claimed = total_claimed_cost = total_sold_summary = 0
 
         for p in purchases:
-            # Safely convert date
             date_str = p.get('date', '')
             if date_str:
                 try:
@@ -1110,10 +1117,11 @@ def api_purchases_pdf():
             sold = qty - remaining
             cost = p.get("cost_price", 0)
 
+            # Ensure all are strings; None becomes ''
             row = [
-                Paragraph(str(p.get("batch_id", '')), cell_style),
-                Paragraph(str(p.get("name", '')), cell_style),
-                Paragraph(str(p.get("brand", '')), cell_style),
+                Paragraph(str(p.get("batch_id", '') or ''), cell_style),
+                Paragraph(str(p.get("name", '') or ''), cell_style),
+                Paragraph(str(p.get("brand", '') or ''), cell_style),
                 Paragraph(str(qty), cell_style),
                 Paragraph(str(remaining), cell_style),
                 Paragraph(str(sold), cell_style),
@@ -1122,7 +1130,7 @@ def api_purchases_pdf():
                 Paragraph(f"₵{p.get('discount', 0):.2f}", cell_style),
                 Paragraph(f"₵{p.get('total_cost', 0):.2f}", cell_style),
                 Paragraph(f"₵{p.get('selling_price', 0):.2f}", cell_style),
-                Paragraph(str(p.get('source', 'Unknown')), cell_style),
+                Paragraph(str(p.get('source', 'Unknown') or ''), cell_style),
                 Paragraph(date_str, cell_style)
             ]
             table_data.append(row)
@@ -1135,18 +1143,16 @@ def api_purchases_pdf():
             total_claimed_cost += claimed * cost
             total_sold_summary += sold
 
-        # Build table with minimal padding
         table = Table(table_data, repeatRows=1, splitByRow=1, hAlign='LEFT', colWidths=col_widths)
         style = TableStyle([
             ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#00CFCF")),
             ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
             ('ALIGN', (3,1), (-2,-1), 'CENTER'),
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-            ('GRID', (0,0), (-1,-1), 0.4, colors.black),
-            ('FONTSIZE', (0,0), (-1,-1), 7),
-            # Reduce padding to save horizontal space
-            ('LEFTPADDING', (0,0), (-1,-1), 2),
-            ('RIGHTPADDING', (0,0), (-1,-1), 2),
+            ('GRID', (0,0), (-1,-1), 0.3, colors.black),
+            ('FONTSIZE', (0,0), (-1,-1), 6),
+            ('LEFTPADDING', (0,0), (-1,-1), 1),
+            ('RIGHTPADDING', (0,0), (-1,-1), 1),
         ])
         for i in range(1, len(table_data)):
             style.add('BACKGROUND', (0,i), (-1,i), colors.whitesmoke if i%2==0 else colors.lightgrey)
@@ -1154,7 +1160,7 @@ def api_purchases_pdf():
         elements.append(table)
         elements.append(Spacer(1, 12))
 
-        # ---------- Summary section with safe numeric handling ----------
+        # ---------- Summary section (with safe numeric handling) ----------
         elements.append(Paragraph("📊 Summary", styles["Heading2"]))
         elements.append(Spacer(1, 6))
 
@@ -1899,7 +1905,7 @@ def api_today_sales_pdf():
 
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=landscape(A4),
-                            rightMargin=15, leftMargin=15,
+                            rightMargin=12, leftMargin=12,
                             topMargin=20, bottomMargin=20)
     styles = getSampleStyleSheet()
     elements = []
@@ -1942,35 +1948,34 @@ def api_today_sales_pdf():
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.enums import TA_LEFT
 
+    # Smaller font, tighter layout
     cell_style = ParagraphStyle(
         'CellStyle',
         fontName='Helvetica',
-        fontSize=7,
-        leading=8,
+        fontSize=6,
+        leading=7,
         alignment=TA_LEFT,
-        wordWrap='CJK'
+        wordWrap='LTR'
     )
     header_style = ParagraphStyle(
         'HeaderStyle',
         fontName='Helvetica-Bold',
-        fontSize=8,
-        leading=10,
+        fontSize=7,
+        leading=8,
         alignment=TA_LEFT,
-        wordWrap='CJK'
+        wordWrap='LTR'
     )
 
-    # ---------- Adjusted column widths (in cm) – reduce to fit within printable area ----------
+    # ---------- Final column widths (in cm) – very tight to fit ----------
     if is_admin:
         headers = ["Name", "Brand", "Category", "Qty", "Price", "Subtotal",
                    "Discount", "Total", "Profit", "Batch", "Cost", "Sale Date",
                    "Payment", "Status", "User"]
-        # Reduced widths
-        col_widths = [3.5, 2.5, 1.8, 1.0, 1.5, 1.8, 1.5, 1.8, 1.5, 1.5, 1.5, 2.2, 1.8, 1.5, 1.8]
+        col_widths = [3.0, 2.0, 1.5, 0.8, 1.2, 1.5, 1.2, 1.5, 1.2, 1.2, 1.2, 1.8, 1.5, 1.2, 1.5]
     else:
         headers = ["Name", "Brand", "Category", "Qty", "Price", "Subtotal",
                    "Discount", "Total", "Batch", "Sale Date", "Payment", "Status", "User"]
-        # Reduced widths
-        col_widths = [4.0, 3.0, 2.0, 1.0, 1.5, 1.8, 1.5, 1.8, 1.5, 2.5, 1.8, 1.5, 1.8]
+        col_widths = [3.5, 2.5, 1.8, 0.8, 1.2, 1.5, 1.2, 1.5, 1.2, 2.0, 1.5, 1.2, 1.5]
 
     header_cells = [Paragraph(h, header_style) for h in headers]
     table_data = [header_cells]
@@ -1989,10 +1994,11 @@ def api_today_sales_pdf():
         if sale.get('cheque_number'):
             payment_display += f" #{sale['cheque_number']}"
 
+        # Convert None to empty string to avoid Paragraph errors
         row = [
-            Paragraph(str(sale.get('name', '')), cell_style),
-            Paragraph(str(sale.get('brand', '')), cell_style),
-            Paragraph(str(sale.get('category', '')), cell_style),
+            Paragraph(str(sale.get('name', '') or ''), cell_style),
+            Paragraph(str(sale.get('brand', '') or ''), cell_style),
+            Paragraph(str(sale.get('category', '') or ''), cell_style),
             Paragraph(str(quantity), cell_style),
             Paragraph(f"₵{selling_price:.2f}", cell_style),
             Paragraph(f"₵{subtotal:.2f}", cell_style),
@@ -2010,25 +2016,25 @@ def api_today_sales_pdf():
             row.append(Paragraph(str(batch_id if batch_id != -1 else 'DELETED'), cell_style))
 
         row.extend([
-            Paragraph(str(sale.get('sale_date', '')), cell_style),
+            Paragraph(str(sale.get('sale_date', '') or ''), cell_style),
             Paragraph(payment_display, cell_style),
             Paragraph(status, cell_style),
-            Paragraph(str(sale.get('username', 'Unknown')), cell_style)
+            Paragraph(str(sale.get('username', 'Unknown') or ''), cell_style)
         ])
 
         table_data.append(row)
 
-    # ---------- Build table with reduced padding and splitByRow ----------
+    # ---------- Build table with minimal padding and splitByRow ----------
     table = Table(table_data, repeatRows=1, splitByRow=1, hAlign='LEFT', colWidths=col_widths)
     style = TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#1E3A5F")),
         ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.black),
-        ('FONTSIZE', (0,0), (-1,-1), 7),
+        ('GRID', (0,0), (-1,-1), 0.4, colors.black),
+        ('FONTSIZE', (0,0), (-1,-1), 6),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ('ALIGN', (3,1), (-1,-1), 'CENTER'),
-        ('LEFTPADDING', (0,0), (-1,-1), 2),
-        ('RIGHTPADDING', (0,0), (-1,-1), 2),
+        ('LEFTPADDING', (0,0), (-1,-1), 1),
+        ('RIGHTPADDING', (0,0), (-1,-1), 1),
     ])
     for i in range(1, len(table_data)):
         bg = colors.whitesmoke if i % 2 == 0 else colors.lightgrey
