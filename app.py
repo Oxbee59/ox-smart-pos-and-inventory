@@ -1051,23 +1051,23 @@ def api_purchases_pdf():
             elements.append(Paragraph(f"Date Range: {from_date} → {to_date}", styles["Normal"]))
         elements.append(Spacer(1, 12))
 
-        # Final column widths (in cm) – tight fit
+        # ---------- Column widths in cm – enough for long names ----------
         col_widths = [
-            0.8,   # ID
-            4.0,   # Name
-            2.5,   # Brand
-            0.8,   # Qty
-            0.8,   # Remaining
-            0.8,   # Sold
-            0.8,   # Claimed
-            1.2,   # Cost
-            1.2,   # Discount
-            1.8,   # Total
-            1.8,   # Selling
-            1.8,   # Source
-            1.8    # Date/Time
+            0.8 * cm,   # ID
+            4.5 * cm,   # Name  (generous for long screen names)
+            2.8 * cm,   # Brand
+            0.8 * cm,   # Qty
+            0.8 * cm,   # Remaining
+            0.8 * cm,   # Sold
+            0.8 * cm,   # Claimed
+            1.2 * cm,   # Cost
+            1.2 * cm,   # Discount
+            1.8 * cm,   # Total
+            1.8 * cm,   # Selling
+            1.8 * cm,   # Source
+            1.8 * cm    # Date/Time
         ]
-        # Sum ≈ 20.2 cm → safe
+        # Sum ≈ 20.8 cm → safe within landscape A4 (≈ 27.5 cm usable)
 
         from reportlab.lib.styles import ParagraphStyle
         from reportlab.lib.enums import TA_LEFT
@@ -1228,6 +1228,12 @@ def api_purchases_pdf():
         return send_file(buffer, as_attachment=True,
                          download_name=f"Purchases_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
                          mimetype='application/pdf')
+
+    except Exception as e:
+        print(f"❌ PDF generation error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 
     except Exception as e:
         print(f"❌ PDF generation error: {str(e)}")
@@ -1966,16 +1972,46 @@ def api_today_sales_pdf():
         wordWrap='LTR'
     )
 
-    # ---------- Final column widths (in cm) – very tight to fit ----------
+    # ---------- Column widths in cm – enough for long names, with padding ----------
     if is_admin:
         headers = ["Name", "Brand", "Category", "Qty", "Price", "Subtotal",
                    "Discount", "Total", "Profit", "Batch", "Cost", "Sale Date",
                    "Payment", "Status", "User"]
-        col_widths = [3.0, 2.0, 1.5, 0.8, 1.2, 1.5, 1.2, 1.5, 1.2, 1.2, 1.2, 1.8, 1.5, 1.2, 1.5]
+        col_widths = [
+            3.5 * cm,   # Name
+            2.5 * cm,   # Brand
+            2.0 * cm,   # Category
+            1.0 * cm,   # Qty
+            1.5 * cm,   # Price
+            2.0 * cm,   # Subtotal
+            1.5 * cm,   # Discount
+            2.0 * cm,   # Total
+            1.5 * cm,   # Profit
+            1.5 * cm,   # Batch
+            1.5 * cm,   # Cost
+            2.5 * cm,   # Sale Date
+            2.0 * cm,   # Payment
+            1.5 * cm,   # Status
+            2.0 * cm    # User
+        ]
     else:
         headers = ["Name", "Brand", "Category", "Qty", "Price", "Subtotal",
                    "Discount", "Total", "Batch", "Sale Date", "Payment", "Status", "User"]
-        col_widths = [3.5, 2.5, 1.8, 0.8, 1.2, 1.5, 1.2, 1.5, 1.2, 2.0, 1.5, 1.2, 1.5]
+        col_widths = [
+            4.0 * cm,   # Name
+            3.0 * cm,   # Brand
+            2.0 * cm,   # Category
+            1.0 * cm,   # Qty
+            1.5 * cm,   # Price
+            2.0 * cm,   # Subtotal
+            1.5 * cm,   # Discount
+            2.0 * cm,   # Total
+            1.5 * cm,   # Batch
+            3.0 * cm,   # Sale Date
+            2.0 * cm,   # Payment
+            1.5 * cm,   # Status
+            2.0 * cm    # User
+        ]
 
     header_cells = [Paragraph(h, header_style) for h in headers]
     table_data = [header_cells]
@@ -1994,7 +2030,6 @@ def api_today_sales_pdf():
         if sale.get('cheque_number'):
             payment_display += f" #{sale['cheque_number']}"
 
-        # Convert None to empty string to avoid Paragraph errors
         row = [
             Paragraph(str(sale.get('name', '') or ''), cell_style),
             Paragraph(str(sale.get('brand', '') or ''), cell_style),
@@ -2057,6 +2092,7 @@ def api_today_sales_pdf():
         ["📝 Cheque Payments", f"₵{cheque_total:.2f}"]
     ]
     if is_admin:
+        # total_profit is a float from the loop
         summary_data.insert(4, ["📈 Net Profit", f"₵{total_profit:.2f}"])
 
     summary_table = Table(summary_data, colWidths=[6*cm, 6*cm], hAlign='CENTER')
@@ -2074,7 +2110,13 @@ def api_today_sales_pdf():
     ]))
     elements.append(summary_table)
 
-    doc.build(elements)
+    try:
+        doc.build(elements)
+    except Exception as e:
+        # If anything still fails, return a clear error
+        print(f"❌ PDF build error: {str(e)}")
+        raise
+
     buffer.seek(0)
     return send_file(buffer, as_attachment=True,
                      download_name=f"SalesReport_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
