@@ -1,0 +1,9 @@
+{
+  "appId": "com.oxsmart.pos",
+  "appName": "OX Smart POS",
+  "webDir": "www",
+  "server": {
+    "url": "https://ox-smart-pos-web-sfgk.onrender.com",
+    "cleartext": true
+  }
+}

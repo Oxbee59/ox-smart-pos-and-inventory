@@ -98,281 +98,328 @@
 </div>
 
 <script>
-    // ---------- Offline banner ----------
-    function updateOfflineBanner() {
-        const banner = document.getElementById('offlineBanner');
-        const refreshBtn = document.getElementById('refreshBtn');
-        if (!navigator.onLine) {
-            banner.classList.remove('hidden');
-            refreshBtn.disabled = true;
-            refreshBtn.classList.add('opacity-50', 'cursor-not-allowed');
-        } else {
-            banner.classList.add('hidden');
-            refreshBtn.disabled = false;
-            refreshBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-        }
-    }
-    window.addEventListener('online', updateOfflineBanner);
-    window.addEventListener('offline', updateOfflineBanner);
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log("DOM loaded – initializing User Logs with Dexie");
 
-    // ---------- Cache helpers ----------
-    const CACHE_MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
+        // ---------- Dexie cache helpers ----------
+        const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-    function cacheData(key, data) {
-        try {
-            localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }));
-        } catch (e) { console.warn('Cache write failed:', e); }
-    }
-
-    function getCachedData(key) {
-        try {
-            const raw = localStorage.getItem(key);
-            if (!raw) return null;
-            const parsed = JSON.parse(raw);
-            if (Date.now() - parsed.timestamp > CACHE_MAX_AGE) {
-                localStorage.removeItem(key);
-                return null;
-            }
-            return parsed.data;
-        } catch (e) { return null; }
-    }
-
-    function getCacheKey(prefix, filters) {
-        const action = filters.action || 'all';
-        const user = filters.user || 'all';
-        const page = filters.page || 1;
-        return `${prefix}_action_${action}_user_${user}_page_${page}`;
-    }
-
-    // ---------- Main variables ----------
-    const isOxbee = document.getElementById('userInfo')?.dataset?.isOxbee === 'true' || false;
-    let currentPage = 1;
-    const limit = 50;
-    let totalRecords = 0;
-
-    function getActionBadge(action) {
-        const badges = {
-            'login': '<span class="inline-flex items-center bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-medium">✅ Login</span>',
-            'logout': '<span class="inline-flex items-center bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">🚪 Logout</span>',
-            'login_failed': '<span class="inline-flex items-center bg-red-100 text-red-800 px-2 py-1 rounded text-xs font-medium">❌ Failed Login</span>'
-        };
-        return badges[action] || action;
-    }
-
-    function formatTimestamp(ts) {
-        if (!ts) return 'N/A';
-        const date = new Date(ts);
-        return date.toLocaleString();
-    }
-
-    function truncateUserAgent(ua) {
-        if (!ua) return 'N/A';
-        if (ua.length > 40) return ua.substring(0, 40) + '...';
-        return ua;
-    }
-
-    function escapeHtml(str) {
-        if (!str) return '';
-        return str.replace(/[&<>]/g, function(m) {
-            if (m === '&') return '&amp;';
-            if (m === '<') return '&lt;';
-            if (m === '>') return '&gt;';
-            return m;
-        });
-    }
-
-    // ---------- Load users (with cache) ----------
-    async function loadUsers() {
-        const cacheKey = 'logs_users_list';
-        let users = [];
-        let fromCache = false;
-
-        if (navigator.onLine) {
-            try {
-                const res = await fetch('/api/admin/users');
-                if (res.ok) {
-                    users = await res.json();
-                    cacheData(cacheKey, users);
-                }
-            } catch (e) {
-                console.warn('Failed to fetch users online, trying cache:', e);
-            }
-        }
-
-        if (!users || users.length === 0) {
-            const cached = getCachedData(cacheKey);
-            if (cached && cached.length > 0) {
-                users = cached;
-                fromCache = true;
-            }
-        }
-
-        const select = document.getElementById('userFilter');
-        select.innerHTML = '<option value="">All Users</option>';
-
-        const filteredUsers = isOxbee ? users : users.filter(user => user.username.toLowerCase() !== 'oxbee');
-
-        filteredUsers.forEach(user => {
-            const option = document.createElement('option');
-            option.value = user.id;
-            option.textContent = `${user.username} (${user.role})`;
-            select.appendChild(option);
-        });
-
-        if (fromCache) {
-            // Note: show a subtle hint in the filter area
-            const note = document.createElement('span');
-            note.className = 'text-xs text-orange-400 ml-2';
-            note.textContent = '📦 cached';
-            select.parentNode.appendChild(note);
-        }
-    }
-
-    // ---------- Load logs (with cache) ----------
-    async function loadLogs() {
-        updateOfflineBanner();
-        const actionFilter = document.getElementById('actionFilter').value;
-        const userFilter = document.getElementById('userFilter').value;
-        
-        const tbody = document.getElementById('logsTableBody');
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center py-8 text-gray-400">Loading logs...</td></tr>';
-
-        const filters = { action: actionFilter, user: userFilter, page: currentPage };
-        const cacheKey = getCacheKey('logs_data', filters);
-        let logs = null;
-        let total = 0;
-        let fromCache = false;
-
-        if (navigator.onLine) {
-            try {
-                const offset = (currentPage - 1) * limit;
-                let url = `/api/user/logs?limit=${limit}&offset=${offset}`;
-                if (actionFilter) url += `&action=${actionFilter}`;
-                if (userFilter) url += `&user_id=${userFilter}`;
-
-                const res = await fetch(url);
-                const data = await res.json();
-                if (data.success) {
-                    logs = data.logs;
-                    total = data.total;
-                    cacheData(cacheKey, { logs, total });
-                } else {
-                    // Permission error etc.
-                    if (data.error && data.error.includes('Unauthorized')) {
-                        tbody.innerHTML = `
-                            <tr>
-                                <td colspan="5" class="text-center py-8">
-                                    <div class="text-red-500">
-                                        <i class="fas fa-lock text-3xl mb-2"></i>
-                                        <p>${escapeHtml(data.error)}</p>
-                                        <p class="text-xs text-gray-400 mt-1">You do not have permission to view these logs.</p>
-                                    </div>
-                                </td>
-                            </tr>
-                        `;
-                        totalRecords = 0;
-                        updatePagination();
-                        return;
+        async function getCacheEntry(key) {
+            if (!db) {
+                // Fallback to localStorage
+                try {
+                    const raw = localStorage.getItem(key);
+                    if (!raw) return null;
+                    const parsed = JSON.parse(raw);
+                    if (Date.now() - (parsed.timestamp || 0) > CACHE_MAX_AGE_MS) {
+                        localStorage.removeItem(key);
+                        return null;
                     }
-                    throw new Error(data.error || 'Failed to load logs');
+                    return parsed.data;
+                } catch(e) { return null; }
+            }
+            try {
+                const cacheTable = db.cache || db.table('cache');
+                const entry = await cacheTable.get(key);
+                if (entry && entry.value) {
+                    const age = Date.now() - (entry.timestamp || 0);
+                    if (age < CACHE_MAX_AGE_MS) {
+                        return entry.value;
+                    } else {
+                        await cacheTable.delete(key);
+                        return null;
+                    }
                 }
-            } catch (err) {
-                console.warn('Network error, trying cache:', err);
-                // Fall through to cache
+                return null;
+            } catch (e) {
+                console.warn('Dexie cache read failed, using localStorage fallback', e);
+                try {
+                    const raw = localStorage.getItem(key);
+                    if (!raw) return null;
+                    const parsed = JSON.parse(raw);
+                    if (Date.now() - (parsed.timestamp || 0) > CACHE_MAX_AGE_MS) {
+                        localStorage.removeItem(key);
+                        return null;
+                    }
+                    return parsed.data;
+                } catch(e2) { return null; }
             }
         }
 
-        // If we didn't get logs from network, try cache
-        if (!logs) {
-            const cached = getCachedData(cacheKey);
-            if (cached && cached.logs) {
-                logs = cached.logs;
-                total = cached.total || logs.length;
-                fromCache = true;
+        async function putCacheEntry(key, value) {
+            if (!db) {
+                try {
+                    localStorage.setItem(key, JSON.stringify({ data: value, timestamp: Date.now() }));
+                } catch(e) {}
+                return;
+            }
+            try {
+                const cacheTable = db.cache || db.table('cache');
+                await cacheTable.put({ key, value, timestamp: Date.now() });
+                console.log(`✅ Cache entry ${key} stored in Dexie`);
+            } catch (e) {
+                console.warn('Dexie cache write failed, using localStorage fallback', e);
+                try {
+                    localStorage.setItem(key, JSON.stringify({ data: value, timestamp: Date.now() }));
+                } catch(e2) {}
             }
         }
 
-        if (logs && logs.length > 0) {
-            totalRecords = total;
-            renderLogs(logs);
-            updatePagination();
+        // ---------- Offline banner ----------
+        function updateOfflineBanner() {
+            const banner = document.getElementById('offlineBanner');
+            const refreshBtn = document.getElementById('refreshBtn');
+            if (!navigator.onLine) {
+                banner.classList.remove('hidden');
+                refreshBtn.disabled = true;
+                refreshBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            } else {
+                banner.classList.add('hidden');
+                refreshBtn.disabled = false;
+                refreshBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        }
+        window.addEventListener('online', updateOfflineBanner);
+        window.addEventListener('offline', updateOfflineBanner);
+
+        // ---------- Main variables ----------
+        const isOxbee = document.getElementById('userInfo')?.dataset?.isOxbee === 'true' || false;
+        let currentPage = 1;
+        const limit = 50;
+        let totalRecords = 0;
+
+        function getActionBadge(action) {
+            const badges = {
+                'login': '<span class="inline-flex items-center bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-medium">✅ Login</span>',
+                'logout': '<span class="inline-flex items-center bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">🚪 Logout</span>',
+                'login_failed': '<span class="inline-flex items-center bg-red-100 text-red-800 px-2 py-1 rounded text-xs font-medium">❌ Failed Login</span>'
+            };
+            return badges[action] || action;
+        }
+
+        function formatTimestamp(ts) {
+            if (!ts) return 'N/A';
+            const date = new Date(ts);
+            return date.toLocaleString();
+        }
+
+        function truncateUserAgent(ua) {
+            if (!ua) return 'N/A';
+            if (ua.length > 40) return ua.substring(0, 40) + '...';
+            return ua;
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
+            });
+        }
+
+        function getCacheKey(prefix, filters) {
+            const action = filters.action || 'all';
+            const user = filters.user || 'all';
+            const page = filters.page || 1;
+            return `${prefix}_action_${action}_user_${user}_page_${page}`;
+        }
+
+        // ---------- Load users (with Dexie) ----------
+        async function loadUsers() {
+            const cacheKey = 'logs_users_list';
+            let users = [];
+            let fromCache = false;
+
+            if (navigator.onLine) {
+                try {
+                    const res = await fetch('/api/admin/users');
+                    if (res.ok) {
+                        users = await res.json();
+                        await putCacheEntry(cacheKey, users);
+                    }
+                } catch (e) {
+                    console.warn('Failed to fetch users online, trying cache:', e);
+                }
+            }
+
+            if (!users || users.length === 0) {
+                const cached = await getCacheEntry(cacheKey);
+                if (cached && cached.length > 0) {
+                    users = cached;
+                    fromCache = true;
+                }
+            }
+
+            const select = document.getElementById('userFilter');
+            select.innerHTML = '<option value="">All Users</option>';
+
+            const filteredUsers = isOxbee ? users : users.filter(user => user.username.toLowerCase() !== 'oxbee');
+
+            filteredUsers.forEach(user => {
+                const option = document.createElement('option');
+                option.value = user.id;
+                option.textContent = `${user.username} (${user.role})`;
+                select.appendChild(option);
+            });
+
+            // Remove any existing "cached" note
+            const existingNote = select.parentNode.querySelector('.cache-note');
+            if (existingNote) existingNote.remove();
+
             if (fromCache) {
-                // Add a note at the top of the table
-                const note = document.createElement('div');
-                note.className = 'text-xs text-orange-400 p-2 text-center';
-                note.textContent = '⚠️ Data may be outdated (offline)';
-                document.querySelector('.bg-white.rounded-xl.shadow-md.overflow-hidden').prepend(note);
+                const note = document.createElement('span');
+                note.className = 'text-xs text-orange-400 ml-2 cache-note';
+                note.textContent = '📦 cached';
+                select.parentNode.appendChild(note);
             }
-        } else {
-            tbody.innerHTML = '<tr><td colspan="5" class="text-center py-8 text-gray-400">No logs found. Please connect to the internet to load logs.</td></tr>';
-            totalRecords = 0;
-            updatePagination();
-        }
-    }
-
-    function renderLogs(logs) {
-        const tbody = document.getElementById('logsTableBody');
-        
-        if (!logs || logs.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="text-center py-8 text-gray-400">No logs found.</td></tr>';
-            return;
         }
 
-        tbody.innerHTML = logs.map(log => `
-            <tr class="border-b hover:bg-gray-50 transition">
-                <td class="px-4 py-3 text-sm text-gray-600">${formatTimestamp(log.timestamp)}</td>
-                <td class="px-4 py-3 text-sm font-medium text-indigo-600">${escapeHtml(log.username)}</td>
-                <td class="px-4 py-3">${getActionBadge(log.action)}</td>
-                <td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(log.ip_address || 'N/A')}</td>
-                <td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(truncateUserAgent(log.user_agent))}</td>
-            </tr>
-        `).join('');
-    }
+        // ---------- Load logs (with Dexie) ----------
+        async function loadLogs() {
+            updateOfflineBanner();
+            const actionFilter = document.getElementById('actionFilter').value;
+            const userFilter = document.getElementById('userFilter').value;
+            
+            const tbody = document.getElementById('logsTableBody');
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center py-8 text-gray-400">Loading logs...</td></tr>';
 
-    function updatePagination() {
-        const totalPages = Math.ceil(totalRecords / limit);
-        document.getElementById('pageInfo').textContent = `Page ${currentPage} of ${totalPages || 1}`;
-        document.getElementById('prevBtn').disabled = currentPage <= 1;
-        document.getElementById('nextBtn').disabled = currentPage >= totalPages;
-        document.getElementById('totalLogs').textContent = `Total: ${totalRecords} logs`;
-    }
+            const filters = { action: actionFilter, user: userFilter, page: currentPage };
+            const cacheKey = getCacheKey('logs_data', filters);
+            let logs = null;
+            let total = 0;
+            let fromCache = false;
 
-    function prevPage() {
-        if (currentPage > 1) {
-            currentPage--;
+            if (navigator.onLine) {
+                try {
+                    const offset = (currentPage - 1) * limit;
+                    let url = `/api/user/logs?limit=${limit}&offset=${offset}`;
+                    if (actionFilter) url += `&action=${actionFilter}`;
+                    if (userFilter) url += `&user_id=${userFilter}`;
+
+                    const res = await fetch(url);
+                    const data = await res.json();
+                    if (data.success) {
+                        logs = data.logs;
+                        total = data.total;
+                        await putCacheEntry(cacheKey, { logs, total });
+                    } else {
+                        if (data.error && data.error.includes('Unauthorized')) {
+                            tbody.innerHTML = `
+                                <tr>
+                                    <td colspan="5" class="text-center py-8">
+                                        <div class="text-red-500">
+                                            <i class="fas fa-lock text-3xl mb-2"></i>
+                                            <p>${escapeHtml(data.error)}</p>
+                                            <p class="text-xs text-gray-400 mt-1">You do not have permission to view these logs.</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            `;
+                            totalRecords = 0;
+                            updatePagination();
+                            return;
+                        }
+                        throw new Error(data.error || 'Failed to load logs');
+                    }
+                } catch (err) {
+                    console.warn('Network error, trying cache:', err);
+                }
+            }
+
+            // If we didn't get logs from network, try cache
+            if (!logs) {
+                const cached = await getCacheEntry(cacheKey);
+                if (cached && cached.logs) {
+                    logs = cached.logs;
+                    total = cached.total || logs.length;
+                    fromCache = true;
+                }
+            }
+
+            if (logs && logs.length > 0) {
+                totalRecords = total;
+                renderLogs(logs);
+                updatePagination();
+                // Remove any existing offline note
+                const container = document.querySelector('.bg-white.rounded-xl.shadow-md.overflow-hidden');
+                const existingNote = container.querySelector('.offline-note');
+                if (existingNote) existingNote.remove();
+                if (fromCache) {
+                    const note = document.createElement('div');
+                    note.className = 'text-xs text-orange-400 p-2 text-center offline-note';
+                    note.textContent = '⚠️ Data may be outdated (offline)';
+                    container.prepend(note);
+                }
+            } else {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center py-8 text-gray-400">No logs found. Please connect to the internet to load logs.</td></tr>';
+                totalRecords = 0;
+                updatePagination();
+            }
+        }
+
+        function renderLogs(logs) {
+            const tbody = document.getElementById('logsTableBody');
+            
+            if (!logs || logs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center py-8 text-gray-400">No logs found.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = logs.map(log => `
+                <tr class="border-b hover:bg-gray-50 transition">
+                    <td class="px-4 py-3 text-sm text-gray-600">${formatTimestamp(log.timestamp)}</td>
+                    <td class="px-4 py-3 text-sm font-medium text-indigo-600">${escapeHtml(log.username)}</td>
+                    <td class="px-4 py-3">${getActionBadge(log.action)}</td>
+                    <td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(log.ip_address || 'N/A')}</td>
+                    <td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(truncateUserAgent(log.user_agent))}</td>
+                </tr>
+            `).join('');
+        }
+
+        function updatePagination() {
+            const totalPages = Math.ceil(totalRecords / limit);
+            document.getElementById('pageInfo').textContent = `Page ${currentPage} of ${totalPages || 1}`;
+            document.getElementById('prevBtn').disabled = currentPage <= 1;
+            document.getElementById('nextBtn').disabled = currentPage >= totalPages;
+            document.getElementById('totalLogs').textContent = `Total: ${totalRecords} logs`;
+        }
+
+        function prevPage() {
+            if (currentPage > 1) {
+                currentPage--;
+                loadLogs();
+            }
+        }
+
+        function nextPage() {
+            currentPage++;
             loadLogs();
         }
-    }
 
-    function nextPage() {
-        currentPage++;
-        loadLogs();
-    }
+        function applyFilters() {
+            currentPage = 1;
+            loadLogs();
+        }
 
-    function applyFilters() {
-        currentPage = 1;
-        loadLogs();
-    }
+        function clearFilters() {
+            document.getElementById('actionFilter').value = '';
+            document.getElementById('userFilter').value = '';
+            currentPage = 1;
+            loadLogs();
+        }
 
-    function clearFilters() {
-        document.getElementById('actionFilter').value = '';
-        document.getElementById('userFilter').value = '';
-        currentPage = 1;
-        // Reload logs without filters – this will clear the cache key
-        loadLogs();
-    }
-
-    // ---------- Initialization ----------
-    document.addEventListener('DOMContentLoaded', function() {
+        // ---------- Initialization ----------
         updateOfflineBanner();
         loadUsers();
         loadLogs();
-    });
 
-    // Refresh when back online
-    window.addEventListener('online', function() {
-        loadUsers();
-        loadLogs();
+        // Refresh when back online
+        window.addEventListener('online', function() {
+            loadUsers();
+            loadLogs();
+        });
     });
 </script>
 {% endblock %}

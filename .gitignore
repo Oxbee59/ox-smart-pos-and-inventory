@@ -8,3 +8,4 @@ reports/
 
 venv/
 .envnode_modules/
+node_modules/

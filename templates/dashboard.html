@@ -117,607 +117,676 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-    let pieChart = null;
-    let lowStockShown = false;
-    let startDate = null;
-    let endDate = null;
-    let startTime = null;
-    let endTime = null;
-    let selectedDate = null;
-    let lowStockProducts = [];
-    let calendarYear = new Date().getFullYear();
-    let calendarMonth = new Date().getMonth();
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log("DOM loaded – initializing Dashboard with Dexie");
 
-    // Helper: format currency
-    function formatMoney(amount) {
-        return '₵' + (parseFloat(amount) || 0).toFixed(2);
-    }
+        // ========== DEXIE HELPERS (using cache table) ==========
+        const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-    // Helper: escape HTML
-    function escapeHtml(str) {
-        if (!str) return '';
-        return str.replace(/[&<>]/g, function(m) {
-            if (m === '&') return '&amp;';
-            if (m === '<') return '&lt;';
-            if (m === '>') return '&gt;';
-            return m;
-        });
-    }
-
-    // Navigate to product page
-    function navigateToProduct(productName, category) {
-        let page = '/products';
-        if (category && category.toLowerCase() === 'screen') {
-            page = '/products/screens';
-        }
-        sessionStorage.setItem('autoOpenProduct', productName);
-        sessionStorage.setItem('autoOpenBatches', 'true');
-        window.location.href = page;
-    }
-
-    // Update clock
-    function updateClock() {
-        const now = new Date();
-        const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        document.getElementById('clock').innerText = timeStr;
-        setTimeout(updateClock, 1000);
-    }
-    updateClock();
-
-    // Get formatted datetime range
-    function getDateTimeRange() {
-        let startDateTime = null;
-        let endDateTime = null;
-        
-        if (startDate) {
-            if (startTime) {
-                startDateTime = `${startDate} ${startTime}:00`;
-            } else {
-                startDateTime = `${startDate} 00:00:00`;
+        async function getCacheEntry(key) {
+            if (!db) {
+                // Fallback to localStorage
+                try {
+                    const raw = localStorage.getItem(key);
+                    if (!raw) return null;
+                    const parsed = JSON.parse(raw);
+                    if (Date.now() - (parsed.timestamp || 0) > CACHE_MAX_AGE_MS) {
+                        localStorage.removeItem(key);
+                        return null;
+                    }
+                    return parsed.data;
+                } catch(e) { return null; }
+            }
+            try {
+                let cacheTable = db.cache || db.table('cache');
+                const entry = await cacheTable.get(key);
+                if (entry && entry.value) {
+                    const age = Date.now() - (entry.timestamp || 0);
+                    if (age < CACHE_MAX_AGE_MS) {
+                        return entry.value;
+                    } else {
+                        // Stale – remove
+                        await cacheTable.delete(key);
+                        return null;
+                    }
+                }
+                return null;
+            } catch (e) {
+                console.warn('Dexie cache read failed, using localStorage fallback', e);
+                try {
+                    const raw = localStorage.getItem(key);
+                    if (!raw) return null;
+                    const parsed = JSON.parse(raw);
+                    if (Date.now() - (parsed.timestamp || 0) > CACHE_MAX_AGE_MS) {
+                        localStorage.removeItem(key);
+                        return null;
+                    }
+                    return parsed.data;
+                } catch(e2) { return null; }
             }
         }
-        
-        if (endDate) {
-            if (endTime) {
-                endDateTime = `${endDate} ${endTime}:00`;
-            } else {
-                endDateTime = `${endDate} 23:59:59`;
+
+        async function putCacheEntry(key, value) {
+            if (!db) {
+                // localStorage fallback
+                try {
+                    localStorage.setItem(key, JSON.stringify({ data: value, timestamp: Date.now() }));
+                } catch(e) {}
+                return;
+            }
+            try {
+                let cacheTable = db.cache || db.table('cache');
+                await cacheTable.put({ key, value, timestamp: Date.now() });
+                console.log(`✅ Cache entry ${key} stored in Dexie`);
+            } catch (e) {
+                console.warn('Dexie cache write failed, using localStorage fallback', e);
+                try {
+                    localStorage.setItem(key, JSON.stringify({ data: value, timestamp: Date.now() }));
+                } catch(e2) {}
             }
         }
-        
-        return { start_datetime: startDateTime, end_datetime: endDateTime };
-    }
 
-    // Offline banner
-    function updateOfflineBanner() {
-        const banner = document.getElementById('offlineBanner');
-        if (!navigator.onLine) {
-            banner.classList.remove('hidden');
-        } else {
-            banner.classList.add('hidden');
+        // ---------- Offline banner ----------
+        function updateOfflineBanner() {
+            const banner = document.getElementById('offlineBanner');
+            if (!navigator.onLine) {
+                banner.classList.remove('hidden');
+            } else {
+                banner.classList.add('hidden');
+            }
         }
-    }
-    window.addEventListener('online', updateOfflineBanner);
-    window.addEventListener('offline', updateOfflineBanner);
+        window.addEventListener('online', updateOfflineBanner);
+        window.addEventListener('offline', updateOfflineBanner);
 
-    // Cache – now with 24‑hour expiry (1440 minutes)
-    const CACHE_KEY_SUMMARY = 'dashboard_summary';
-    const CACHE_KEY_TOP = 'dashboard_top_products';
-    const CACHE_KEY_HISTORY = 'dashboard_sales_history';
-    const CACHE_KEY_TIMESTAMP = 'dashboard_last_fetch';
-    const CACHE_MAX_AGE_MINUTES = 1440; // 24 hours
+        // ---------- Helper functions ----------
+        let pieChart = null;
+        let lowStockShown = false;
+        let startDate = null;
+        let endDate = null;
+        let startTime = null;
+        let endTime = null;
+        let selectedDate = null;
+        let lowStockProducts = [];
+        let calendarYear = new Date().getFullYear();
+        let calendarMonth = new Date().getMonth();
 
-    function cacheData(key, data) {
-        try {
-            localStorage.setItem(key, JSON.stringify(data));
-            localStorage.setItem(CACHE_KEY_TIMESTAMP, Date.now().toString());
-        } catch (e) {}
-    }
-
-    function loadCache(key, maxAgeMinutes = CACHE_MAX_AGE_MINUTES) {
-        try {
-            const raw = localStorage.getItem(key);
-            if (!raw) return null;
-            const ts = parseInt(localStorage.getItem(CACHE_KEY_TIMESTAMP) || '0');
-            const ageMinutes = (Date.now() - ts) / (1000 * 60);
-            if (ageMinutes > maxAgeMinutes) return null;
-            return JSON.parse(raw);
-        } catch (e) { return null; }
-    }
-
-    // ===== FIXED: Robust low stock rendering =====
-    function renderLowStockList(products) {
-        const container = document.getElementById('lowStockList');
-        container.innerHTML = '';
-        
-        // If products is not an array or empty, show a friendly message
-        if (!Array.isArray(products) || products.length === 0) {
-            container.innerHTML = '<div class="text-gray-400 text-center py-4 text-sm">✅ No low stock items found.</div>';
-            return;
+        function formatMoney(amount) {
+            return '₵' + (parseFloat(amount) || 0).toFixed(2);
         }
 
-        let rendered = 0;
-        products.forEach(item => {
-            let name, brand, category, stock, batchIds;
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
+            });
+        }
+
+        function navigateToProduct(productName, category) {
+            let page = '/products';
+            if (category && category.toLowerCase() === 'screen') {
+                page = '/products/screens';
+            }
+            sessionStorage.setItem('autoOpenProduct', productName);
+            sessionStorage.setItem('autoOpenBatches', 'true');
+            window.location.href = page;
+        }
+
+        // Clock
+        function updateClock() {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            document.getElementById('clock').innerText = timeStr;
+            setTimeout(updateClock, 1000);
+        }
+        updateClock();
+
+        // Get datetime range
+        function getDateTimeRange() {
+            let startDateTime = null;
+            let endDateTime = null;
             
-            // Try to extract data (array or object)
-            if (Array.isArray(item)) {
-                name = (item[0] && typeof item[0] === 'string') ? item[0] : '';
-                brand = (item[1] && typeof item[1] === 'string') ? item[1] : '';
-                category = (item[2] && typeof item[2] === 'string') ? item[2] : '';
-                stock = (typeof item[3] === 'number') ? item[3] : 0;
-                batchIds = Array.isArray(item[4]) ? item[4] : [];
-            } else if (item && typeof item === 'object') {
-                name = item.name || '';
-                brand = item.brand || '';
-                category = item.category || '';
-                stock = item.stock || 0;
-                batchIds = item.batch_ids || item.batchIds || [];
+            if (startDate) {
+                if (startTime) {
+                    startDateTime = `${startDate} ${startTime}:00`;
+                } else {
+                    startDateTime = `${startDate} 00:00:00`;
+                }
+            }
+            
+            if (endDate) {
+                if (endTime) {
+                    endDateTime = `${endDate} ${endTime}:00`;
+                } else {
+                    endDateTime = `${endDate} 23:59:59`;
+                }
+            }
+            
+            return { start_datetime: startDateTime, end_datetime: endDateTime };
+        }
+
+        // Calendar rendering (unchanged)
+        function renderCalendar(year, month) {
+            const monthNames = ['January','February','March','April','May','June',
+                                'July','August','September','October','November','December'];
+            document.getElementById('calendarMonthYear').innerText = `${monthNames[month]} ${year}`;
+
+            const firstDay = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+            let html = '<tr>';
+            for (let i = 0; i < firstDay; i++) {
+                html += '<td></td>';
+            }
+            for (let d = 1; d <= daysInMonth; d++) {
+                const dateObj = new Date(year, month, d);
+                const dateStr = dateObj.toISOString().split('T')[0];
+                const isSelected = (selectedDate === dateStr);
+                const isToday = (dateStr === new Date().toISOString().split('T')[0]);
+                let cls = 'p-0.5 md:p-1 rounded cursor-pointer hover:bg-blue-100 text-xs md:text-sm ';
+                if (isSelected) cls += 'bg-blue-500 text-white hover:bg-blue-600 ';
+                else if (isToday) cls += 'bg-gray-200 font-bold ';
+                html += `<td class="${cls}" data-date="${dateStr}">${d}</td>`;
+                if ((firstDay + d) % 7 === 0) {
+                    html += '</tr><tr>';
+                }
+            }
+            html += '</tr>';
+            document.getElementById('calendarBody').innerHTML = html;
+
+            document.querySelectorAll('#calendarBody td[data-date]').forEach(td => {
+                td.addEventListener('click', function() {
+                    const newDate = this.dataset.date;
+                    startDate = newDate;
+                    endDate = newDate;
+                    startTime = '';
+                    endTime = '';
+                    selectedDate = newDate;
+                    
+                    document.getElementById('startDate').value = newDate;
+                    document.getElementById('endDate').value = newDate;
+                    document.getElementById('startTime').value = '';
+                    document.getElementById('endTime').value = '';
+                    
+                    loadDashboard();
+                    renderCalendar(calendarYear, calendarMonth);
+                });
+            });
+        }
+
+        document.getElementById('prevMonthBtn').addEventListener('click', function() {
+            if (calendarMonth === 0) {
+                calendarMonth = 11;
+                calendarYear--;
             } else {
-                // Skip invalid entries
+                calendarMonth--;
+            }
+            renderCalendar(calendarYear, calendarMonth);
+        });
+
+        document.getElementById('nextMonthBtn').addEventListener('click', function() {
+            if (calendarMonth === 11) {
+                calendarMonth = 0;
+                calendarYear++;
+            } else {
+                calendarMonth++;
+            }
+            renderCalendar(calendarYear, calendarMonth);
+        });
+
+        document.getElementById('todayHistoryBtn').addEventListener('click', function() {
+            const today = new Date().toISOString().split('T')[0];
+            startDate = today;
+            endDate = today;
+            startTime = '';
+            endTime = '';
+            selectedDate = today;
+            document.getElementById('startDate').value = today;
+            document.getElementById('endDate').value = today;
+            document.getElementById('startTime').value = '';
+            document.getElementById('endTime').value = '';
+            const now = new Date();
+            calendarYear = now.getFullYear();
+            calendarMonth = now.getMonth();
+            renderCalendar(calendarYear, calendarMonth);
+            loadDashboard();
+        });
+
+        // ---------- Render low stock list ----------
+        function renderLowStockList(products) {
+            const container = document.getElementById('lowStockList');
+            container.innerHTML = '';
+            
+            if (!Array.isArray(products) || products.length === 0) {
+                container.innerHTML = '<div class="text-gray-400 text-center py-4 text-sm">✅ No low stock items found.</div>';
                 return;
             }
 
-            // Fallback for missing name (should never happen, but just in case)
-            if (!name) {
-                name = 'Unknown Product';
-                console.warn('Low stock item missing name:', item);
-            }
+            let rendered = 0;
+            products.forEach(item => {
+                let name, brand, category, stock, batchIds;
+                
+                if (Array.isArray(item)) {
+                    name = (item[0] && typeof item[0] === 'string') ? item[0] : '';
+                    brand = (item[1] && typeof item[1] === 'string') ? item[1] : '';
+                    category = (item[2] && typeof item[2] === 'string') ? item[2] : '';
+                    stock = (typeof item[3] === 'number') ? item[3] : 0;
+                    batchIds = Array.isArray(item[4]) ? item[4] : [];
+                } else if (item && typeof item === 'object') {
+                    name = item.name || '';
+                    brand = item.brand || '';
+                    category = item.category || '';
+                    stock = item.stock || 0;
+                    batchIds = item.batch_ids || item.batchIds || [];
+                } else {
+                    return;
+                }
 
-            let batchDisplay = '';
-            let statusClass = '';
-            let categoryBadge = '';
-            
-            if (category && category.toLowerCase() === 'screen') {
-                categoryBadge = `<span class="bg-purple-100 text-purple-800 text-[8px] md:text-xs px-1 md:px-1.5 py-0.5 rounded ml-0.5 md:ml-1">Screen</span>`;
-            } else if (category && category.toLowerCase() === 'accessory') {
-                categoryBadge = `<span class="bg-green-100 text-green-800 text-[8px] md:text-xs px-1 md:px-1.5 py-0.5 rounded ml-0.5 md:ml-1">Accessory</span>`;
+                if (!name) {
+                    name = 'Unknown Product';
+                    console.warn('Low stock item missing name:', item);
+                }
+
+                let batchDisplay = '';
+                let statusClass = '';
+                let categoryBadge = '';
+                
+                if (category && category.toLowerCase() === 'screen') {
+                    categoryBadge = `<span class="bg-purple-100 text-purple-800 text-[8px] md:text-xs px-1 md:px-1.5 py-0.5 rounded ml-0.5 md:ml-1">Screen</span>`;
+                } else if (category && category.toLowerCase() === 'accessory') {
+                    categoryBadge = `<span class="bg-green-100 text-green-800 text-[8px] md:text-xs px-1 md:px-1.5 py-0.5 rounded ml-0.5 md:ml-1">Accessory</span>`;
+                }
+                
+                if (batchIds && batchIds.length > 0) {
+                    const batchList = batchIds.slice(0, 5).join(', #');
+                    const more = batchIds.length > 5 ? ` +${batchIds.length - 5} more` : '';
+                    batchDisplay = ` | Batch${batchIds.length > 1 ? 'es' : ''}: #${batchList}${more}`;
+                    statusClass = 'text-green-600';
+                } else if (stock === 0) {
+                    batchDisplay = ' | ⚠️ DEPLETED - No active batches';
+                    statusClass = 'text-orange-500';
+                } else if (stock > 0) {
+                    batchDisplay = ' | ⚠️ WARNING: Stock without batches!';
+                    statusClass = 'text-red-500';
+                } else {
+                    batchDisplay = ' | No batches';
+                    statusClass = 'text-gray-400';
+                }
+                
+                const div = document.createElement('div');
+                const stockClass = stock === 0 ? 'text-red-600 font-bold' : 'text-red-600';
+                
+                div.className = 'border-b pb-1 flex justify-between items-center hover:bg-blue-50 p-1 md:p-2 rounded transition-colors cursor-pointer text-xs md:text-sm';
+                div.dataset.productName = name;
+                div.dataset.productCategory = category || 'Accessory';
+                
+                div.addEventListener('click', function(e) {
+                    navigateToProduct(this.dataset.productName, this.dataset.productCategory);
+                });
+                
+                div.innerHTML = `
+                    <span class="truncate">
+                        <strong class="text-indigo-700 text-xs md:text-sm">${escapeHtml(name)}</strong>
+                        <span class="text-gray-600 text-[10px] md:text-xs"> (${escapeHtml(brand)} | ${escapeHtml(category)})</span>
+                        ${categoryBadge}
+                        <span class="text-[8px] md:text-xs ${statusClass} block">${batchDisplay}</span>
+                    </span>
+                    <span class="${stockClass} text-xs md:text-sm whitespace-nowrap">${stock} left</span>
+                `;
+                container.appendChild(div);
+                rendered++;
+            });
+
+            if (rendered === 0) {
+                container.innerHTML = '<div class="text-gray-400 text-center py-4 text-sm">✅ No low stock items found.</div>';
             }
+        }
+
+        // ---------- Main dashboard load (with Dexie) ----------
+        async function loadDashboard() {
+            try {
+                updateOfflineBanner();
+
+                const range = getDateTimeRange();
+                let summaryUrl = '/api/dashboard/summary';
+                const params = [];
+                if (range.start_datetime) params.push(`start_datetime=${encodeURIComponent(range.start_datetime)}`);
+                if (range.end_datetime) params.push(`end_datetime=${encodeURIComponent(range.end_datetime)}`);
+                if (params.length > 0) {
+                    summaryUrl += '?' + params.join('&');
+                }
+
+                let summary = null;
+                let summaryError = false;
+
+                // Try API if online
+                if (navigator.onLine) {
+                    try {
+                        const summaryRes = await fetch(summaryUrl);
+                        if (!summaryRes.ok) throw new Error('Network error');
+                        summary = await summaryRes.json();
+                        // Validate summary structure
+                        if (!summary || typeof summary !== 'object') throw new Error('Invalid summary');
+                        if (!Array.isArray(summary.low_stock_products)) {
+                            summary.low_stock_products = [];
+                        }
+                        await putCacheEntry('dashboard_summary', summary);
+                    } catch (err) {
+                        console.warn('Offline – using cached summary');
+                        summaryError = true;
+                        summary = await getCacheEntry('dashboard_summary');
+                        if (!summary || typeof summary !== 'object' || !Array.isArray(summary.low_stock_products)) {
+                            summary = { sales: 0, profit: 0, total_products: 0, total_batches: 0, low_stock_count: 0, low_stock_products: [] };
+                        }
+                    }
+                } else {
+                    // Offline – read from cache
+                    summaryError = true;
+                    summary = await getCacheEntry('dashboard_summary');
+                    if (!summary || typeof summary !== 'object' || !Array.isArray(summary.low_stock_products)) {
+                        summary = { sales: 0, profit: 0, total_products: 0, total_batches: 0, low_stock_count: 0, low_stock_products: [] };
+                    }
+                }
+
+                document.getElementById('salesValue').innerText = formatMoney(summary.sales);
+                document.getElementById('profitValue').innerText = formatMoney(summary.profit);
+                document.getElementById('productsValue').innerText = summary.total_products || 0;
+                document.getElementById('batchesValue').innerText = summary.total_batches || 0;
+                document.getElementById('lowStockValue').innerText = summary.low_stock_count || 0;
+
+                lowStockProducts = summary.low_stock_products || [];
+                
+                // SHOW LOW STOCK ALERT (only once per page load)
+                if (!summaryError && !lowStockShown && summary.low_stock_count > 0 && lowStockProducts.length > 0) {
+                    let productList = lowStockProducts.slice(0, 10).map(item => {
+                        let name, brand, stock, batchIds;
+                        if (Array.isArray(item)) {
+                            name = (item[0] && typeof item[0] === 'string') ? item[0] : 'Unknown';
+                            brand = (item[1] && typeof item[1] === 'string') ? item[1] : '';
+                            stock = (typeof item[3] === 'number') ? item[3] : 0;
+                            batchIds = Array.isArray(item[4]) ? item[4] : [];
+                        } else {
+                            name = item.name || 'Unknown';
+                            brand = item.brand || '';
+                            stock = item.stock || 0;
+                            batchIds = item.batch_ids || item.batchIds || [];
+                        }
+                        const batchInfo = batchIds && batchIds.length > 0 ? ` (Batch: #${batchIds.slice(0,3).join(', #')}${batchIds.length > 3 ? '...' : ''})` : ' (No batches)';
+                        return `• ${name} (${brand}) - ${stock} left${batchInfo}`;
+                    }).join('\n');
+                    if (lowStockProducts.length > 10) {
+                        productList += `\n\n... and ${lowStockProducts.length - 10} more items`;
+                    }
+                    alert(`⚠️ LOW STOCK ALERT ⚠️\n\n${summary.low_stock_count} product(s) are running low:\n\n${productList}\n\nPlease restock soon!`);
+                    lowStockShown = true;
+                }
+
+                // Render low stock list
+                renderLowStockList(lowStockProducts);
+
+                // ---------- Top products ----------
+                let topUrl = '/api/dashboard/top_products';
+                if (params.length > 0) {
+                    topUrl += '?' + params.join('&');
+                }
+                let topProducts = [];
+                let topError = false;
+
+                if (navigator.onLine) {
+                    try {
+                        const topRes = await fetch(topUrl);
+                        if (!topRes.ok) throw new Error();
+                        topProducts = await topRes.json();
+                        await putCacheEntry('dashboard_top_products', topProducts);
+                    } catch (err) {
+                        console.warn('Offline – using cached top products');
+                        topError = true;
+                        const cached = await getCacheEntry('dashboard_top_products');
+                        if (cached) topProducts = cached;
+                    }
+                } else {
+                    topError = true;
+                    const cached = await getCacheEntry('dashboard_top_products');
+                    if (cached) topProducts = cached;
+                }
+
+                const topContainer = document.getElementById('topProductsList');
+                topContainer.innerHTML = '';
+                if (topProducts.length) {
+                    topProducts.forEach((p, index) => {
+                        const div = document.createElement('div');
+                        div.className = 'border-b pb-1 flex justify-between items-center hover:bg-gray-50 p-1 rounded transition-colors text-xs md:text-sm';
+                        let medal = '';
+                        if (index === 0) medal = '🥇 ';
+                        else if (index === 1) medal = '🥈 ';
+                        else if (index === 2) medal = '🥉 ';
+                        div.innerHTML = `
+                            <span>${medal}<strong class="text-indigo-700">${escapeHtml(p.name)}</strong> <span class="text-gray-600 text-[10px] md:text-xs">(${escapeHtml(p.brand)} | ${escapeHtml(p.category)})</span></span>
+                            <span class="font-bold text-indigo-600 text-xs md:text-sm">${p.qty} sold</span>
+                        `;
+                        topContainer.appendChild(div);
+                    });
+                } else {
+                    topContainer.innerHTML = '<div class="text-gray-400 text-center py-4 text-sm">📊 No sales data for this period.</div>';
+                }
+
+                // ---------- Pie chart ----------
+                if (pieChart) pieChart.destroy();
+                const ctx = document.getElementById('pieChart');
+                const container = document.getElementById('pieChartContainer');
+                const offlineMsg = document.getElementById('pieChartOfflineMsg');
+                if (topProducts.length > 0 && !topError) {
+                    container.classList.remove('hidden');
+                    offlineMsg.classList.add('hidden');
+                    let labels = topProducts.map(p => `${p.name.substring(0, 15)}${p.name.length > 15 ? '...' : ''}`);
+                    let values = topProducts.map(p => p.qty);
+                    if (values.length > 8) {
+                        const top8Values = values.slice(0,8);
+                        const top8Labels = labels.slice(0,8);
+                        const othersSum = values.slice(8).reduce((a,b) => a+b, 0);
+                        top8Values.push(othersSum);
+                        top8Labels.push('Others');
+                        pieChart = new Chart(ctx, {
+                            type: 'pie',
+                            data: { labels: top8Labels, datasets: [{ data: top8Values, backgroundColor: generateColors(top8Labels.length) }] },
+                            options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } } }
+                        });
+                    } else {
+                        pieChart = new Chart(ctx, {
+                            type: 'pie',
+                            data: { labels: labels, datasets: [{ data: values, backgroundColor: generateColors(labels.length) }] },
+                            options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } } }
+                        });
+                    }
+                } else {
+                    container.classList.add('hidden');
+                    offlineMsg.classList.remove('hidden');
+                }
+
+                // ---------- Sales history ----------
+                await loadSalesHistory(range);
+
+            } catch (err) {
+                console.error('Error loading dashboard:', err);
+            }
+        }
+
+        // ---------- Load sales history (with Dexie) ----------
+        async function loadSalesHistory(range) {
+            try {
+                let url = '/api/dashboard/sales_history';
+                const params = [];
+                if (range.start_datetime) {
+                    params.push(`start_datetime=${encodeURIComponent(range.start_datetime)}`);
+                }
+                if (range.end_datetime) {
+                    params.push(`end_datetime=${encodeURIComponent(range.end_datetime)}`);
+                }
+                if (params.length === 0 && selectedDate) {
+                    params.push(`date=${selectedDate}`);
+                }
+                if (params.length > 0) {
+                    url += '?' + params.join('&');
+                }
+
+                let history = [];
+                let historyError = false;
+
+                if (navigator.onLine) {
+                    try {
+                        const historyRes = await fetch(url);
+                        if (!historyRes.ok) throw new Error();
+                        history = await historyRes.json();
+                        await putCacheEntry('dashboard_sales_history', history);
+                    } catch (err) {
+                        console.warn('Offline – using cached sales history');
+                        historyError = true;
+                        const cached = await getCacheEntry('dashboard_sales_history');
+                        if (cached) history = cached;
+                    }
+                } else {
+                    historyError = true;
+                    const cached = await getCacheEntry('dashboard_sales_history');
+                    if (cached) history = cached;
+                }
+
+                const historyContainer = document.getElementById('salesHistoryList');
+                historyContainer.innerHTML = '';
+                
+                if (history && history.length > 0) {
+                    history.forEach(item => {
+                        const div = document.createElement('div');
+                        div.className = 'border-b pb-1 md:pb-2 mb-1 md:mb-2 hover:bg-gray-50 p-1 rounded transition-colors';
+                        div.innerHTML = `
+                            <div class="flex justify-between items-center">
+                                <span class="font-medium text-gray-700 text-xs md:text-sm">${item.date}</span>
+                                <span class="font-bold text-green-600 text-xs md:text-base">${formatMoney(item.total_sales)}</span>
+                            </div>
+                            <div class="text-[10px] md:text-sm text-gray-500 flex justify-between">
+                                <span>Profit: ${formatMoney(item.profit)}</span>
+                                <span>Discount: ${formatMoney(item.discount)}</span>
+                            </div>
+                        `;
+                        historyContainer.appendChild(div);
+                    });
+                    if (historyError) {
+                        const note = document.createElement('div');
+                        note.className = 'text-[10px] md:text-xs text-amber-500 mt-2 text-center';
+                        note.innerText = '⚠️ Data may be outdated (offline mode)';
+                        historyContainer.appendChild(note);
+                    }
+                } else {
+                    historyContainer.innerHTML = '<div class="text-gray-400 text-center py-4 text-sm">📅 No sales history found for this period.</div>';
+                }
+            } catch (err) {
+                console.error('Error loading sales history:', err);
+                document.getElementById('salesHistoryList').innerHTML = '<div class="text-red-400 text-center py-4 text-sm">❌ Error loading sales history.</div>';
+            }
+        }
+
+        // Generate colors for pie chart
+        function generateColors(n) {
+            const colors = [];
+            for (let i = 0; i < n; i++) {
+                const hue = (i * 360 / n) % 360;
+                colors.push(`hsl(${hue}, 70%, 60%)`);
+            }
+            return colors;
+        }
+
+        // Apply filter
+        function applyFilter() {
+            const start = document.getElementById('startDate').value;
+            const end = document.getElementById('endDate').value;
+            const st = document.getElementById('startTime').value;
+            const et = document.getElementById('endTime').value;
             
-            if (batchIds && batchIds.length > 0) {
-                const batchList = batchIds.slice(0, 5).join(', #');
-                const more = batchIds.length > 5 ? ` +${batchIds.length - 5} more` : '';
-                batchDisplay = ` | Batch${batchIds.length > 1 ? 'es' : ''}: #${batchList}${more}`;
-                statusClass = 'text-green-600';
-            } else if (stock === 0) {
-                batchDisplay = ' | ⚠️ DEPLETED - No active batches';
-                statusClass = 'text-orange-500';
-            } else if (stock > 0) {
-                batchDisplay = ' | ⚠️ WARNING: Stock without batches!';
-                statusClass = 'text-red-500';
+            if (!start && !end) {
+                alert('Please select at least a start date or end date');
+                return;
+            }
+            startDate = start || null;
+            endDate = end || null;
+            startTime = st || null;
+            endTime = et || null;
+            if (startDate && startDate === endDate) {
+                selectedDate = startDate;
             } else {
-                batchDisplay = ' | No batches';
-                statusClass = 'text-gray-400';
+                selectedDate = null;
             }
-            
-            const div = document.createElement('div');
-            const stockClass = stock === 0 ? 'text-red-600 font-bold' : 'text-red-600';
-            
-            div.className = 'border-b pb-1 flex justify-between items-center hover:bg-blue-50 p-1 md:p-2 rounded transition-colors cursor-pointer text-xs md:text-sm';
-            div.dataset.productName = name;
-            div.dataset.productCategory = category || 'Accessory';
-            
-            div.addEventListener('click', function(e) {
-                navigateToProduct(this.dataset.productName, this.dataset.productCategory);
-            });
-            
-            div.innerHTML = `
-                <span class="truncate">
-                    <strong class="text-indigo-700 text-xs md:text-sm">${escapeHtml(name)}</strong>
-                    <span class="text-gray-600 text-[10px] md:text-xs"> (${escapeHtml(brand)} | ${escapeHtml(category)})</span>
-                    ${categoryBadge}
-                    <span class="text-[8px] md:text-xs ${statusClass} block">${batchDisplay}</span>
-                </span>
-                <span class="${stockClass} text-xs md:text-sm whitespace-nowrap">${stock} left</span>
-            `;
-            container.appendChild(div);
-            rendered++;
-        });
-
-        if (rendered === 0) {
-            container.innerHTML = '<div class="text-gray-400 text-center py-4 text-sm">✅ No low stock items found.</div>';
-        }
-    }
-
-    // Calendar rendering (unchanged)
-    function renderCalendar(year, month) {
-        const monthNames = ['January','February','March','April','May','June',
-                            'July','August','September','October','November','December'];
-        document.getElementById('calendarMonthYear').innerText = `${monthNames[month]} ${year}`;
-
-        const firstDay = new Date(year, month, 1).getDay();
-        const daysInMonth = new Date(year, month + 1, 0).getDate();
-
-        let html = '<tr>';
-        for (let i = 0; i < firstDay; i++) {
-            html += '<td></td>';
-        }
-        for (let d = 1; d <= daysInMonth; d++) {
-            const dateObj = new Date(year, month, d);
-            const dateStr = dateObj.toISOString().split('T')[0];
-            const isSelected = (selectedDate === dateStr);
-            const isToday = (dateStr === new Date().toISOString().split('T')[0]);
-            let cls = 'p-0.5 md:p-1 rounded cursor-pointer hover:bg-blue-100 text-xs md:text-sm ';
-            if (isSelected) cls += 'bg-blue-500 text-white hover:bg-blue-600 ';
-            else if (isToday) cls += 'bg-gray-200 font-bold ';
-            html += `<td class="${cls}" data-date="${dateStr}">${d}</td>`;
-            if ((firstDay + d) % 7 === 0) {
-                html += '</tr><tr>';
-            }
-        }
-        html += '</tr>';
-        document.getElementById('calendarBody').innerHTML = html;
-
-        document.querySelectorAll('#calendarBody td[data-date]').forEach(td => {
-            td.addEventListener('click', function() {
-                const newDate = this.dataset.date;
-                startDate = newDate;
-                endDate = newDate;
-                startTime = '';
-                endTime = '';
-                selectedDate = newDate;
-                
-                document.getElementById('startDate').value = newDate;
-                document.getElementById('endDate').value = newDate;
-                document.getElementById('startTime').value = '';
-                document.getElementById('endTime').value = '';
-                
-                loadDashboard();
+            if (startDate) {
+                const d = new Date(startDate);
+                calendarYear = d.getFullYear();
+                calendarMonth = d.getMonth();
                 renderCalendar(calendarYear, calendarMonth);
+            }
+            loadDashboard();
+        }
+
+        document.getElementById('applyFilterBtn').addEventListener('click', applyFilter);
+
+        // Low stock search
+        document.getElementById('lowStockSearch').addEventListener('input', function() {
+            const keyword = this.value.toLowerCase().trim();
+            if (!keyword) {
+                renderLowStockList(lowStockProducts);
+                return;
+            }
+            
+            const filtered = lowStockProducts.filter(item => {
+                let name, brand, category, batchIds;
+                
+                if (Array.isArray(item)) {
+                    name = (item[0] && typeof item[0] === 'string') ? item[0] : '';
+                    brand = (item[1] && typeof item[1] === 'string') ? item[1] : '';
+                    category = (item[2] && typeof item[2] === 'string') ? item[2] : '';
+                    batchIds = Array.isArray(item[4]) ? item[4] : [];
+                } else {
+                    name = item.name || '';
+                    brand = item.brand || '';
+                    category = item.category || '';
+                    batchIds = item.batch_ids || item.batchIds || [];
+                }
+                
+                return name.toLowerCase().includes(keyword) ||
+                       brand.toLowerCase().includes(keyword) ||
+                       category.toLowerCase().includes(keyword) ||
+                       batchIds.some(b => b.toString().includes(keyword));
             });
+            renderLowStockList(filtered);
         });
-    }
 
-    document.getElementById('prevMonthBtn').addEventListener('click', function() {
-        if (calendarMonth === 0) {
-            calendarMonth = 11;
-            calendarYear--;
-        } else {
-            calendarMonth--;
-        }
-        renderCalendar(calendarYear, calendarMonth);
-    });
-
-    document.getElementById('nextMonthBtn').addEventListener('click', function() {
-        if (calendarMonth === 11) {
-            calendarMonth = 0;
-            calendarYear++;
-        } else {
-            calendarMonth++;
-        }
-        renderCalendar(calendarYear, calendarMonth);
-    });
-
-    document.getElementById('todayHistoryBtn').addEventListener('click', function() {
+        // Set default date range
         const today = new Date().toISOString().split('T')[0];
-        startDate = today;
-        endDate = today;
-        startTime = '';
-        endTime = '';
-        selectedDate = today;
         document.getElementById('startDate').value = today;
         document.getElementById('endDate').value = today;
-        document.getElementById('startTime').value = '';
-        document.getElementById('endTime').value = '';
+        document.getElementById('startTime').value = '00:00';
+        document.getElementById('endTime').value = '23:59';
+        startDate = today;
+        endDate = today;
+        startTime = '00:00';
+        endTime = '23:59';
+        selectedDate = today;
+        
         const now = new Date();
         calendarYear = now.getFullYear();
         calendarMonth = now.getMonth();
         renderCalendar(calendarYear, calendarMonth);
-        loadDashboard();
-    });
 
-    // Main dashboard load
-    async function loadDashboard() {
-        try {
-            updateOfflineBanner();
-
-            const range = getDateTimeRange();
-            let summaryUrl = '/api/dashboard/summary';
-            const params = [];
-            if (range.start_datetime) params.push(`start_datetime=${encodeURIComponent(range.start_datetime)}`);
-            if (range.end_datetime) params.push(`end_datetime=${encodeURIComponent(range.end_datetime)}`);
-            if (params.length > 0) {
-                summaryUrl += '?' + params.join('&');
-            }
-
-            let summary = null;
-            let summaryError = false;
-            try {
-                const summaryRes = await fetch(summaryUrl);
-                if (!summaryRes.ok) throw new Error('Network error');
-                summary = await summaryRes.json();
-                // Validate summary structure
-                if (!summary || typeof summary !== 'object') throw new Error('Invalid summary');
-                // Ensure low_stock_products is an array
-                if (!Array.isArray(summary.low_stock_products)) {
-                    summary.low_stock_products = [];
-                }
-                cacheData(CACHE_KEY_SUMMARY, summary);
-            } catch (err) {
-                console.warn('Offline – using cached summary');
-                summaryError = true;
-                summary = loadCache(CACHE_KEY_SUMMARY);
-                if (!summary || typeof summary !== 'object' || !Array.isArray(summary.low_stock_products)) {
-                    summary = { sales: 0, profit: 0, total_products: 0, total_batches: 0, low_stock_count: 0, low_stock_products: [] };
-                }
-            }
-
-            document.getElementById('salesValue').innerText = formatMoney(summary.sales);
-            document.getElementById('profitValue').innerText = formatMoney(summary.profit);
-            document.getElementById('productsValue').innerText = summary.total_products || 0;
-            document.getElementById('batchesValue').innerText = summary.total_batches || 0;
-            document.getElementById('lowStockValue').innerText = summary.low_stock_count || 0;
-
-            lowStockProducts = summary.low_stock_products || [];
-            
-            // SHOW LOW STOCK ALERT (only once per page load)
-            if (!summaryError && !lowStockShown && summary.low_stock_count > 0 && lowStockProducts.length > 0) {
-                let productList = lowStockProducts.slice(0, 10).map(item => {
-                    let name, brand, stock, batchIds;
-                    if (Array.isArray(item)) {
-                        name = (item[0] && typeof item[0] === 'string') ? item[0] : 'Unknown';
-                        brand = (item[1] && typeof item[1] === 'string') ? item[1] : '';
-                        stock = (typeof item[3] === 'number') ? item[3] : 0;
-                        batchIds = Array.isArray(item[4]) ? item[4] : [];
-                    } else {
-                        name = item.name || 'Unknown';
-                        brand = item.brand || '';
-                        stock = item.stock || 0;
-                        batchIds = item.batch_ids || item.batchIds || [];
-                    }
-                    const batchInfo = batchIds && batchIds.length > 0 ? ` (Batch: #${batchIds.slice(0,3).join(', #')}${batchIds.length > 3 ? '...' : ''})` : ' (No batches)';
-                    return `• ${name} (${brand}) - ${stock} left${batchInfo}`;
-                }).join('\n');
-                if (lowStockProducts.length > 10) {
-                    productList += `\n\n... and ${lowStockProducts.length - 10} more items`;
-                }
-                alert(`⚠️ LOW STOCK ALERT ⚠️\n\n${summary.low_stock_count} product(s) are running low:\n\n${productList}\n\nPlease restock soon!`);
-                lowStockShown = true;
-            }
-
-            // Render low stock list
-            renderLowStockList(lowStockProducts);
-
-            // Top products (unchanged)
-            let topUrl = '/api/dashboard/top_products';
-            if (params.length > 0) {
-                topUrl += '?' + params.join('&');
-            }
-            let topProducts = [];
-            let topError = false;
-            try {
-                const topRes = await fetch(topUrl);
-                if (!topRes.ok) throw new Error();
-                topProducts = await topRes.json();
-                cacheData(CACHE_KEY_TOP, topProducts);
-            } catch (err) {
-                console.warn('Offline – using cached top products');
-                topError = true;
-                const cached = loadCache(CACHE_KEY_TOP);
-                if (cached) topProducts = cached;
-            }
-
-            const topContainer = document.getElementById('topProductsList');
-            topContainer.innerHTML = '';
-            if (topProducts.length) {
-                topProducts.forEach((p, index) => {
-                    const div = document.createElement('div');
-                    div.className = 'border-b pb-1 flex justify-between items-center hover:bg-gray-50 p-1 rounded transition-colors text-xs md:text-sm';
-                    let medal = '';
-                    if (index === 0) medal = '🥇 ';
-                    else if (index === 1) medal = '🥈 ';
-                    else if (index === 2) medal = '🥉 ';
-                    div.innerHTML = `
-                        <span>${medal}<strong class="text-indigo-700">${escapeHtml(p.name)}</strong> <span class="text-gray-600 text-[10px] md:text-xs">(${escapeHtml(p.brand)} | ${escapeHtml(p.category)})</span></span>
-                        <span class="font-bold text-indigo-600 text-xs md:text-sm">${p.qty} sold</span>
-                    `;
-                    topContainer.appendChild(div);
-                });
-            } else {
-                topContainer.innerHTML = '<div class="text-gray-400 text-center py-4 text-sm">📊 No sales data for this period.</div>';
-            }
-
-            // Pie chart (unchanged)
-            if (pieChart) pieChart.destroy();
-            const ctx = document.getElementById('pieChart');
-            const container = document.getElementById('pieChartContainer');
-            const offlineMsg = document.getElementById('pieChartOfflineMsg');
-            if (topProducts.length > 0 && !topError) {
-                container.classList.remove('hidden');
-                offlineMsg.classList.add('hidden');
-                let labels = topProducts.map(p => `${p.name.substring(0, 15)}${p.name.length > 15 ? '...' : ''}`);
-                let values = topProducts.map(p => p.qty);
-                if (values.length > 8) {
-                    const top8Values = values.slice(0,8);
-                    const top8Labels = labels.slice(0,8);
-                    const othersSum = values.slice(8).reduce((a,b) => a+b, 0);
-                    top8Values.push(othersSum);
-                    top8Labels.push('Others');
-                    pieChart = new Chart(ctx, {
-                        type: 'pie',
-                        data: { labels: top8Labels, datasets: [{ data: top8Values, backgroundColor: generateColors(top8Labels.length) }] },
-                        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } } }
-                    });
-                } else {
-                    pieChart = new Chart(ctx, {
-                        type: 'pie',
-                        data: { labels: labels, datasets: [{ data: values, backgroundColor: generateColors(labels.length) }] },
-                        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } } }
-                    });
-                }
-            } else {
-                container.classList.add('hidden');
-                offlineMsg.classList.remove('hidden');
-            }
-
-            await loadSalesHistory(range);
-
-        } catch (err) {
-            console.error('Error loading dashboard:', err);
-        }
-    }
-
-    // Load sales history (unchanged)
-    async function loadSalesHistory(range) {
-        try {
-            let url = '/api/dashboard/sales_history';
-            const params = [];
-            if (range.start_datetime) {
-                params.push(`start_datetime=${encodeURIComponent(range.start_datetime)}`);
-            }
-            if (range.end_datetime) {
-                params.push(`end_datetime=${encodeURIComponent(range.end_datetime)}`);
-            }
-            if (params.length === 0 && selectedDate) {
-                params.push(`date=${selectedDate}`);
-            }
-            if (params.length > 0) {
-                url += '?' + params.join('&');
-            }
-
-            let history = [];
-            let historyError = false;
-            try {
-                const historyRes = await fetch(url);
-                if (!historyRes.ok) throw new Error();
-                history = await historyRes.json();
-                cacheData(CACHE_KEY_HISTORY, history);
-            } catch (err) {
-                console.warn('Offline – using cached sales history');
-                historyError = true;
-                const cached = loadCache(CACHE_KEY_HISTORY);
-                if (cached) history = cached;
-            }
-
-            const historyContainer = document.getElementById('salesHistoryList');
-            historyContainer.innerHTML = '';
-            
-            if (history && history.length > 0) {
-                history.forEach(item => {
-                    const div = document.createElement('div');
-                    div.className = 'border-b pb-1 md:pb-2 mb-1 md:mb-2 hover:bg-gray-50 p-1 rounded transition-colors';
-                    div.innerHTML = `
-                        <div class="flex justify-between items-center">
-                            <span class="font-medium text-gray-700 text-xs md:text-sm">${item.date}</span>
-                            <span class="font-bold text-green-600 text-xs md:text-base">${formatMoney(item.total_sales)}</span>
-                        </div>
-                        <div class="text-[10px] md:text-sm text-gray-500 flex justify-between">
-                            <span>Profit: ${formatMoney(item.profit)}</span>
-                            <span>Discount: ${formatMoney(item.discount)}</span>
-                        </div>
-                    `;
-                    historyContainer.appendChild(div);
-                });
-                if (historyError) {
-                    const note = document.createElement('div');
-                    note.className = 'text-[10px] md:text-xs text-amber-500 mt-2 text-center';
-                    note.innerText = '⚠️ Data may be outdated (offline mode)';
-                    historyContainer.appendChild(note);
-                }
-            } else {
-                historyContainer.innerHTML = '<div class="text-gray-400 text-center py-4 text-sm">📅 No sales history found for this period.</div>';
-            }
-        } catch (err) {
-            console.error('Error loading sales history:', err);
-            document.getElementById('salesHistoryList').innerHTML = '<div class="text-red-400 text-center py-4 text-sm">❌ Error loading sales history.</div>';
-        }
-    }
-
-    // Generate colors for pie chart (unchanged)
-    function generateColors(n) {
-        const colors = [];
-        for (let i = 0; i < n; i++) {
-            const hue = (i * 360 / n) % 360;
-            colors.push(`hsl(${hue}, 70%, 60%)`);
-        }
-        return colors;
-    }
-
-    // Apply filter (unchanged)
-    function applyFilter() {
-        const start = document.getElementById('startDate').value;
-        const end = document.getElementById('endDate').value;
-        const st = document.getElementById('startTime').value;
-        const et = document.getElementById('endTime').value;
-        
-        if (!start && !end) {
-            alert('Please select at least a start date or end date');
-            return;
-        }
-        startDate = start || null;
-        endDate = end || null;
-        startTime = st || null;
-        endTime = et || null;
-        if (startDate && startDate === endDate) {
-            selectedDate = startDate;
-        } else {
-            selectedDate = null;
-        }
-        if (startDate) {
-            const d = new Date(startDate);
-            calendarYear = d.getFullYear();
-            calendarMonth = d.getMonth();
-            renderCalendar(calendarYear, calendarMonth);
-        }
-        loadDashboard();
-    }
-
-    document.getElementById('applyFilterBtn').addEventListener('click', applyFilter);
-
-    // Low stock search (unchanged)
-    document.getElementById('lowStockSearch').addEventListener('input', function() {
-        const keyword = this.value.toLowerCase().trim();
-        if (!keyword) {
-            renderLowStockList(lowStockProducts);
-            return;
-        }
-        
-        const filtered = lowStockProducts.filter(item => {
-            let name, brand, category, batchIds;
-            
-            if (Array.isArray(item)) {
-                name = (item[0] && typeof item[0] === 'string') ? item[0] : '';
-                brand = (item[1] && typeof item[1] === 'string') ? item[1] : '';
-                category = (item[2] && typeof item[2] === 'string') ? item[2] : '';
-                batchIds = Array.isArray(item[4]) ? item[4] : [];
-            } else {
-                name = item.name || '';
-                brand = item.brand || '';
-                category = item.category || '';
-                batchIds = item.batch_ids || item.batchIds || [];
-            }
-            
-            return name.toLowerCase().includes(keyword) ||
-                   brand.toLowerCase().includes(keyword) ||
-                   category.toLowerCase().includes(keyword) ||
-                   batchIds.some(b => b.toString().includes(keyword));
+        // Reset lowStockShown when page is reloaded
+        window.addEventListener('beforeunload', function() {
+            lowStockShown = false;
         });
-        renderLowStockList(filtered);
+
+        // Initial load
+        loadDashboard();
+
+        // Refresh on reconnect
+        window.addEventListener('online', function() {
+            loadDashboard();
+        });
     });
-
-    // Set default date range
-    const today = new Date().toISOString().split('T')[0];
-    document.getElementById('startDate').value = today;
-    document.getElementById('endDate').value = today;
-    document.getElementById('startTime').value = '00:00';
-    document.getElementById('endTime').value = '23:59';
-    startDate = today;
-    endDate = today;
-    startTime = '00:00';
-    endTime = '23:59';
-    selectedDate = today;
-    
-    const now = new Date();
-    calendarYear = now.getFullYear();
-    calendarMonth = now.getMonth();
-    renderCalendar(calendarYear, calendarMonth);
-
-    // Reset lowStockShown when page is reloaded
-    window.addEventListener('beforeunload', function() {
-        lowStockShown = false;
-    });
-
-    // Initial load
-    loadDashboard();
 </script>
 {% endblock %}

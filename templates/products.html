@@ -266,15 +266,12 @@
             return;
         }
         try {
-            localStorage.removeItem(PRODUCTS_CACHE_KEY);
-            const allKeys = Object.keys(localStorage);
-            allKeys.forEach(key => {
-                if (key.startsWith('batches_')) {
-                    localStorage.removeItem(key);
-                    console.log('🗑️ Cleared batch cache:', key);
-                }
-            });
-            console.log('✅ Cache cleared successfully');
+            // Clear Dexie products/batches
+            if (db) {
+                db.products.clear();
+                db.batches.clear();
+            }
+            console.log('✅ Dexie data cleared');
             loadProducts(true);
             alert('✅ Cache cleared. Data reloaded from server.');
         } catch (e) {
@@ -303,6 +300,11 @@
             allKeys.forEach(key => {
                 if (key.startsWith('batches_')) localStorage.removeItem(key);
             });
+            if (db) {
+                db.delete().then(() => {
+                    console.log('🗑️ Dexie database deleted');
+                }).catch(err => console.warn('Error deleting Dexie:', err));
+            }
             sessionStorage.removeItem('autoOpenBatches');
             sessionStorage.removeItem('autoOpenProduct');
             alert('✅ All local data cleared. Refreshing page...');
@@ -329,8 +331,6 @@
 
     // Low stock variables
     let lowStockProducts = [];
-
-    const PRODUCTS_CACHE_KEY = 'cached_products_accessories';
 
     // ---------- Utilities ----------
     function escapeHtml(str) {
@@ -851,59 +851,100 @@
     window.addEventListener('online', updateOfflineBanner);
     window.addEventListener('offline', updateOfflineBanner);
 
-    // ---------- Load products ----------
+    // =============================================================
+    //  NEW: Load products with Dexie integration
+    // =============================================================
     async function loadProducts(forceRefresh = false) {
         if (isLoading) return;
         isLoading = true;
         updateOfflineBanner();
-        let productsData = null, summaryData = null, fromCache = false;
 
-        try {
-            if (forceRefresh) {
-                try { localStorage.removeItem(PRODUCTS_CACHE_KEY); } catch(e) {}
-            }
-            const res = await fetch('/api/products?exclude_category=Screen');
-            if (!res.ok) throw new Error('Network error');
-            const data = await res.json();
-            if (data && data.products && Array.isArray(data.products)) {
-                productsData = data.products;
-                let totalQty = 0, totalClaimed = 0, totalBatches = data.total_batches || 0;
-                productsData.forEach(p => {
-                    totalQty += p.stock || 0;
-                    if (p.batches) {
-                        p.batches.forEach(b => { totalClaimed += b.claimed_quantity || 0; });
-                    }
-                });
-                const totalGood = totalQty - totalClaimed;
-                summaryData = {
-                    total_products: data.total_products || productsData.length,
-                    total_batches: totalBatches,
-                    total_quantity: totalQty,
-                    total_claimed: totalClaimed,
-                    total_good: Math.max(totalGood, 0)
-                };
-                try {
-                    localStorage.setItem(PRODUCTS_CACHE_KEY, JSON.stringify({ products: productsData, summary: summaryData, timestamp: Date.now() }));
-                } catch(e) {}
-            } else {
-                throw new Error('Invalid data format');
-            }
-        } catch (err) {
-            console.warn('⚠️ API failed, using cached data:', err.message);
-            fromCache = true;
+        let productsData = [];
+        let summaryData = { total_products: 0, total_batches: 0, total_quantity: 0, total_claimed: 0, total_good: 0 };
+        let fromCache = false;
+
+        // Try to fetch from API if online
+        if (navigator.onLine && !forceRefresh) {
             try {
-                const cached = localStorage.getItem(PRODUCTS_CACHE_KEY);
-                if (cached) {
-                    const parsed = JSON.parse(cached);
-                    if (parsed.products && Array.isArray(parsed.products)) {
-                        productsData = parsed.products;
-                        summaryData = parsed.summary || { total_products: parsed.products.length, total_batches: 0, total_quantity: 0, total_claimed: 0, total_good: 0 };
-                    } else { productsData = []; summaryData = { total_products: 0, total_batches: 0, total_quantity: 0, total_claimed: 0, total_good: 0 }; }
-                } else { productsData = []; summaryData = { total_products: 0, total_batches: 0, total_quantity: 0, total_claimed: 0, total_good: 0 }; }
-            } catch (e) { console.error('Error reading cache:', e); productsData = []; summaryData = { total_products: 0, total_batches: 0, total_quantity: 0, total_claimed: 0, total_good: 0 }; }
+                const res = await fetch('/api/products?exclude_category=Screen');
+                if (!res.ok) throw new Error('Network error');
+                const data = await res.json();
+                if (data && data.products && Array.isArray(data.products)) {
+                    productsData = data.products;
+                    // Store in Dexie
+                    if (db) {
+                        await db.products.bulkPut(productsData);
+                        // Also store each product's batches separately (optional)
+                        // We'll store product with batches array already – fine.
+                        console.log('✅ Products stored in Dexie');
+                    }
+                    // Compute summary
+                    let totalQty = 0, totalClaimed = 0, totalBatches = data.total_batches || 0;
+                    productsData.forEach(p => {
+                        totalQty += p.stock || 0;
+                        if (p.batches) {
+                            p.batches.forEach(b => { totalClaimed += b.claimed_quantity || 0; });
+                        }
+                    });
+                    summaryData = {
+                        total_products: data.total_products || productsData.length,
+                        total_batches: totalBatches,
+                        total_quantity: totalQty,
+                        total_claimed: totalClaimed,
+                        total_good: Math.max(totalQty - totalClaimed, 0)
+                    };
+                    fromCache = false;
+                } else {
+                    throw new Error('Invalid data format');
+                }
+            } catch (err) {
+                console.warn('⚠️ API failed, using Dexie cache:', err.message);
+                fromCache = true;
+                // Fall through to Dexie
+            }
         }
 
-        currentProducts = productsData || [];
+        // If no data yet (or offline / API failed), read from Dexie
+        if (productsData.length === 0) {
+            try {
+                if (db) {
+                    const cached = await db.products.where('category').notEqual('Screen').toArray();
+                    if (cached && cached.length > 0) {
+                        productsData = cached;
+                        // Recompute summary from Dexie
+                        let totalQty = 0, totalClaimed = 0, totalBatches = 0;
+                        productsData.forEach(p => {
+                            totalQty += p.stock || 0;
+                            if (p.batches) {
+                                p.batches.forEach(b => { 
+                                    totalClaimed += b.claimed_quantity || 0;
+                                    totalBatches++;
+                                });
+                            }
+                        });
+                        summaryData = {
+                            total_products: productsData.length,
+                            total_batches: totalBatches,
+                            total_quantity: totalQty,
+                            total_claimed: totalClaimed,
+                            total_good: Math.max(totalQty - totalClaimed, 0)
+                        };
+                        fromCache = true;
+                        console.log('📦 Loaded products from Dexie');
+                    }
+                }
+            } catch (e) {
+                console.warn('Failed to read from Dexie:', e);
+            }
+        }
+
+        if (productsData.length === 0) {
+            // Still nothing – show empty
+            productsData = [];
+            summaryData = { total_products: 0, total_batches: 0, total_quantity: 0, total_claimed: 0, total_good: 0 };
+        }
+
+        currentProducts = productsData;
         document.getElementById('totalProductsCount').textContent = summaryData.total_products || 0;
         document.getElementById('totalBatchesCount').textContent = summaryData.total_batches || 0;
         document.getElementById('totalQuantityCount').textContent = summaryData.total_quantity || 0;
@@ -912,31 +953,71 @@
 
         const cacheStatus = document.getElementById('cacheStatus');
         if (fromCache) {
-            cacheStatus.textContent = '📦 Showing cached data';
+            cacheStatus.textContent = '📦 Showing cached data (Dexie)';
             cacheStatus.className = 'text-xs text-orange-500 mt-2 text-center';
         } else {
             cacheStatus.textContent = '✅ Live data';
             cacheStatus.className = 'text-xs text-green-500 mt-2 text-center';
         }
 
-        // ---------- Fetch low stock data ----------
-        try {
-            let lowStockUrl = `/api/products/low_stock?threshold=10`;
-            // The page is Accessory, so filter by category
-            lowStockUrl += '&exclude_category=Screen';
-            const lowRes = await fetch(lowStockUrl);
-            if (lowRes.ok) {
-                lowStockProducts = await lowRes.json();
-                document.getElementById('lowStockCount').textContent = lowStockProducts.length;
-                renderLowStockList(lowStockProducts);
-            }
-        } catch (e) {
-            console.warn('Could not load low stock data:', e);
-        }
+        // ---------- Load low stock ----------
+        await loadLowStock();
 
         applyAdvancedSearch();
         autoOpenBatches();
         isLoading = false;
+    }
+
+    // ---------- Low stock loading ----------
+    async function loadLowStock() {
+        if (navigator.onLine) {
+            try {
+                const lowRes = await fetch('/api/products/low_stock?threshold=10&exclude_category=Screen');
+                if (lowRes.ok) {
+                    lowStockProducts = await lowRes.json();
+                    document.getElementById('lowStockCount').textContent = lowStockProducts.length;
+                    renderLowStockList(lowStockProducts);
+                    return;
+                }
+            } catch (e) {
+                console.warn('Could not load low stock data, computing from Dexie:', e);
+            }
+        }
+        // Fallback: compute from Dexie products
+        try {
+            const computed = await computeLowStockFromDexie();
+            lowStockProducts = computed;
+            document.getElementById('lowStockCount').textContent = lowStockProducts.length;
+            renderLowStockList(lowStockProducts);
+        } catch (e) {
+            console.warn('Failed to compute low stock from Dexie:', e);
+        }
+    }
+
+    async function computeLowStockFromDexie() {
+        if (!db) return [];
+        try {
+            const products = await db.products.where('category').notEqual('Screen').toArray();
+            const batches = await db.batches.toArray();
+            const result = [];
+            for (const p of products) {
+                const productBatches = batches.filter(b => b.product_id === p.product_id);
+                const totalStock = productBatches.reduce((sum, b) => sum + (b.remaining_quantity || 0), 0);
+                if (totalStock <= 10 && totalStock > 0) {
+                    result.push({
+                        name: p.name,
+                        brand: p.brand,
+                        category: p.category,
+                        stock: totalStock,
+                        batch_ids: productBatches.map(b => b.id)
+                    });
+                }
+            }
+            return result;
+        } catch (e) {
+            console.warn('Error computing low stock:', e);
+            return [];
+        }
     }
 
     // ---------- Advanced search ----------

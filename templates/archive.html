@@ -79,507 +79,586 @@
 </div>
 
 <script>
-    // ---------- Offline banner ----------
-    function updateOfflineBanner() {
-        const banner = document.getElementById('offlineBanner');
-        if (!navigator.onLine) {
-            banner.classList.remove('hidden');
-        } else {
-            banner.classList.add('hidden');
-        }
-    }
-    window.addEventListener('online', updateOfflineBanner);
-    window.addEventListener('offline', updateOfflineBanner);
+    document.addEventListener('DOMContentLoaded', function () {
+        console.log("DOM loaded – initializing Archive with Dexie");
 
-    // ---------- Robust caching helpers ----------
-    const CACHE_MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
-
-    function cacheData(key, data) {
-        try {
-            localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }));
-        } catch(e) { console.warn('Cache write failed:', e); }
-    }
-
-    function getCachedData(key) {
-        try {
-            const raw = localStorage.getItem(key);
-            if (!raw) return null;
-            const parsed = JSON.parse(raw);
-            const ageMs = Date.now() - parsed.timestamp;
-            if (ageMs > CACHE_MAX_AGE) {
-                // Stale – remove and return null
-                localStorage.removeItem(key);
-                return null;
+        // ---------- Offline banner ----------
+        function updateOfflineBanner() {
+            const banner = document.getElementById('offlineBanner');
+            if (!navigator.onLine) {
+                banner.classList.remove('hidden');
+            } else {
+                banner.classList.add('hidden');
             }
-            return parsed.data;
-        } catch(e) {
-            console.warn('Cache read failed:', e);
-            return null;
         }
-    }
+        window.addEventListener('online', updateOfflineBanner);
+        window.addEventListener('offline', updateOfflineBanner);
 
-    // ---------- Main ----------
-    let allItems = [];
-    let currentPage = 1;
-    let totalItems = 0;
-    let totalPages = 1;
-    let isLoading = false;
-    let hasMore = true;
-    const PER_PAGE = 50;
-
-    // Helper: format currency
-    function formatMoney(amount) {
-        return '₵' + (parseFloat(amount) || 0).toFixed(2);
-    }
-
-    // Helper: escape HTML
-    function escapeHtml(str) {
-        if (!str) return '';
-        return str.replace(/[&<>]/g, function(m) {
-            if (m === '&') return '&amp;';
-            if (m === '<') return '&lt;';
-            if (m === '>') return '&gt;';
-            return m;
-        });
-    }
-
-    // Get status color
-    function getStatusColor(action) {
-        const colors = {
-            'ACTIVE': '#22C55E',
-            'UPDATED': '#F59E0B',
-            'DELETED': '#EF4444',
-            'PRODUCT DELETED': '#EF4444',
-            'BATCH DELETED': '#F87171',
-            'PERMANENTLY DELETED': '#6B7280'
-        };
-        return colors[action] || '#999';
-    }
-
-    // Format date for display
-    function formatDate(dateStr) {
-        if (!dateStr) return '';
-        try {
-            const d = new Date(dateStr);
-            return d.toLocaleString();
-        } catch(e) {
-            return dateStr;
+        // ========== DEXIE HELPERS ==========
+        async function storeArchiveInDexie(data, status, search) {
+            if (!db) return;
+            try {
+                // Use the cache table
+                let cacheTable = db.cache || db.table('cache');
+                // Store the data with a key that includes status and search
+                const key = `archive_${status}_${search || 'all'}`;
+                await cacheTable.put({ key, value: data, timestamp: Date.now() });
+                console.log('✅ Archive data stored in Dexie');
+            } catch (e) {
+                console.warn('Dexie cache not available, using localStorage fallback', e);
+                // Fallback to localStorage
+                try {
+                    const key = `archive_${status}_${search || 'all'}`;
+                    localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }));
+                } catch (e2) {}
+            }
         }
-    }
 
-    // Get claim status color
-    function getClaimStatusColor(status) {
-        const colors = {
-            'active': '#EF4444',
-            'resolved': '#22C55E',
-            'pending': '#F59E0B'
-        };
-        return colors[status] || '#6B7280';
-    }
+        async function loadArchiveFromDexie(status, search) {
+            if (!db) return null;
+            try {
+                let cacheTable = db.cache || db.table('cache');
+                const key = `archive_${status}_${search || 'all'}`;
+                const entry = await cacheTable.get(key);
+                if (entry && entry.value) {
+                    // Check age (24 hours)
+                    const age = Date.now() - (entry.timestamp || 0);
+                    if (age < 24 * 60 * 60 * 1000) {
+                        return entry.value;
+                    } else {
+                        // Stale – remove
+                        await cacheTable.delete(key);
+                        return null;
+                    }
+                }
+                return null;
+            } catch (e) {
+                console.warn('Dexie read failed, trying localStorage', e);
+                try {
+                    const key = `archive_${status}_${search || 'all'}`;
+                    const raw = localStorage.getItem(key);
+                    if (!raw) return null;
+                    const parsed = JSON.parse(raw);
+                    if (Date.now() - parsed.timestamp > 24 * 60 * 60 * 1000) {
+                        localStorage.removeItem(key);
+                        return null;
+                    }
+                    return parsed.data;
+                } catch (e2) {
+                    return null;
+                }
+            }
+        }
 
-    // Get cache key for archive
-    function getArchiveCacheKey() {
-        const status = document.getElementById('statusFilter').value;
-        const searchTerm = document.getElementById('searchInput').value.trim();
-        return `archive_${status}_${searchTerm}`;
-    }
+        // Store batches in Dexie
+        async function storeBatchesInDexie(name, brand, batches) {
+            if (!db) return;
+            try {
+                // Use cache table for batches too
+                let cacheTable = db.cache || db.table('cache');
+                const key = `batches_${name}_${brand}`;
+                await cacheTable.put({ key, value: batches, timestamp: Date.now() });
+                console.log('✅ Batches stored in Dexie');
+            } catch (e) {
+                console.warn('Could not store batches in Dexie', e);
+            }
+        }
 
-    // Reset and load from beginning
-    function resetAndLoad() {
-        currentPage = 1;
-        allItems = [];
-        document.getElementById('loadMoreContainer').classList.add('hidden');
-        loadArchive(true);
-    }
+        async function loadBatchesFromDexie(name, brand) {
+            if (!db) return null;
+            try {
+                let cacheTable = db.cache || db.table('cache');
+                const key = `batches_${name}_${brand}`;
+                const entry = await cacheTable.get(key);
+                if (entry && entry.value) {
+                    const age = Date.now() - (entry.timestamp || 0);
+                    if (age < 24 * 60 * 60 * 1000) {
+                        return entry.value;
+                    } else {
+                        await cacheTable.delete(key);
+                        return null;
+                    }
+                }
+                return null;
+            } catch (e) {
+                console.warn('Dexie batch read failed', e);
+                try {
+                    const key = `batches_${name}_${brand}`;
+                    const raw = localStorage.getItem(key);
+                    if (!raw) return null;
+                    const parsed = JSON.parse(raw);
+                    if (Date.now() - parsed.timestamp > 24 * 60 * 60 * 1000) {
+                        localStorage.removeItem(key);
+                        return null;
+                    }
+                    return parsed.data;
+                } catch (e2) {
+                    return null;
+                }
+            }
+        }
 
-    // Load archive data from API
-    async function loadArchive(reset = true) {
-        if (isLoading) return;
-        isLoading = true;
-        
-        updateOfflineBanner();
-        const status = document.getElementById('statusFilter').value;
-        const searchTerm = document.getElementById('searchInput').value.trim();
-        
-        // If reset, clear the list and show loading
-        if (reset) {
+        // ---------- Main variables ----------
+        let allItems = [];
+        let currentPage = 1;
+        let totalItems = 0;
+        let totalPages = 1;
+        let isLoading = false;
+        let hasMore = true;
+        const PER_PAGE = 50;
+
+        // Helper: format currency
+        function formatMoney(amount) {
+            return '₵' + (parseFloat(amount) || 0).toFixed(2);
+        }
+
+        // Helper: escape HTML
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
+            });
+        }
+
+        // Get status color
+        function getStatusColor(action) {
+            const colors = {
+                'ACTIVE': '#22C55E',
+                'UPDATED': '#F59E0B',
+                'DELETED': '#EF4444',
+                'PRODUCT DELETED': '#EF4444',
+                'BATCH DELETED': '#F87171',
+                'PERMANENTLY DELETED': '#6B7280'
+            };
+            return colors[action] || '#999';
+        }
+
+        // Format date for display
+        function formatDate(dateStr) {
+            if (!dateStr) return '';
+            try {
+                const d = new Date(dateStr);
+                return d.toLocaleString();
+            } catch(e) {
+                return dateStr;
+            }
+        }
+
+        // Get claim status color
+        function getClaimStatusColor(status) {
+            const colors = {
+                'active': '#EF4444',
+                'resolved': '#22C55E',
+                'pending': '#F59E0B'
+            };
+            return colors[status] || '#6B7280';
+        }
+
+        // Reset and load from beginning
+        function resetAndLoad() {
             currentPage = 1;
             allItems = [];
             document.getElementById('loadMoreContainer').classList.add('hidden');
-            const container = document.getElementById('archiveList');
-            container.innerHTML = `
-                <div class="text-center text-gray-400 py-8">
-                    <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
-                    <p>Loading archive data...</p>
-                </div>
-            `;
-            document.getElementById('statsBar').classList.add('hidden');
+            loadArchive(true);
         }
 
-        try {
-            const url = `/api/archive?status=${status}&page=${currentPage}&per_page=${PER_PAGE}&search=${encodeURIComponent(searchTerm)}`;
-            const res = await fetch(url);
-            if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-            const data = await res.json();
+        // Load archive data from API with Dexie fallback
+        async function loadArchive(reset = true) {
+            if (isLoading) return;
+            isLoading = true;
             
-            // Cache the data (only if it's page 1)
-            if (currentPage === 1) {
-                cacheData(getArchiveCacheKey(), data);
-            }
+            updateOfflineBanner();
+            const status = document.getElementById('statusFilter').value;
+            const searchTerm = document.getElementById('searchInput').value.trim();
             
-            // Update pagination info
-            totalItems = data.total || 0;
-            totalPages = data.total_pages || 1;
-            hasMore = data.has_more || false;
-            
-            // Append items
             if (reset) {
-                allItems = data.items || [];
-            } else {
-                allItems = [...allItems, ...(data.items || [])];
-            }
-            
-            // Render
-            renderArchive(allItems);
-            
-            // Update stats
-            document.getElementById('shownCount').textContent = allItems.length;
-            document.getElementById('totalCount').textContent = totalItems;
-            document.getElementById('statsBar').classList.remove('hidden');
-            
-            // Show/hide load more button
-            if (hasMore && allItems.length < totalItems) {
-                document.getElementById('loadMoreContainer').classList.remove('hidden');
-                document.getElementById('loadMoreBtn').textContent = `📥 Load More (${allItems.length}/${totalItems})`;
-            } else {
+                currentPage = 1;
+                allItems = [];
                 document.getElementById('loadMoreContainer').classList.add('hidden');
-                // Show "all loaded" message
-                if (allItems.length > 0 && allItems.length === totalItems) {
-                    const container = document.getElementById('archiveList');
-                    const note = document.createElement('div');
-                    note.className = 'text-xs text-gray-400 text-center mt-2';
-                    note.innerText = `✅ All ${totalItems} items loaded`;
-                    container.appendChild(note);
-                }
-            }
-            
-        } catch (error) {
-            console.warn('Error fetching archive data:', error);
-            // Try cache as fallback
-            const cacheKey = getArchiveCacheKey();
-            const cached = getCachedData(cacheKey);
-            if (cached && cached.items && cached.items.length > 0) {
-                allItems = cached.items;
-                totalItems = cached.total || cached.items.length;
-                hasMore = false;
-                renderArchive(allItems);
-                document.getElementById('statsBar').classList.remove('hidden');
-                document.getElementById('shownCount').textContent = allItems.length;
-                document.getElementById('totalCount').textContent = totalItems;
-                const container = document.getElementById('archiveList');
-                const note = document.createElement('div');
-                note.className = 'text-xs text-gray-400 text-center mt-2';
-                note.innerText = '⚠️ Data may be outdated (offline)';
-                container.appendChild(note);
-            } else {
                 const container = document.getElementById('archiveList');
                 container.innerHTML = `
                     <div class="text-center text-gray-400 py-8">
-                        <i class="fas fa-exclamation-triangle text-2xl mb-2 text-yellow-500"></i>
-                        <p>Failed to load archive data.</p>
-                        <p class="text-xs text-gray-400 mt-1">Please try refreshing or check your connection.</p>
+                        <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
+                        <p>Loading archive data...</p>
+                    </div>
+                `;
+                document.getElementById('statsBar').classList.add('hidden');
+            }
+
+            let data = null;
+            let fromCache = false;
+
+            // Try API if online
+            if (navigator.onLine) {
+                try {
+                    const url = `/api/archive?status=${status}&page=${currentPage}&per_page=${PER_PAGE}&search=${encodeURIComponent(searchTerm)}`;
+                    const res = await fetch(url);
+                    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+                    data = await res.json();
+                    // Store in Dexie
+                    await storeArchiveInDexie(data, status, searchTerm);
+                    console.log("✅ Archive data fetched from API and stored in Dexie");
+                } catch (error) {
+                    console.warn('API failed, falling back to Dexie:', error);
+                    fromCache = true;
+                    data = await loadArchiveFromDexie(status, searchTerm);
+                }
+            } else {
+                // Offline – read from Dexie
+                fromCache = true;
+                data = await loadArchiveFromDexie(status, searchTerm);
+            }
+
+            if (data && data.items && data.items.length > 0) {
+                // Update pagination info
+                totalItems = data.total || 0;
+                totalPages = data.total_pages || 1;
+                hasMore = data.has_more || false;
+                
+                // Append items
+                if (reset) {
+                    allItems = data.items || [];
+                } else {
+                    allItems = [...allItems, ...(data.items || [])];
+                }
+                
+                renderArchive(allItems);
+                
+                document.getElementById('shownCount').textContent = allItems.length;
+                document.getElementById('totalCount').textContent = totalItems;
+                document.getElementById('statsBar').classList.remove('hidden');
+                
+                if (hasMore && allItems.length < totalItems) {
+                    document.getElementById('loadMoreContainer').classList.remove('hidden');
+                    document.getElementById('loadMoreBtn').textContent = `📥 Load More (${allItems.length}/${totalItems})`;
+                } else {
+                    document.getElementById('loadMoreContainer').classList.add('hidden');
+                    if (allItems.length > 0 && allItems.length === totalItems) {
+                        const container = document.getElementById('archiveList');
+                        const note = document.createElement('div');
+                        note.className = 'text-xs text-gray-400 text-center mt-2';
+                        note.innerText = `✅ All ${totalItems} items loaded`;
+                        container.appendChild(note);
+                    }
+                }
+                if (fromCache) {
+                    const container = document.getElementById('archiveList');
+                    const note = document.createElement('div');
+                    note.className = 'text-xs text-gray-400 text-center mt-2';
+                    note.innerText = '⚠️ Data may be outdated (offline)';
+                    container.appendChild(note);
+                }
+            } else {
+                // No data
+                const container = document.getElementById('archiveList');
+                container.innerHTML = `
+                    <div class="text-center text-gray-400 py-8">
+                        <i class="fas fa-search text-2xl mb-2"></i>
+                        <p>No archive data available.</p>
+                        <p class="text-xs text-gray-400 mt-1">Try adjusting your search or filter.</p>
                     </div>
                 `;
             }
-        } finally {
             isLoading = false;
         }
-    }
 
-    // Load more items
-    function loadMore() {
-        if (!hasMore || isLoading) return;
-        currentPage++;
-        loadArchive(false);
-    }
-
-    // Render cards
-    function renderArchive(items) {
-        const container = document.getElementById('archiveList');
-        // Keep the "Load More" container separate, we'll re-append it later
-        const loadMoreContainer = document.getElementById('loadMoreContainer');
-        
-        if (!items || !items.length) {
-            container.innerHTML = `
-                <div class="text-center text-gray-400 py-8">
-                    <i class="fas fa-search text-2xl mb-2"></i>
-                    <p>No archive data available.</p>
-                    <p class="text-xs text-gray-400 mt-1">Try adjusting your search or filter.</p>
-                </div>
-            `;
-            return;
+        // Load more items
+        function loadMore() {
+            if (!hasMore || isLoading) return;
+            currentPage++;
+            loadArchive(false);
         }
 
-        // If we're on page 1, clear and rebuild
-        if (currentPage === 1) {
-            container.innerHTML = '';
-        } else {
-            // Remove any "all loaded" message if present
-            const notes = container.querySelectorAll('.text-xs.text-gray-400.text-center.mt-2');
-            notes.forEach(n => n.remove());
-        }
-
-        // Use document fragment for better performance
-        const fragment = document.createDocumentFragment();
-        
-        items.forEach(item => {
-            const card = document.createElement('div');
-            card.className = 'bg-white rounded-xl shadow-md border p-4';
-
-            // Header row with claims badge
-            const headerDiv = document.createElement('div');
-            headerDiv.className = 'flex justify-between items-start mb-2';
+        // Render cards
+        function renderArchive(items) {
+            const container = document.getElementById('archiveList');
+            // Keep the "Load More" container separate, we'll re-append it later
+            const loadMoreContainer = document.getElementById('loadMoreContainer');
             
-            let claimsBadge = '';
-            if (item.has_claims && item.total_claimed > 0) {
-                claimsBadge = `<span class="ml-2 text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded-full">⚠️ ${item.total_claimed} Claimed</span>`;
-            }
-            
-            headerDiv.innerHTML = `
-                <div>
-                    <span class="font-bold text-lg text-indigo-700">${escapeHtml(item.name)} (${escapeHtml(item.brand)})</span>
-                    ${claimsBadge}
-                </div>
-                <div>
-                    <span class="text-sm font-semibold" style="color: ${getStatusColor(item.action)}">● ${item.action}</span>
-                </div>
-            `;
-            card.appendChild(headerDiv);
-
-            // Details
-            const detailsDiv = document.createElement('div');
-            detailsDiv.className = 'text-gray-700 text-sm mb-3';
-            if (item.action === 'ACTIVE') {
-                detailsDiv.innerHTML = `
-                    📦 Stock: ${item.stock} | ${formatMoney(item.cost)} | ${formatMoney(item.price)} | 💰 Disc: ${formatMoney(item.discount)} | 📂 ${escapeHtml(item.category)}
-                    ${item.has_claims ? `<br><span class="text-red-500">⚠️ ${item.total_claimed} units claimed as faulty</span>` : ''}
-                `;
-            } else {
-                let details = `
-                    Category: ${escapeHtml(item.category)} | Stock: ${item.stock}<br>
-                    Cost: ${formatMoney(item.cost)} | Selling: ${formatMoney(item.price)} | Discount: ${formatMoney(item.discount)}<br>
-                    Date: ${formatDate(item.date)}
-                `;
-                if (item.action === 'BATCH DELETED' && item.batch_id) {
-                    details += `<br>Batch #${item.batch_id} | Original Qty: ${item.batch_quantity} | Remaining at deletion: ${item.batch_remaining}`;
-                }
-                if (item.action === 'PRODUCT DELETED' && item.product_id) {
-                    details += `<br>Product ID: #${item.product_id} | All batches archived`;
-                }
-                if (item.has_claims) {
-                    details += `<br><span class="text-red-500">⚠️ ${item.total_claimed} units were claimed as faulty</span>`;
-                }
-                detailsDiv.innerHTML = details;
-            }
-            card.appendChild(detailsDiv);
-
-            // Buttons
-            const btnDiv = document.createElement('div');
-            btnDiv.className = 'flex justify-end gap-2 flex-wrap';
-            
-            // View Claims button (if has claims)
-            if (item.has_claims && item.claims && item.claims.length > 0) {
-                const claimsBtn = document.createElement('button');
-                claimsBtn.textContent = `⚠️ View Claims (${item.total_claimed})`;
-                claimsBtn.className = 'bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm transition-colors';
-                claimsBtn.onclick = () => viewClaims(item.claims, item.name, item.brand);
-                btnDiv.appendChild(claimsBtn);
-            }
-            
-            // View Batches button for ACTIVE items
-            if (item.action === 'ACTIVE') {
-                const viewBtn = document.createElement('button');
-                viewBtn.textContent = '📋 View Batches';
-                viewBtn.className = 'bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm transition-colors';
-                viewBtn.onclick = () => viewBatches(item.name, item.brand);
-                btnDiv.appendChild(viewBtn);
-            }
-            
-            // Restore button logic
-            const canRestore = ['DELETED', 'BATCH DELETED', 'PRODUCT DELETED'].includes(item.action);
-            const isPermanent = item.action === 'PERMANENTLY DELETED';
-            
-            if (isPermanent) {
-                const disabledBtn = document.createElement('button');
-                disabledBtn.textContent = '❌ Cannot Restore';
-                disabledBtn.className = 'bg-gray-400 text-white px-3 py-1 rounded text-sm cursor-not-allowed';
-                disabledBtn.disabled = true;
-                btnDiv.appendChild(disabledBtn);
-            } else if (canRestore && item.id && !item.is_permanent) {
-                const restoreBtn = document.createElement('button');
-                restoreBtn.textContent = '↻ Restore';
-                restoreBtn.className = 'bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm transition-colors';
-                restoreBtn.onclick = () => restoreItem(item.id);
-                btnDiv.appendChild(restoreBtn);
-            } else if (item.action === 'UPDATED') {
-                const infoBtn = document.createElement('button');
-                infoBtn.textContent = 'ℹ️ Update History';
-                infoBtn.className = 'bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-sm transition-colors';
-                infoBtn.onclick = () => alert('This is an update history record.\n\nIt tracks changes made to products and cannot be restored.\n\n✅ The actual product is still active in inventory.');
-                btnDiv.appendChild(infoBtn);
-            }
-            
-            card.appendChild(btnDiv);
-            fragment.appendChild(card);
-        });
-
-        container.appendChild(fragment);
-        
-        // Show "all loaded" message if we're done
-        if (!hasMore && allItems.length > 0 && allItems.length === totalItems) {
-            const note = document.createElement('div');
-            note.className = 'text-xs text-gray-400 text-center mt-2';
-            note.innerText = `✅ All ${totalItems} items loaded`;
-            container.appendChild(note);
-        }
-    }
-
-    // View Claims modal
-    function viewClaims(claims, productName, brand) {
-        const modalTitle = document.getElementById('claimsModalTitle');
-        const container = document.getElementById('claimsList');
-        container.innerHTML = '<div class="text-center text-gray-400 py-4"><i class="fas fa-spinner fa-spin"></i> Loading claims...</div>';
-        modalTitle.innerText = `Claims – ${productName} (${brand})`;
-        document.getElementById('claimsModal').classList.remove('hidden');
-
-        if (!claims || claims.length === 0) {
-            container.innerHTML = '<div class="text-gray-400 text-center py-4">No claims found.</div>';
-            return;
-        }
-
-        container.innerHTML = '';
-        claims.forEach(claim => {
-            const div = document.createElement('div');
-            div.className = 'border rounded p-3 mb-2';
-            const statusColor = getClaimStatusColor(claim.status);
-            div.innerHTML = `
-                <div class="flex justify-between items-start">
-                    <div>
-                        <span class="font-semibold">Claim #${claim.claim_id}</span>
-                        <span class="text-xs ml-2" style="color: ${statusColor}">● ${claim.status}</span>
+            if (!items || !items.length) {
+                container.innerHTML = `
+                    <div class="text-center text-gray-400 py-8">
+                        <i class="fas fa-search text-2xl mb-2"></i>
+                        <p>No archive data available.</p>
+                        <p class="text-xs text-gray-400 mt-1">Try adjusting your search or filter.</p>
                     </div>
-                    <span class="text-xs text-gray-500">${formatDate(claim.created_at)}</span>
-                </div>
-                <div class="mt-1">
-                    <span class="font-medium">Issue:</span> ${escapeHtml(claim.issue_type)}
-                </div>
-                <div>
-                    <span class="font-medium">Quantity:</span> ${claim.quantity} units
-                </div>
-                ${claim.batch_id ? `<div><span class="font-medium">Batch:</span> #${claim.batch_id}</div>` : ''}
-                ${claim.description ? `<div class="text-sm text-gray-600 mt-1">📝 ${escapeHtml(claim.description)}</div>` : ''}
-                ${claim.batch_identifier ? `<div class="text-xs text-gray-400 mt-1">Batch Identifier: ${claim.batch_identifier}</div>` : ''}
-            `;
-            container.appendChild(div);
-        });
-    }
-
-    function closeClaimsModal() {
-        document.getElementById('claimsModal').classList.add('hidden');
-    }
-
-    // View batches modal (with caching)
-    async function viewBatches(name, brand) {
-        const modalTitle = document.getElementById('batchModalTitle');
-        const container = document.getElementById('batchList');
-        container.innerHTML = '<div class="text-center text-gray-400 py-4"><i class="fas fa-spinner fa-spin"></i> Loading batches...</div>';
-        modalTitle.innerText = `Batches – ${name} (${brand})`;
-        document.getElementById('batchModal').classList.remove('hidden');
-
-        const cacheKey = `batches_${name}_${brand}`;
-        let batches = [];
-        try {
-            const res = await fetch(`/api/archive/batches?name=${encodeURIComponent(name)}&brand=${encodeURIComponent(brand)}`);
-            if (!res.ok) throw new Error('Failed to load batches');
-            batches = await res.json();
-            if (batches && batches.length > 0) {
-                cacheData(cacheKey, batches);
+                `;
+                return;
             }
-        } catch (error) {
-            console.warn('Offline – using cached batches');
-            const cached = getCachedData(cacheKey);
-            if (cached) batches = cached;
+
+            // If we're on page 1, clear and rebuild
+            if (currentPage === 1) {
+                container.innerHTML = '';
+            } else {
+                // Remove any "all loaded" message if present
+                const notes = container.querySelectorAll('.text-xs.text-gray-400.text-center.mt-2');
+                notes.forEach(n => n.remove());
+            }
+
+            const fragment = document.createDocumentFragment();
+            
+            items.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'bg-white rounded-xl shadow-md border p-4';
+
+                // Header row with claims badge
+                const headerDiv = document.createElement('div');
+                headerDiv.className = 'flex justify-between items-start mb-2';
+                
+                let claimsBadge = '';
+                if (item.has_claims && item.total_claimed > 0) {
+                    claimsBadge = `<span class="ml-2 text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded-full">⚠️ ${item.total_claimed} Claimed</span>`;
+                }
+                
+                headerDiv.innerHTML = `
+                    <div>
+                        <span class="font-bold text-lg text-indigo-700">${escapeHtml(item.name)} (${escapeHtml(item.brand)})</span>
+                        ${claimsBadge}
+                    </div>
+                    <div>
+                        <span class="text-sm font-semibold" style="color: ${getStatusColor(item.action)}">● ${item.action}</span>
+                    </div>
+                `;
+                card.appendChild(headerDiv);
+
+                // Details
+                const detailsDiv = document.createElement('div');
+                detailsDiv.className = 'text-gray-700 text-sm mb-3';
+                if (item.action === 'ACTIVE') {
+                    detailsDiv.innerHTML = `
+                        📦 Stock: ${item.stock} | ${formatMoney(item.cost)} | ${formatMoney(item.price)} | 💰 Disc: ${formatMoney(item.discount)} | 📂 ${escapeHtml(item.category)}
+                        ${item.has_claims ? `<br><span class="text-red-500">⚠️ ${item.total_claimed} units claimed as faulty</span>` : ''}
+                    `;
+                } else {
+                    let details = `
+                        Category: ${escapeHtml(item.category)} | Stock: ${item.stock}<br>
+                        Cost: ${formatMoney(item.cost)} | Selling: ${formatMoney(item.price)} | Discount: ${formatMoney(item.discount)}<br>
+                        Date: ${formatDate(item.date)}
+                    `;
+                    if (item.action === 'BATCH DELETED' && item.batch_id) {
+                        details += `<br>Batch #${item.batch_id} | Original Qty: ${item.batch_quantity} | Remaining at deletion: ${item.batch_remaining}`;
+                    }
+                    if (item.action === 'PRODUCT DELETED' && item.product_id) {
+                        details += `<br>Product ID: #${item.product_id} | All batches archived`;
+                    }
+                    if (item.has_claims) {
+                        details += `<br><span class="text-red-500">⚠️ ${item.total_claimed} units were claimed as faulty</span>`;
+                    }
+                    detailsDiv.innerHTML = details;
+                }
+                card.appendChild(detailsDiv);
+
+                // Buttons
+                const btnDiv = document.createElement('div');
+                btnDiv.className = 'flex justify-end gap-2 flex-wrap';
+                
+                // View Claims button (if has claims)
+                if (item.has_claims && item.claims && item.claims.length > 0) {
+                    const claimsBtn = document.createElement('button');
+                    claimsBtn.textContent = `⚠️ View Claims (${item.total_claimed})`;
+                    claimsBtn.className = 'bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm transition-colors';
+                    claimsBtn.onclick = () => viewClaims(item.claims, item.name, item.brand);
+                    btnDiv.appendChild(claimsBtn);
+                }
+                
+                // View Batches button for ACTIVE items
+                if (item.action === 'ACTIVE') {
+                    const viewBtn = document.createElement('button');
+                    viewBtn.textContent = '📋 View Batches';
+                    viewBtn.className = 'bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm transition-colors';
+                    viewBtn.onclick = () => viewBatches(item.name, item.brand);
+                    btnDiv.appendChild(viewBtn);
+                }
+                
+                // Restore button logic
+                const canRestore = ['DELETED', 'BATCH DELETED', 'PRODUCT DELETED'].includes(item.action);
+                const isPermanent = item.action === 'PERMANENTLY DELETED';
+                
+                if (isPermanent) {
+                    const disabledBtn = document.createElement('button');
+                    disabledBtn.textContent = '❌ Cannot Restore';
+                    disabledBtn.className = 'bg-gray-400 text-white px-3 py-1 rounded text-sm cursor-not-allowed';
+                    disabledBtn.disabled = true;
+                    btnDiv.appendChild(disabledBtn);
+                } else if (canRestore && item.id && !item.is_permanent) {
+                    const restoreBtn = document.createElement('button');
+                    restoreBtn.textContent = '↻ Restore';
+                    restoreBtn.className = 'bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm transition-colors';
+                    restoreBtn.onclick = () => restoreItem(item.id);
+                    btnDiv.appendChild(restoreBtn);
+                } else if (item.action === 'UPDATED') {
+                    const infoBtn = document.createElement('button');
+                    infoBtn.textContent = 'ℹ️ Update History';
+                    infoBtn.className = 'bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-sm transition-colors';
+                    infoBtn.onclick = () => alert('This is an update history record.\n\nIt tracks changes made to products and cannot be restored.\n\n✅ The actual product is still active in inventory.');
+                    btnDiv.appendChild(infoBtn);
+                }
+                
+                card.appendChild(btnDiv);
+                fragment.appendChild(card);
+            });
+
+            container.appendChild(fragment);
+            
+            // Show "all loaded" message if we're done
+            if (!hasMore && allItems.length > 0 && allItems.length === totalItems) {
+                const note = document.createElement('div');
+                note.className = 'text-xs text-gray-400 text-center mt-2';
+                note.innerText = `✅ All ${totalItems} items loaded`;
+                container.appendChild(note);
+            }
         }
 
-        if (!batches || batches.length === 0) {
-            container.innerHTML = '<div class="text-gray-400 text-center py-4">No batches found.</div>';
-        } else {
+        // View Claims modal
+        function viewClaims(claims, productName, brand) {
+            const modalTitle = document.getElementById('claimsModalTitle');
+            const container = document.getElementById('claimsList');
+            container.innerHTML = '<div class="text-center text-gray-400 py-4"><i class="fas fa-spinner fa-spin"></i> Loading claims...</div>';
+            modalTitle.innerText = `Claims – ${productName} (${brand})`;
+            document.getElementById('claimsModal').classList.remove('hidden');
+
+            if (!claims || claims.length === 0) {
+                container.innerHTML = '<div class="text-gray-400 text-center py-4">No claims found.</div>';
+                return;
+            }
+
             container.innerHTML = '';
-            batches.forEach(b => {
+            claims.forEach(claim => {
                 const div = document.createElement('div');
-                div.className = 'border rounded p-2 mb-2';
-                const faultyBadge = (b.is_faulty || b.claimed_quantity > 0) 
-                    ? `<span class="text-red-500 text-xs font-bold ml-2">⚠️ FAULTY (${b.claimed_quantity || 0} claimed)</span>` 
-                    : '';
+                div.className = 'border rounded p-3 mb-2';
+                const statusColor = getClaimStatusColor(claim.status);
                 div.innerHTML = `
-                    <strong>Batch #${b.batch_id}</strong> ${faultyBadge}<br>
-                    Qty: ${b.quantity} | Remaining: ${b.remaining_quantity}<br>
-                    Cost: ${formatMoney(b.cost_price)} | Selling: ${formatMoney(b.selling_price)} | Disc: ${formatMoney(b.discount)}<br>
-                    Date: ${formatDate(b.date)}
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <span class="font-semibold">Claim #${claim.claim_id}</span>
+                            <span class="text-xs ml-2" style="color: ${statusColor}">● ${claim.status}</span>
+                        </div>
+                        <span class="text-xs text-gray-500">${formatDate(claim.created_at)}</span>
+                    </div>
+                    <div class="mt-1">
+                        <span class="font-medium">Issue:</span> ${escapeHtml(claim.issue_type)}
+                    </div>
+                    <div>
+                        <span class="font-medium">Quantity:</span> ${claim.quantity} units
+                    </div>
+                    ${claim.batch_id ? `<div><span class="font-medium">Batch:</span> #${claim.batch_id}</div>` : ''}
+                    ${claim.description ? `<div class="text-sm text-gray-600 mt-1">📝 ${escapeHtml(claim.description)}</div>` : ''}
+                    ${claim.batch_identifier ? `<div class="text-xs text-gray-400 mt-1">Batch Identifier: ${claim.batch_identifier}</div>` : ''}
                 `;
                 container.appendChild(div);
             });
         }
-    }
 
-    function closeBatchModal() {
-        document.getElementById('batchModal').classList.add('hidden');
-    }
+        function closeClaimsModal() {
+            document.getElementById('claimsModal').classList.add('hidden');
+        }
 
-    // Restore item (requires internet)
-    async function restoreItem(archiveId) {
-        if (!navigator.onLine) {
-            alert('Restoring requires internet. Please connect and try again.');
-            return;
-        }
-        if (!confirm('Are you sure you want to restore this item?\n\n• Product will be added back to inventory\n• Batches will be restored\n• Stock levels will be recalculated')) {
-            return;
-        }
-        try {
-            const res = await fetch('/api/archive/restore', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ archive_id: archiveId })
-            });
-            const data = await res.json();
-            if (data.success) {
-                alert('✅ Item restored successfully!\n\nIt has been added back to your inventory.');
-                resetAndLoad();
+        // View batches modal (with Dexie caching)
+        async function viewBatches(name, brand) {
+            const modalTitle = document.getElementById('batchModalTitle');
+            const container = document.getElementById('batchList');
+            container.innerHTML = '<div class="text-center text-gray-400 py-4"><i class="fas fa-spinner fa-spin"></i> Loading batches...</div>';
+            modalTitle.innerText = `Batches – ${name} (${brand})`;
+            document.getElementById('batchModal').classList.remove('hidden');
+
+            let batches = [];
+            let fromCache = false;
+
+            // Try API if online
+            if (navigator.onLine) {
+                try {
+                    const res = await fetch(`/api/archive/batches?name=${encodeURIComponent(name)}&brand=${encodeURIComponent(brand)}`);
+                    if (!res.ok) throw new Error('Failed to load batches');
+                    batches = await res.json();
+                    if (batches && batches.length > 0) {
+                        await storeBatchesInDexie(name, brand, batches);
+                    }
+                } catch (error) {
+                    console.warn('Batch API failed, falling back to Dexie:', error);
+                    fromCache = true;
+                    batches = await loadBatchesFromDexie(name, brand) || [];
+                }
             } else {
-                alert('❌ Restore failed: ' + data.error);
+                fromCache = true;
+                batches = await loadBatchesFromDexie(name, brand) || [];
             }
-        } catch (err) {
-            alert('❌ Error: ' + err.message);
+
+            if (!batches || batches.length === 0) {
+                container.innerHTML = '<div class="text-gray-400 text-center py-4">No batches found.</div>';
+            } else {
+                container.innerHTML = '';
+                batches.forEach(b => {
+                    const div = document.createElement('div');
+                    div.className = 'border rounded p-2 mb-2';
+                    const faultyBadge = (b.is_faulty || b.claimed_quantity > 0) 
+                        ? `<span class="text-red-500 text-xs font-bold ml-2">⚠️ FAULTY (${b.claimed_quantity || 0} claimed)</span>` 
+                        : '';
+                    div.innerHTML = `
+                        <strong>Batch #${b.batch_id}</strong> ${faultyBadge}<br>
+                        Qty: ${b.quantity} | Remaining: ${b.remaining_quantity}<br>
+                        Cost: ${formatMoney(b.cost_price)} | Selling: ${formatMoney(b.selling_price)} | Disc: ${formatMoney(b.discount)}<br>
+                        Date: ${formatDate(b.date)}
+                    `;
+                    container.appendChild(div);
+                });
+                if (fromCache) {
+                    const note = document.createElement('div');
+                    note.className = 'text-xs text-gray-400 text-center mt-2';
+                    note.innerText = '⚠️ Data may be outdated (offline)';
+                    container.appendChild(note);
+                }
+            }
         }
-    }
 
-    // ---------- Event listeners ----------
-    document.getElementById('statusFilter').addEventListener('change', resetAndLoad);
-    document.getElementById('searchInput').addEventListener('input', function() {
-        clearTimeout(this._searchTimeout);
-        this._searchTimeout = setTimeout(resetAndLoad, 500);
-    });
-    document.getElementById('loadMoreBtn').addEventListener('click', loadMore);
+        function closeBatchModal() {
+            document.getElementById('batchModal').classList.add('hidden');
+        }
 
-    // Auto-refresh on reconnect
-    window.addEventListener('online', function() {
+        // Restore item (requires internet)
+        async function restoreItem(archiveId) {
+            if (!navigator.onLine) {
+                alert('Restoring requires internet. Please connect and try again.');
+                return;
+            }
+            if (!confirm('Are you sure you want to restore this item?\n\n• Product will be added back to inventory\n• Batches will be restored\n• Stock levels will be recalculated')) {
+                return;
+            }
+            try {
+                const res = await fetch('/api/archive/restore', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ archive_id: archiveId })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert('✅ Item restored successfully!\n\nIt has been added back to your inventory.');
+                    resetAndLoad();
+                } else {
+                    alert('❌ Restore failed: ' + data.error);
+                }
+            } catch (err) {
+                alert('❌ Error: ' + err.message);
+            }
+        }
+
+        // ---------- Event listeners ----------
+        document.getElementById('statusFilter').addEventListener('change', resetAndLoad);
+        document.getElementById('searchInput').addEventListener('input', function() {
+            clearTimeout(this._searchTimeout);
+            this._searchTimeout = setTimeout(resetAndLoad, 500);
+        });
+        document.getElementById('loadMoreBtn').addEventListener('click', loadMore);
+
+        // Auto-refresh on reconnect
+        window.addEventListener('online', function() {
+            resetAndLoad();
+        });
+
+        // Initial load
         resetAndLoad();
     });
-
-    // Initial load
-    document.addEventListener('DOMContentLoaded', function() {
-        resetAndLoad();
-    });
-
 </script>
 {% endblock %}

@@ -191,7 +191,7 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {
-        console.log("DOM fully loaded - initializing screen today sales page with Advanced Search");
+        console.log("DOM fully loaded - initializing screen today sales page with Dexie");
 
         // Get user role from hidden element
         const userRoleEl = document.getElementById('userRole');
@@ -226,7 +226,101 @@
         window.addEventListener('online', updateOfflineBanner);
         window.addEventListener('offline', updateOfflineBanner);
 
-        // ---------- Caching helpers (distinct cache key for screens) ----------
+        // ========== DEXIE HELPERS (NEW) ==========
+        async function storeSalesInDexie(salesData) {
+            if (!db) return;
+            try {
+                // Group by sale_id
+                const saleMap = new Map();
+                for (const item of salesData) {
+                    if (!saleMap.has(item.sale_id)) {
+                        saleMap.set(item.sale_id, {
+                            id: item.sale_id,
+                            date: item.sale_date || item.date,
+                            subtotal: item.subtotal || 0,
+                            discount: item.discount || 0,
+                            total: item.total || 0,
+                            profit: item.net_profit || 0,
+                            reversed: 0,
+                            payment_method: item.payment_method || 'cash',
+                            cheque_number: item.cheque_number || null,
+                            user_id: null,
+                        });
+                    }
+                    // Get product ID from products table (by name/brand)
+                    let product_id = null;
+                    if (item.name && db) {
+                        const product = await db.products.where({ name: item.name, brand: item.brand || '' }).first();
+                        if (product) product_id = product.id;
+                    }
+                    const saleItem = {
+                        sale_id: item.sale_id,
+                        product_id: product_id,
+                        batch_id: item.batch_id || -1,
+                        quantity: item.quantity,
+                        selling_price: item.selling_price || 0,
+                        cost_price: item.cost_price || 0,
+                        profit: item.profit || 0,
+                    };
+                    saleMap.get(item.sale_id).items = saleMap.get(item.sale_id).items || [];
+                    saleMap.get(item.sale_id).items.push(saleItem);
+                }
+                // Store sales headers and items
+                for (const [saleId, sale] of saleMap) {
+                    await db.sales.put(sale);
+                    for (const item of sale.items) {
+                        await db.sales_items.put(item);
+                    }
+                }
+                console.log('✅ Screen sales data stored in Dexie');
+            } catch (e) {
+                console.warn('Error storing screen sales in Dexie:', e);
+            }
+        }
+
+        async function loadSalesFromDexie() {
+            if (!db) return [];
+            try {
+                const sales = await db.sales.where('reversed').equals(0).toArray();
+                const items = await db.sales_items.toArray();
+                const result = [];
+                for (const sale of sales) {
+                    const saleItems = items.filter(item => item.sale_id === sale.id);
+                    for (const item of saleItems) {
+                        let product = null;
+                        if (item.product_id) {
+                            product = await db.products.get(item.product_id);
+                        }
+                        result.push({
+                            sale_id: sale.id,
+                            name: product?.name || 'Unknown',
+                            brand: product?.brand || '',
+                            category: product?.category || '',
+                            quantity: item.quantity,
+                            selling_price: item.selling_price,
+                            subtotal: item.quantity * item.selling_price,
+                            discount: sale.discount || 0,
+                            total: sale.total || 0,
+                            profit: item.profit || 0,
+                            batch_id: item.batch_id,
+                            cost_price: item.cost_price || 0,
+                            sale_date: sale.date,
+                            is_deleted_batch: item.batch_id === -1 || false,
+                            net_profit: sale.profit || 0,
+                            payment_method: sale.payment_method || 'cash',
+                            cheque_number: sale.cheque_number || null,
+                            username: 'Unknown' // we don't store username in Dexie
+                        });
+                    }
+                }
+                return result;
+            } catch (e) {
+                console.warn('Error loading screen sales from Dexie:', e);
+                return [];
+            }
+        }
+
+        // ---------- Caching helpers (fallback) ----------
         function cacheData(key, data) {
             try {
                 localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }));
@@ -298,7 +392,6 @@
                 case 'ends':
                     return searchValue.endsWith(term);
                 case 'words':
-                    // Check if ALL words in search term are present
                     const words = term.split(/\s+/).filter(w => w.length > 0);
                     return words.every(word => searchValue.includes(word));
                 case 'contains':
@@ -332,7 +425,6 @@
             const searchInput = document.getElementById('searchInput');
             currentSearchTerm = searchInput ? searchInput.value : '';
             
-            // Get advanced search settings
             searchMode = document.getElementById('searchMode').value;
             searchField = document.getElementById('searchField').value;
             caseSensitive = document.getElementById('caseSensitive').value === 'true';
@@ -341,7 +433,6 @@
             
             if (currentSearchTerm.trim()) {
                 const searchTerm = currentSearchTerm.trim();
-                
                 filtered = currentSalesData.filter(sale => {
                     const searchableText = getSearchableText(sale, searchField);
                     return matchesSearch(searchableText, searchTerm, searchMode, caseSensitive);
@@ -352,7 +443,6 @@
             updateFilterInfo();
             renderSales(filtered, currentSearchTerm);
             
-            // Update result count
             const resultCount = document.getElementById('resultCount');
             if (resultCount) {
                 const total = currentSalesData.length;
@@ -364,57 +454,96 @@
             }
         }
 
-        // ---------- Fetch sales data with offline fallback (filtered to screens) ----------
+        // ---------- Fetch sales data with Dexie integration ----------
         async function loadSalesData() {
             updateOfflineBanner();
-            console.log("Loading screen sales data...");
+            console.log("Loading screen sales data with Dexie...");
 
             let url = '';
             if (currentStartDate && currentEndDate) {
                 url = `/api/today_sales?start_date=${currentStartDate}&end_date=${currentEndDate}&category=Screen`;
-            } else if (currentPeriod === 'all') {
-                url = '/api/today_sales?period=all&category=Screen';
-            } else if (currentPeriod === 'weekly') {
-                url = '/api/today_sales?period=weekly&category=Screen';
-            } else if (currentPeriod === 'monthly') {
-                url = '/api/today_sales?period=monthly&category=Screen';
-            } else if (currentPeriod === 'yearly') {
-                url = '/api/today_sales?period=yearly&category=Screen';
             } else {
-                url = '/api/today_sales?period=daily&category=Screen';
+                url = `/api/today_sales?period=${currentPeriod}&category=Screen`;
             }
 
             console.log("Fetching from URL:", url);
-            let data = [];
-            let fromCache = false;
+            let data = [], fromCache = false;
 
-            try {
-                const res = await fetch(url);
-                if (!res.ok) {
-                    if (res.status === 401) { window.location.href = '/login'; return; }
-                    throw new Error(`HTTP error! status: ${res.status}`);
+            // Try API first if online
+            if (navigator.onLine) {
+                try {
+                    const res = await fetch(url);
+                    if (!res.ok) {
+                        if (res.status === 401) { window.location.href = '/login'; return; }
+                        throw new Error(`HTTP error! status: ${res.status}`);
+                    }
+                    data = await res.json();
+                    if (data.error) {
+                        console.error("API error:", data.error);
+                        alert("Error loading sales data: " + data.error);
+                        data = [];
+                    } else {
+                        // Store in Dexie
+                        await storeSalesInDexie(data);
+                        console.log("✅ Data fetched from API and stored in Dexie");
+                    }
+                } catch (error) {
+                    console.warn("API failed, falling back to Dexie:", error);
+                    fromCache = true;
+                    data = await loadSalesFromDexie();
+                    if (data.length === 0) {
+                        // fallback to localStorage cache
+                        const cached = getCachedData(getCacheKey());
+                        if (cached) data = cached;
+                    }
                 }
-                data = await res.json();
-                cacheData(getCacheKey(), data);
-                console.log("Received data:", data.length, "records");
-            } catch (error) {
-                console.warn("Offline – using cached screen sales data");
+            } else {
+                // Offline – read from Dexie
                 fromCache = true;
-                const cached = getCachedData(getCacheKey());
-                if (cached) {
-                    data = cached;
-                } else {
-                    data = [];
+                data = await loadSalesFromDexie();
+                if (data.length === 0) {
+                    const cached = getCachedData(getCacheKey());
+                    if (cached) data = cached;
                 }
+            }
+
+            // Apply period/date filters to the data
+            if (data.length > 0) {
+                let filteredByDate = data;
+                if (currentPeriod !== 'all' && !(currentStartDate && currentEndDate)) {
+                    const now = new Date();
+                    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                    const startOfWeek = new Date(today);
+                    startOfWeek.setDate(today.getDate() - today.getDay());
+                    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+                    const startOfYear = new Date(today.getFullYear(), 0, 1);
+                    filteredByDate = data.filter(item => {
+                        const d = new Date(item.sale_date || item.date);
+                        if (currentPeriod === 'daily') return d >= today;
+                        if (currentPeriod === 'weekly') return d >= startOfWeek;
+                        if (currentPeriod === 'monthly') return d >= startOfMonth;
+                        if (currentPeriod === 'yearly') return d >= startOfYear;
+                        return true;
+                    });
+                } else if (currentStartDate && currentEndDate) {
+                    const start = new Date(currentStartDate);
+                    start.setHours(0,0,0,0);
+                    const end = new Date(currentEndDate);
+                    end.setHours(23,59,59,999);
+                    filteredByDate = data.filter(item => {
+                        const d = new Date(item.sale_date || item.date);
+                        return d >= start && d <= end;
+                    });
+                }
+                data = filteredByDate;
             }
 
             currentSalesData = data;
             updateFilterInfo();
             applyAdvancedSearchAndRender();
-            
             if (fromCache) {
                 const list = document.getElementById('salesList');
-                list.innerHTML += '<div class="text-xs text-gray-500 text-center mt-2">⚠️ Data may be outdated (offline)</div>';
+                list.innerHTML += '<div class="text-xs text-gray-500 text-center mt-2">📦 Data may be outdated (offline)</div>';
             }
         }
 
@@ -559,7 +688,7 @@
             }
         }
 
-        // ---------- Render sales cards with highlighting and role-based visibility ----------
+        // ---------- Render sales cards ----------
         function renderSales(sales, searchTerm = '') {
             const container = document.getElementById('salesList');
             if (!sales || sales.length === 0) {
@@ -682,7 +811,7 @@
             console.log(`✅ Rendered ${saleCount} screen sales with ${sales.length} total items`);
         }
 
-        // ---------- Update summary (hide profit for non‑admins) ----------
+        // ---------- Update summary ----------
         function updateSummary(sales) {
             const seenSales = new Set();
             let totalSales = 0, totalDiscount = 0, totalProfit = 0, totalItems = 0;
@@ -757,7 +886,7 @@
             `;
         }
 
-        // ---------- PDF export (pass is_admin to backend) ----------
+        // ---------- PDF export ----------
         async function exportPDF() {
             if (!navigator.onLine) {
                 alert('PDF export requires internet. Please connect and try again.');
@@ -775,14 +904,14 @@
             if (currentStartDate && currentEndDate) {
                 periodText = `Period: ${currentStartDate} to ${currentEndDate}`;
             } else {
-                switch (currentPeriod) {
-                    case 'daily': periodText = 'Today'; break;
-                    case 'weekly': periodText = 'This Week'; break;
-                    case 'monthly': periodText = 'This Month'; break;
-                    case 'yearly': periodText = 'This Year'; break;
-                    case 'all': periodText = 'All Time'; break;
-                    default: periodText = 'Today';
-                }
+                const periodNames = {
+                    'daily': 'Today',
+                    'weekly': 'This Week',
+                    'monthly': 'This Month',
+                    'yearly': 'This Year',
+                    'all': 'All Time'
+                };
+                periodText = periodNames[currentPeriod] || 'Today';
             }
             
             if (currentSearchTerm) {
@@ -806,7 +935,7 @@
                         sales_data: dataToExport,
                         period_text: periodText + ' (Screens)',
                         summary: summary,
-                        is_admin: isAdmin  // <-- pass role to backend
+                        is_admin: isAdmin
                     })
                 });
                 if (response.ok) {
@@ -834,29 +963,24 @@
         document.getElementById('pdfBtn').addEventListener('click', exportPDF);
         document.getElementById('confirmReverseBtn').addEventListener('click', confirmReverseSelected);
         
-        // Search input with real-time filtering
         document.getElementById('searchInput').addEventListener('input', () => {
             applyAdvancedSearchAndRender();
         });
         
-        // Clear search
         document.getElementById('clearSearchBtn').addEventListener('click', () => {
             document.getElementById('searchInput').value = '';
             applyAdvancedSearchAndRender();
         });
         
-        // Advanced toggle
         document.getElementById('advancedToggle').addEventListener('click', () => {
             const advanced = document.getElementById('advancedSearch');
             advanced.classList.toggle('hidden');
         });
         
-        // Apply advanced search
         document.getElementById('applyAdvancedSearch').addEventListener('click', () => {
             applyAdvancedSearchAndRender();
         });
         
-        // Apply search settings on Enter key in search input
         document.getElementById('searchInput').addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 applyAdvancedSearchAndRender();
@@ -889,7 +1013,7 @@
             });
         });
 
-        // ---------- Auto-refresh on reconnect ----------
+        // Auto-refresh on reconnect
         window.addEventListener('online', function () {
             loadSalesData();
         });

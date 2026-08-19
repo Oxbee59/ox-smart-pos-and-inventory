@@ -70,320 +70,414 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-    // ---------- Offline banner ----------
-    function updateOfflineBanner() {
-        const banner = document.getElementById('offlineBanner');
-        if (!navigator.onLine) {
-            banner.classList.remove('hidden');
-        } else {
-            banner.classList.add('hidden');
-        }
-    }
-    window.addEventListener('online', updateOfflineBanner);
-    window.addEventListener('offline', updateOfflineBanner);
+    document.addEventListener('DOMContentLoaded', function () {
+        console.log("DOM loaded – initializing Analytics with Dexie");
 
-    // ---------- Robust caching helpers ----------
-    const CACHE_MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
-
-    function cacheData(key, data) {
-        try {
-            localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }));
-        } catch(e) { console.warn('Cache write failed:', e); }
-    }
-
-    function getCachedData(key) {
-        try {
-            const raw = localStorage.getItem(key);
-            if (!raw) return null;
-            const parsed = JSON.parse(raw);
-            const ageMs = Date.now() - parsed.timestamp;
-            if (ageMs > CACHE_MAX_AGE) {
-                // Stale – remove and return null
-                localStorage.removeItem(key);
-                return null;
-            }
-            return parsed.data;
-        } catch(e) {
-            console.warn('Cache read failed:', e);
-            return null;
-        }
-    }
-
-    function getCacheKey(prefix) {
-        let key = prefix;
-        if (currentPeriod === 'custom' && customStartDate && customEndDate) {
-            key += `_custom_${customStartDate}_${customEndDate}`;
-        } else {
-            key += `_${currentPeriod}`;
-        }
-        return key;
-    }
-
-    // ---------- Main variables ----------
-    let currentPeriod = 'daily';
-    let customStartDate = null;
-    let customEndDate = null;
-    let trendChart = null;
-
-    function formatMoney(amount) {
-        return '₵' + (parseFloat(amount) || 0).toFixed(2);
-    }
-
-    // ---------- Load summary ----------
-    async function loadSummary() {
-        updateOfflineBanner();
-        let salesData = [];
-        let fromCache = false;
-        const cacheKey = getCacheKey('analytics_summary');
-
-        try {
-            let url = '';
-            if (customStartDate && customEndDate) {
-                url = `/api/today_sales?start_date=${customStartDate}&end_date=${customEndDate}`;
-            } else if (currentPeriod === 'all') {
-                url = '/api/today_sales?period=all';
-            } else if (currentPeriod === 'weekly') {
-                url = '/api/today_sales?period=weekly';
-            } else if (currentPeriod === 'monthly') {
-                url = '/api/today_sales?period=monthly';
-            } else if (currentPeriod === 'yearly') {
-                url = '/api/today_sales?period=yearly';
+        // ---------- Offline banner ----------
+        function updateOfflineBanner() {
+            const banner = document.getElementById('offlineBanner');
+            if (!navigator.onLine) {
+                banner.classList.remove('hidden');
             } else {
-                url = '/api/today_sales?period=daily';
-            }
-            const res = await fetch(url);
-            if (!res.ok) throw new Error('Network error');
-            salesData = await res.json();
-            cacheData(cacheKey, salesData);
-        } catch (err) {
-            console.warn('⚠️ Network failed – using cached summary', err.message);
-            fromCache = true;
-            const cached = getCachedData(cacheKey);
-            if (cached) {
-                salesData = cached;
-            } else {
-                // No cache – show zeros
-                salesData = [];
+                banner.classList.add('hidden');
             }
         }
+        window.addEventListener('online', updateOfflineBanner);
+        window.addEventListener('offline', updateOfflineBanner);
 
-        const seenSales = new Set();
-        let totalSales = 0, totalProfit = 0, totalDiscount = 0, totalItems = 0;
-        for (const sale of salesData) {
-            if (!seenSales.has(sale.sale_id)) {
-                totalSales += sale.total || 0;
-                totalDiscount += sale.discount || 0;
-                totalProfit += sale.net_profit || 0;
-                seenSales.add(sale.sale_id);
-            }
-            totalItems += sale.quantity || 0;
-        }
-
-        document.getElementById('itemsSold').innerText = totalItems;
-        document.getElementById('revenue').innerText = formatMoney(totalSales);
-        document.getElementById('profit').innerText = formatMoney(totalProfit);
-        document.getElementById('discount').innerText = formatMoney(totalDiscount);
-
-        // Show offline indicator on summary cards if from cache
-        const summaryCards = document.querySelectorAll('.bg-white.rounded-xl.shadow-md.p-4 p.text-gray-500.text-sm');
-        if (fromCache) {
-            // Append a small indicator (optional)
-        }
-        return salesData;
-    }
-
-    // ---------- Load trend (grouped by date) ----------
-    async function loadTrend(salesData) {
-        if (!salesData || salesData.length === 0) {
-            // Try to get from cache
-            const cacheKey = getCacheKey('analytics_trend');
-            const cached = getCachedData(cacheKey);
-            if (cached) {
-                salesData = cached;
-            }
-        }
-
-        if (!salesData || salesData.length === 0) {
-            document.getElementById('trendOfflineMsg').classList.remove('hidden');
-            if (trendChart) trendChart.destroy();
-            trendChart = null;
-            return;
-        }
-
-        // Group by date
-        const trendMap = new Map();
-        for (const sale of salesData) {
-            const date = sale.sale_date.split(' ')[0];
-            if (!trendMap.has(date)) {
-                trendMap.set(date, { sales: 0, profit: 0 });
-            }
-            const current = trendMap.get(date);
-            trendMap.set(date, {
-                sales: current.sales + (sale.total || 0),
-                profit: current.profit + (sale.net_profit || 0)
-            });
-        }
-
-        const sortedDates = Array.from(trendMap.keys()).sort();
-        const labels = sortedDates;
-        const sales = sortedDates.map(d => trendMap.get(d).sales);
-        const profits = sortedDates.map(d => trendMap.get(d).profit);
-
-        // Cache trend data separately for offline use
-        cacheData(getCacheKey('analytics_trend'), salesData);
-
-        if (trendChart) trendChart.destroy();
-        const ctx = document.getElementById('trendChart').getContext('2d');
-        trendChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [
-                    {
-                        label: 'Sales (₵)',
-                        data: sales,
-                        borderColor: 'rgb(59, 130, 246)',
-                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                        tension: 0.3,
-                        fill: true
-                    },
-                    {
-                        label: 'Profit (₵)',
-                        data: profits,
-                        borderColor: 'rgb(34, 197, 94)',
-                        backgroundColor: 'rgba(34, 197, 94, 0.1)',
-                        tension: 0.3,
-                        fill: true
+        // ========== DEXIE HELPERS (reused from today-sales) ==========
+        async function storeSalesInDexie(salesData) {
+            if (!db) return;
+            try {
+                const saleMap = new Map();
+                for (const item of salesData) {
+                    if (!saleMap.has(item.sale_id)) {
+                        saleMap.set(item.sale_id, {
+                            id: item.sale_id,
+                            date: item.sale_date || item.date,
+                            subtotal: item.subtotal || 0,
+                            discount: item.discount || 0,
+                            total: item.total || 0,
+                            profit: item.net_profit || 0,
+                            reversed: 0,
+                            payment_method: item.payment_method || 'cash',
+                            cheque_number: item.cheque_number || null,
+                            user_id: null,
+                        });
                     }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                plugins: {
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                return `${context.dataset.label}: ₵${context.raw.toFixed(2)}`;
+                    let product_id = null;
+                    if (item.name && db) {
+                        const product = await db.products.where({ name: item.name, brand: item.brand || '' }).first();
+                        if (product) product_id = product.id;
+                    }
+                    const saleItem = {
+                        sale_id: item.sale_id,
+                        product_id: product_id,
+                        batch_id: item.batch_id || -1,
+                        quantity: item.quantity,
+                        selling_price: item.selling_price || 0,
+                        cost_price: item.cost_price || 0,
+                        profit: item.profit || 0,
+                    };
+                    saleMap.get(item.sale_id).items = saleMap.get(item.sale_id).items || [];
+                    saleMap.get(item.sale_id).items.push(saleItem);
+                }
+                for (const [saleId, sale] of saleMap) {
+                    await db.sales.put(sale);
+                    for (const item of sale.items) {
+                        await db.sales_items.put(item);
+                    }
+                }
+                console.log('✅ Analytics sales data stored in Dexie');
+            } catch (e) {
+                console.warn('Error storing sales in Dexie:', e);
+            }
+        }
+
+        async function loadSalesFromDexie() {
+            if (!db) return [];
+            try {
+                const sales = await db.sales.where('reversed').equals(0).toArray();
+                const items = await db.sales_items.toArray();
+                const result = [];
+                for (const sale of sales) {
+                    const saleItems = items.filter(item => item.sale_id === sale.id);
+                    for (const item of saleItems) {
+                        let product = null;
+                        if (item.product_id) {
+                            product = await db.products.get(item.product_id);
+                        }
+                        result.push({
+                            sale_id: sale.id,
+                            name: product?.name || 'Unknown',
+                            brand: product?.brand || '',
+                            category: product?.category || '',
+                            quantity: item.quantity,
+                            selling_price: item.selling_price,
+                            subtotal: item.quantity * item.selling_price,
+                            discount: sale.discount || 0,
+                            total: sale.total || 0,
+                            profit: item.profit || 0,
+                            batch_id: item.batch_id,
+                            cost_price: item.cost_price || 0,
+                            sale_date: sale.date,
+                            is_deleted_batch: item.batch_id === -1 || false,
+                            net_profit: sale.profit || 0,
+                            payment_method: sale.payment_method || 'cash',
+                            cheque_number: sale.cheque_number || null,
+                            username: 'Unknown'
+                        });
+                    }
+                }
+                return result;
+            } catch (e) {
+                console.warn('Error loading from Dexie:', e);
+                return [];
+            }
+        }
+
+        // ---------- Helper: date filtering ----------
+        function filterSalesByDate(salesData, period, startDate, endDate) {
+            if (!salesData || salesData.length === 0) return [];
+            let filtered = salesData;
+            if (startDate && endDate) {
+                const start = new Date(startDate);
+                start.setHours(0,0,0,0);
+                const end = new Date(endDate);
+                end.setHours(23,59,59,999);
+                filtered = salesData.filter(item => {
+                    const d = new Date(item.sale_date || item.date);
+                    return d >= start && d <= end;
+                });
+            } else if (period !== 'all') {
+                const now = new Date();
+                const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                const startOfWeek = new Date(today);
+                startOfWeek.setDate(today.getDate() - today.getDay());
+                const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+                const startOfYear = new Date(today.getFullYear(), 0, 1);
+                filtered = salesData.filter(item => {
+                    const d = new Date(item.sale_date || item.date);
+                    if (period === 'daily') return d >= today;
+                    if (period === 'weekly') return d >= startOfWeek;
+                    if (period === 'monthly') return d >= startOfMonth;
+                    if (period === 'yearly') return d >= startOfYear;
+                    return true;
+                });
+            }
+            return filtered;
+        }
+
+        // ---------- Main variables ----------
+        let currentPeriod = 'daily';
+        let customStartDate = null;
+        let customEndDate = null;
+        let trendChart = null;
+
+        function formatMoney(amount) {
+            return '₵' + (parseFloat(amount) || 0).toFixed(2);
+        }
+
+        // ---------- Load summary & trend from Dexie or API ----------
+        async function loadAnalyticsData() {
+            updateOfflineBanner();
+            console.log("Loading analytics data...");
+            let salesData = [];
+            let fromCache = false;
+
+            // Try API first if online
+            if (navigator.onLine) {
+                try {
+                    let url = '';
+                    if (customStartDate && customEndDate) {
+                        url = `/api/today_sales?start_date=${customStartDate}&end_date=${customEndDate}`;
+                    } else {
+                        url = `/api/today_sales?period=${currentPeriod}`;
+                    }
+                    const res = await fetch(url);
+                    if (!res.ok) {
+                        if (res.status === 401) { window.location.href = '/login'; return; }
+                        throw new Error(`HTTP error! status: ${res.status}`);
+                    }
+                    salesData = await res.json();
+                    // Store in Dexie
+                    await storeSalesInDexie(salesData);
+                    console.log("✅ Data fetched from API and stored in Dexie");
+                } catch (error) {
+                    console.warn("API failed, falling back to Dexie:", error);
+                    fromCache = true;
+                    salesData = await loadSalesFromDexie();
+                    // Apply period/date filter in memory
+                    salesData = filterSalesByDate(salesData, currentPeriod, customStartDate, customEndDate);
+                }
+            } else {
+                // Offline – read from Dexie
+                fromCache = true;
+                salesData = await loadSalesFromDexie();
+                salesData = filterSalesByDate(salesData, currentPeriod, customStartDate, customEndDate);
+            }
+
+            // Update summary cards
+            const seenSales = new Set();
+            let totalSales = 0, totalProfit = 0, totalDiscount = 0, totalItems = 0;
+            for (const sale of salesData) {
+                if (!seenSales.has(sale.sale_id)) {
+                    totalSales += sale.total || 0;
+                    totalDiscount += sale.discount || 0;
+                    totalProfit += sale.net_profit || 0;
+                    seenSales.add(sale.sale_id);
+                }
+                totalItems += sale.quantity || 0;
+            }
+
+            document.getElementById('itemsSold').innerText = totalItems;
+            document.getElementById('revenue').innerText = formatMoney(totalSales);
+            document.getElementById('profit').innerText = formatMoney(totalProfit);
+            document.getElementById('discount').innerText = formatMoney(totalDiscount);
+
+            // Update trend chart
+            await renderTrend(salesData, fromCache);
+
+            // Update top products (try API first, fallback to computed from salesData)
+            await loadTopProducts(salesData, fromCache);
+
+            if (fromCache) {
+                // Show a small note somewhere (already handled by offline banner)
+            }
+        }
+
+        // ---------- Render trend chart ----------
+        async function renderTrend(salesData, fromCache) {
+            if (!salesData || salesData.length === 0) {
+                document.getElementById('trendOfflineMsg').classList.remove('hidden');
+                if (trendChart) trendChart.destroy();
+                trendChart = null;
+                return;
+            }
+
+            // Group by date
+            const trendMap = new Map();
+            for (const sale of salesData) {
+                const date = sale.sale_date ? sale.sale_date.split(' ')[0] : sale.date;
+                if (!trendMap.has(date)) {
+                    trendMap.set(date, { sales: 0, profit: 0 });
+                }
+                const current = trendMap.get(date);
+                trendMap.set(date, {
+                    sales: current.sales + (sale.total || 0),
+                    profit: current.profit + (sale.net_profit || 0)
+                });
+            }
+
+            const sortedDates = Array.from(trendMap.keys()).sort();
+            const labels = sortedDates;
+            const sales = sortedDates.map(d => trendMap.get(d).sales);
+            const profits = sortedDates.map(d => trendMap.get(d).profit);
+
+            if (trendChart) trendChart.destroy();
+            const ctx = document.getElementById('trendChart').getContext('2d');
+            trendChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Sales (₵)',
+                            data: sales,
+                            borderColor: 'rgb(59, 130, 246)',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            tension: 0.3,
+                            fill: true
+                        },
+                        {
+                            label: 'Profit (₵)',
+                            data: profits,
+                            borderColor: 'rgb(34, 197, 94)',
+                            backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                            tension: 0.3,
+                            fill: true
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.dataset.label}: ₵${context.raw.toFixed(2)}`;
+                                }
                             }
                         }
                     }
                 }
+            });
+            document.getElementById('trendOfflineMsg').classList.add('hidden');
+        }
+
+        // ---------- Load top products (API first, fallback to Dexie computation) ----------
+        async function loadTopProducts(salesData, fromCache) {
+            const container = document.getElementById('topProductsList');
+            let products = [];
+
+            // If online, try API first
+            if (navigator.onLine && !fromCache) {
+                try {
+                    let url = '/api/dashboard/top_products?limit=10';
+                    if (customStartDate && customEndDate) {
+                        url = `/api/dashboard/top_products?start_date=${customStartDate}&end_date=${customEndDate}&limit=10`;
+                    } else if (currentPeriod !== 'custom') {
+                        url = `/api/dashboard/top_products?period=${currentPeriod}&limit=10`;
+                    }
+                    const res = await fetch(url);
+                    if (res.ok) {
+                        products = await res.json();
+                        // Cache the result in Dexie? We'll store it in a separate table or just rely on sales data.
+                        // For simplicity, we'll just use it.
+                        renderTopProducts(products, false);
+                        return;
+                    }
+                } catch (e) {
+                    console.warn('Top products API failed, computing from cached data', e);
+                }
             }
-        });
-        document.getElementById('trendOfflineMsg').classList.add('hidden');
-    }
 
-    // ---------- Load top products ----------
-    async function loadTopProducts() {
-        updateOfflineBanner();
-        let products = [];
-        let fromCache = false;
-        const cacheKey = getCacheKey('analytics_top');
-
-        try {
-            let url = '/api/dashboard/top_products?limit=10';
-            if (customStartDate && customEndDate) {
-                url = `/api/dashboard/top_products?start_date=${customStartDate}&end_date=${customEndDate}&limit=10`;
-            } else if (currentPeriod === 'weekly') {
-                url = '/api/dashboard/top_products?period=weekly&limit=10';
-            } else if (currentPeriod === 'monthly') {
-                url = '/api/dashboard/top_products?period=monthly&limit=10';
-            } else if (currentPeriod === 'yearly') {
-                url = '/api/dashboard/top_products?period=yearly&limit=10';
-            } else if (currentPeriod === 'all') {
-                url = '/api/dashboard/top_products?period=all&limit=10';
+            // Fallback: compute from salesData (which is already filtered by date)
+            if (salesData && salesData.length > 0) {
+                // Group by product name+brand
+                const productMap = new Map();
+                for (const sale of salesData) {
+                    const key = `${sale.name}|${sale.brand}`;
+                    if (!productMap.has(key)) {
+                        productMap.set(key, { name: sale.name, brand: sale.brand, category: sale.category || '', qty: 0 });
+                    }
+                    productMap.get(key).qty += sale.quantity || 0;
+                }
+                // Sort by qty descending and take top 10
+                products = Array.from(productMap.values())
+                    .sort((a, b) => b.qty - a.qty)
+                    .slice(0, 10);
+                renderTopProducts(products, true);
             } else {
-                url = '/api/dashboard/top_products?limit=10';
+                container.innerHTML = '<div class="text-gray-400 text-center py-4">No product data available.</div>';
             }
-            const res = await fetch(url);
-            if (!res.ok) throw new Error('Network error');
-            products = await res.json();
-            cacheData(cacheKey, products);
-        } catch (err) {
-            console.warn('⚠️ Network failed – using cached top products', err.message);
-            fromCache = true;
-            const cached = getCachedData(cacheKey);
-            if (cached) products = cached;
         }
 
-        const container = document.getElementById('topProductsList');
-        container.innerHTML = '';
-
-        if (products.length === 0) {
-            container.innerHTML = '<div class="text-gray-400 text-center py-4">No product data available.</div>';
-            return;
+        function renderTopProducts(products, fromCache) {
+            const container = document.getElementById('topProductsList');
+            container.innerHTML = '';
+            if (!products || products.length === 0) {
+                container.innerHTML = '<div class="text-gray-400 text-center py-4">No product data available.</div>';
+                return;
+            }
+            products.forEach((p, index) => {
+                const div = document.createElement('div');
+                div.className = 'border-b pb-2 flex justify-between items-center';
+                let medal = '';
+                if (index === 0) medal = '🥇 ';
+                else if (index === 1) medal = '🥈 ';
+                else if (index === 2) medal = '🥉 ';
+                div.innerHTML = `
+                    <div>
+                        <span class="font-medium">${medal}${p.name}</span>
+                        <span class="text-sm text-gray-500"> (${p.brand || 'No brand'} | ${p.category || 'No category'})</span>
+                    </div>
+                    <div>
+                        <span class="font-bold text-indigo-600">${p.qty} sold</span>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+            if (fromCache) {
+                const note = document.createElement('div');
+                note.className = 'text-xs text-gray-400 mt-2 text-center';
+                note.innerText = '⚠️ Data may be outdated (offline)';
+                container.appendChild(note);
+            }
         }
 
-        products.forEach((p, index) => {
-            const div = document.createElement('div');
-            div.className = 'border-b pb-2 flex justify-between items-center';
-            let medal = '';
-            if (index === 0) medal = '🥇 ';
-            else if (index === 1) medal = '🥈 ';
-            else if (index === 2) medal = '🥉 ';
-            div.innerHTML = `
-                <div>
-                    <span class="font-medium">${medal}${p.name}</span>
-                    <span class="text-sm text-gray-500"> (${p.brand || 'No brand'} | ${p.category || 'No category'})</span>
-                </div>
-                <div>
-                    <span class="font-bold text-indigo-600">${p.qty} sold</span>
-                </div>
-            `;
-            container.appendChild(div);
+        // ---------- Reload all ----------
+        async function reloadAnalytics() {
+            console.log("📊 Reloading analytics for period:", currentPeriod, customStartDate, customEndDate);
+            await loadAnalyticsData();
+        }
+
+        // ---------- Event listeners ----------
+        document.querySelectorAll('.period-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                currentPeriod = btn.getAttribute('data-period');
+                customStartDate = null;
+                customEndDate = null;
+                document.getElementById('startDate').value = '';
+                document.getElementById('endDate').value = '';
+                reloadAnalytics();
+            });
         });
 
-        if (fromCache) {
-            const note = document.createElement('div');
-            note.className = 'text-xs text-gray-400 mt-2 text-center';
-            note.innerText = '⚠️ Data may be outdated (offline)';
-            container.appendChild(note);
-        }
-    }
+        document.getElementById('applyCustomRange').addEventListener('click', () => {
+            const start = document.getElementById('startDate').value;
+            const end = document.getElementById('endDate').value;
+            if (start && end) {
+                customStartDate = start;
+                customEndDate = end;
+                currentPeriod = 'custom';
+                reloadAnalytics();
+            } else {
+                alert('Please select both start and end dates.');
+            }
+        });
 
-    // ---------- Reload all ----------
-    async function reloadAnalytics() {
-        console.log("📊 Loading analytics for period:", currentPeriod, customStartDate, customEndDate);
-        const salesData = await loadSummary();
-        await loadTrend(salesData);
-        await loadTopProducts();
-    }
-
-    // ---------- Event listeners ----------
-    document.querySelectorAll('.period-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            currentPeriod = btn.getAttribute('data-period');
-            customStartDate = null;
-            customEndDate = null;
-            document.getElementById('startDate').value = '';
-            document.getElementById('endDate').value = '';
+        // ---------- Auto-refresh on reconnect ----------
+        window.addEventListener('online', function() {
             reloadAnalytics();
         });
-    });
 
-    document.getElementById('applyCustomRange').addEventListener('click', () => {
-        const start = document.getElementById('startDate').value;
-        const end = document.getElementById('endDate').value;
-        if (start && end) {
-            customStartDate = start;
-            customEndDate = end;
-            currentPeriod = 'custom';
-            reloadAnalytics();
-        } else {
-            alert('Please select both start and end dates.');
-        }
-    });
-
-    // ---------- Auto-refresh on reconnect ----------
-    window.addEventListener('online', function() {
+        // ---------- Initial load ----------
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('startDate').value = today;
+        document.getElementById('endDate').value = today;
         reloadAnalytics();
     });
-
-    // ---------- Initial load ----------
-    const today = new Date().toISOString().split('T')[0];
-    document.getElementById('startDate').value = today;
-    document.getElementById('endDate').value = today;
-    reloadAnalytics();
 </script>
 {% endblock %}

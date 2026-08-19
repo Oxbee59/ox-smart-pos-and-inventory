@@ -28,9 +28,9 @@
     <!-- ===== SERVICE WORKER WITH CACHE-BUSTING ===== -->
     <script>
         if ('serviceWorker' in navigator) {
-            // Register from root so it controls all pages
-            navigator.serviceWorker.register('/sw.js?v=6')
-                .then(() => console.log('✅ Service Worker registered'))
+            // ✅ Updated to v=7 to force SW update
+            navigator.serviceWorker.register('/sw.js?v=7')
+                .then(() => console.log('✅ Service Worker registered (v7)'))
                 .catch(err => console.log('❌ SW registration failed:', err));
         }
     </script>
@@ -687,7 +687,7 @@
                 return;
             }
             registration.active.postMessage({
-                type: 'CACHE_PAGES',
+                type: 'CACHE_ALL_PAGES',
                 urls: PROTECTED_ROUTES
             });
             console.log('📦 Sent caching request to Service Worker.');
@@ -722,7 +722,7 @@
     })();
 
     // ============================================================
-    //  PIN LOCK – ONLY FOR STANDALONE, ONCE PER SESSION (no timeout)
+    //  PIN LOCK – 24‑HOUR EXPIRY (PWA ONLY)
     // ============================================================
     let pinAttempt = '';
     const MAX_PIN_LENGTH = 4;
@@ -747,7 +747,8 @@
             if (pinAttempt.length === MAX_PIN_LENGTH) {
                 if (pinAttempt === PIN_CODE) {
                     pinError.textContent = '';
-                    localStorage.setItem('pin_unlocked', 'true');
+                    // Store unlock timestamp with 24‑hour expiry
+                    localStorage.setItem('pin_unlocked', JSON.stringify({ timestamp: Date.now() }));
                     pinLockScreen.classList.remove('active');
                     pinAttempt = '';
                     updatePinDots();
@@ -790,21 +791,27 @@
     });
 
     function checkPinLock() {
-        // Only in standalone mode
         if (!isAppMode()) return true;
-        // If already unlocked this session, skip
-        if (localStorage.getItem('pin_unlocked') === 'true') {
-            return true;
+        const unlockData = localStorage.getItem('pin_unlocked');
+        if (unlockData) {
+            try {
+                const { timestamp } = JSON.parse(unlockData);
+                if (Date.now() - timestamp < 24 * 60 * 60 * 1000) {
+                    return true; // unlocked within last 24 hours
+                } else {
+                    localStorage.removeItem('pin_unlocked');
+                }
+            } catch(e) {
+                localStorage.removeItem('pin_unlocked');
+            }
         }
-        // Otherwise show the lock screen
+        // Show lock screen
         pinLockScreen.classList.add('active');
         pinAttempt = '';
         updatePinDots();
         pinError.textContent = '';
         return false;
     }
-
-    // No activity timer – stay unlocked for the whole session.
 
     // ============================================================
     //  SESSION MANAGEMENT
@@ -829,7 +836,6 @@
 
     function clearSession() {
         localStorage.removeItem('ox_user');
-        // Also clear PIN unlock flag
         localStorage.removeItem('pin_unlocked');
     }
 
@@ -859,12 +865,105 @@
     }
 
     // ============================================================
+    //  FULL DATA SYNC FOR OFFLINE USAGE (PWA ONLY)
+    // ============================================================
+    async function fetchAndStoreAllData() {
+        if (!isAppMode() || !db) return;
+        console.log('📥 Fetching all data for offline use...');
+        try {
+            const res = await fetch('/api/sync/all');
+            if (!res.ok) throw new Error('Failed to fetch sync data');
+            const data = await res.json();
+
+            // Store each section. Use the cache table as fallback if specific tables don't exist.
+            const tables = {
+                products: data.products,
+                batches: data.batches,
+                sales: data.sales,
+                sales_items: data.sales_items,
+                claims: data.claims,
+                deleted_products: data.deleted_products
+            };
+
+            for (const [tableName, items] of Object.entries(tables)) {
+                if (!db[tableName]) {
+                    // If table doesn't exist, store in cache table with key = tableName
+                    await db.cache.put({ key: tableName, value: items, timestamp: Date.now() });
+                    console.log(`✅ Stored ${items.length} ${tableName} in cache`);
+                } else {
+                    await db[tableName].clear();
+                    if (items.length > 0) {
+                        await db[tableName].bulkAdd(items);
+                    }
+                    console.log(`✅ Stored ${items.length} ${tableName}`);
+                }
+            }
+
+            // Also store a last_sync timestamp
+            await db.cache.put({ key: 'last_full_sync', value: Date.now(), timestamp: Date.now() });
+            console.log('✅ Full data sync completed.');
+        } catch (err) {
+            console.warn('❌ Full data sync failed:', err);
+        }
+    }
+
+    // ============================================================
+    //  HOURLY OFFLINE PROMPT (PWA ONLY)
+    // ============================================================
+    let offlinePromptInterval = null;
+
+    function startOfflinePrompt() {
+        if (!isAppMode()) return;
+        if (offlinePromptInterval) {
+            clearInterval(offlinePromptInterval);
+            offlinePromptInterval = null;
+        }
+
+        // Check every hour
+        offlinePromptInterval = setInterval(() => {
+            if (!navigator.onLine) {
+                showOfflineReminder();
+            }
+        }, 60 * 60 * 1000);
+    }
+
+    function showOfflineReminder() {
+        if (document.getElementById('offlineReminderToast')) return;
+        const toast = document.createElement('div');
+        toast.id = 'offlineReminderToast';
+        toast.innerHTML = `
+            <span>⚠️ You have been offline for over an hour. Please connect to the internet to sync your data.</span>
+            <button id="offlineReminderBtn" class="ml-2 bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm font-semibold">
+                Go Online
+            </button>
+            <button id="offlineReminderDismiss" class="ml-2 text-gray-400 hover:text-gray-600 text-sm">✕</button>
+        `;
+        toast.style.cssText = `
+            position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+            background: #FEF3C7; color: #92400E; padding: 12px 20px;
+            border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            z-index: 9999; font-size: 14px; max-width: 90vw;
+            display: flex; align-items: center; gap: 12px;
+            border: 1px solid #F59E0B;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+        `;
+        document.body.appendChild(toast);
+
+        document.getElementById('offlineReminderBtn').addEventListener('click', function() {
+            alert('Please connect to the internet and refresh the page.');
+            toast.remove();
+        });
+        document.getElementById('offlineReminderDismiss').addEventListener('click', function() {
+            toast.remove();
+        });
+    }
+
+    // ============================================================
     //  INSTALL PASSWORD LOGIC (only if the button exists)
     // ============================================================
     let deferredPrompt = null;
     const installButton = document.getElementById('installAppBtn');
 
-    // Only proceed if the button exists (i.e., we are oxbee)
     if (installButton) {
         window.addEventListener('beforeinstallprompt', (e) => {
             e.preventDefault();
@@ -983,7 +1082,7 @@
     //  LOGOUT
     // ============================================================
     async function logout() {
-        clearSession(); // also clears pin_unlocked
+        clearSession();
         if (navigator.onLine) {
             try {
                 await fetch('/api/auth/logout', { method: 'POST' });
@@ -997,10 +1096,8 @@
     // ============================================================
     function clearOfflineData() {
         if (!confirm('⚠️ This will clear all pending offline sales, purchases, and local database. Proceed?')) return;
-        // Clear localStorage keys
         const keysToRemove = ['pendingCount', 'pendingSales', 'offlineQueue', 'importPending', 'pendingImports', 'offlineSales', 'pendingJobId', 'pendingJobStatus', 'pendingPurchases'];
         keysToRemove.forEach(key => { localStorage.removeItem(key); sessionStorage.removeItem(key); });
-        // Delete Dexie database (if in app mode and db is available)
         if (isAppMode() && db) {
             db.delete().then(() => {
                 console.log('🗑️ Dexie database deleted');
@@ -1023,7 +1120,7 @@
     const SYNC_INTERVAL = 6 * 60 * 60 * 1000;
 
     function getLastSync() {
-        if (!isAppMode()) return Date.now(); // always fresh in browser mode
+        if (!isAppMode()) return Date.now();
         const stored = localStorage.getItem('lastSyncTime');
         return stored ? parseInt(stored, 10) : 0;
     }
@@ -1095,13 +1192,11 @@
         }
         console.log('🔄 Syncing all pending data...');
         try {
-            // If the Dexie sync functions are available, use them
             if (typeof pushPending === 'function' && typeof pullData === 'function') {
                 await pushPending();
                 await pullData();
                 console.log('✅ Dexie sync completed.');
             } else {
-                // Fallback to old localStorage sync functions if they exist
                 if (typeof syncPendingSales === 'function') await syncPendingSales();
                 if (typeof syncPendingPurchases === 'function') await syncPendingPurchases();
                 if (typeof syncPendingProductDeletions === 'function') await syncPendingProductDeletions();
@@ -1147,10 +1242,8 @@
         const yearSpan = document.getElementById('footerYear');
         if (yearSpan) yearSpan.textContent = new Date().getFullYear();
 
-        // Check PIN lock (only if app mode)
         const pinUnlocked = checkPinLock();
         if (!pinUnlocked) {
-            // Wait for PIN to be entered
             const observer = new MutationObserver(() => {
                 if (!pinLockScreen.classList.contains('active')) {
                     initializeApp();
@@ -1172,12 +1265,10 @@
             const currentPath = window.location.pathname;
             const publicPaths = ['/login', '/signup'];
 
-            // On public pages – let login.html handle the check.
             if (publicPaths.includes(currentPath)) {
                 return;
             }
 
-            // Protected page: sync with server if online
             let serverSession = null;
             if (navigator.onLine) {
                 serverSession = await syncSessionWithServer();
@@ -1197,7 +1288,6 @@
                     return;
                 }
             } else {
-                // Offline
                 if (!sessionValid) {
                     clearSession();
                     if (!navigator.onLine) {
@@ -1209,14 +1299,15 @@
                 isLoggedIn = true;
             }
 
-            // If we have a valid session, run offline setup
             if (isLoggedIn) {
-                // Always cache pages for offline reading (browser & app mode)
+                // Pre‑cache all protected pages (service worker)
                 cacheAllPages();
 
                 if (isAppMode()) {
-                    // App mode: full offline data sync with Dexie
                     if (navigator.onLine) {
+                        // Download all data for offline use
+                        await fetchAndStoreAllData();
+                        // Full sync (push pending + pull) – if available
                         if (typeof fullSync === 'function') {
                             try {
                                 await fullSync();
@@ -1228,19 +1319,23 @@
                             console.warn('fullSync not defined – using fallback');
                             await window.syncAllPending();
                         }
-                        // Set up periodic sync every 5 minutes (only in app mode)
+                        // Periodic full sync every 5 minutes while online
                         setInterval(() => {
                             if (navigator.onLine && typeof fullSync === 'function') {
                                 fullSync();
                             }
                         }, 5 * 60 * 1000);
+
+                        // Start offline prompt timer
+                        startOfflinePrompt();
                     } else {
+                        // Offline – show sync reminder after 2 seconds
                         setTimeout(showSyncReminder, 2000);
+                        // Also start hourly prompt
+                        startOfflinePrompt();
                     }
                 } else {
-                    // Browser mode: no Dexie sync, but pending operations (sales, claims) are still synced via localStorage
                     if (navigator.onLine) {
-                        // Use the legacy pending sync for browser mode (sales, claims, etc.)
                         if (typeof window.syncAllPending === 'function') {
                             await window.syncAllPending();
                         }
@@ -1248,7 +1343,6 @@
                 }
             }
 
-            // Reinstall notice (only in app mode)
             if (isAppMode()) {
                 const urlParams = new URLSearchParams(window.location.search);
                 if (urlParams.get('reinstall') === 'true') {
@@ -1270,12 +1364,11 @@
         }
     });
 
-    // ============================================================
-    //  AUTO-SYNC ON RECONNECT (only in app mode)
-    // ============================================================
     window.addEventListener('online', function() {
         if (!isAppMode()) return;
         console.log('🌐 Connection restored – syncing all pending items...');
+        // Re-fetch all data
+        fetchAndStoreAllData();
         if (typeof fullSync === 'function') {
             fullSync().catch(err => console.warn('fullSync error:', err));
         } else {
@@ -1283,20 +1376,13 @@
         }
         const reminder = document.getElementById('syncReminderToast');
         if (reminder) reminder.remove();
-        // Re-cache pages when coming online
         cacheAllPages();
     });
 
-    // ============================================================
-    //  SIDEBAR AUTO-CLOSE ON RESIZE
-    // ============================================================
     window.addEventListener('resize', function() {
         if (window.innerWidth >= 768) closeSidebar();
     });
 
-    // ============================================================
-    //  UPDATE PENDING BADGE (from Dexie, only in app mode)
-    // ============================================================
     async function updatePendingBadge() {
         if (!isAppMode()) {
             const badge = document.getElementById('pending-badge');

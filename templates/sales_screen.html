@@ -200,35 +200,13 @@
     window.addEventListener('online', updateOfflineBanner);
     window.addEventListener('offline', updateOfflineBanner);
 
-    // ---------- Caching helpers ----------
-    function cacheData(key, data) {
-        try {
-            localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }));
-        } catch(e) {}
-    }
-    function getCachedData(key, maxAgeMinutes = 60) {
-        try {
-            const raw = localStorage.getItem(key);
-            if (!raw) return null;
-            const parsed = JSON.parse(raw);
-            const ageMinutes = (Date.now() - parsed.timestamp) / (1000 * 60);
-            if (ageMinutes > maxAgeMinutes) return null;
-            return parsed.data;
-        } catch(e) { return null; }
-    }
-
-    const PRODUCTS_CACHE_KEY = 'sales_products_cache_screens';
-    const LICENSE_CACHE_KEY = 'sales_license_cache';
-
-    // ---------- Clear Offline Data ----------
+    // ---------- Clear Offline Data (with Dexie) ----------
     function clearOfflineData() {
         const keys = [
             'pending_sales',
             'offline_sales', 
             'sales_products_cache_screens',
             'sales_license_cache',
-            PRODUCTS_CACHE_KEY,
-            LICENSE_CACHE_KEY
         ];
         keys.forEach(key => {
             try {
@@ -243,6 +221,12 @@
                 console.log('🗑️ Cleared batch cache:', key);
             }
         });
+        // Clear Dexie products/batches
+        if (db) {
+            db.products.clear();
+            db.batches.clear();
+            console.log('🗑️ Dexie products & batches cleared');
+        }
         document.getElementById('receiptPreview').innerHTML = '';
         document.getElementById('printReceiptBtn').disabled = true;
         alert('✅ Offline data cleared. Please refresh the page.');
@@ -259,12 +243,14 @@
             licenseLicensed = data.licensed;
             licenseTrialActive = data.trial_active;
             licenseRemainingSeconds = data.remaining_seconds;
-            cacheData(LICENSE_CACHE_KEY, data);
+            // cache in localStorage for offline fallback
+            try { localStorage.setItem('sales_license_cache', JSON.stringify(data)); } catch(e) {}
             console.log("License status:", data);
             return data;
         } catch (err) {
             console.warn('Offline – using cached license');
-            const cached = getCachedData(LICENSE_CACHE_KEY);
+            let cached = null;
+            try { cached = JSON.parse(localStorage.getItem('sales_license_cache')); } catch(e) {}
             if (cached) {
                 licenseLicensed = cached.licensed;
                 licenseTrialActive = cached.trial_active;
@@ -392,7 +378,9 @@
         return `${minutes.toString().padStart(2,'0')}:${secs.toString().padStart(2,'0')}`;
     }
 
-    // ---------- Load Products (Screen only) ----------
+    // =============================================================
+    //  NEW: Load Products with Dexie integration (Screen version)
+    // =============================================================
     async function loadProducts() {
         updateOfflineBanner();
         const noProductsBanner = document.getElementById('noProductsBanner');
@@ -401,18 +389,80 @@
         let prods = [];
         let fromCache = false;
 
-        try {
-            const res = await fetch('/api/sales/products?category=Screen');
-            if (!res.ok) throw new Error();
-            prods = await res.json();
-            cacheData(PRODUCTS_CACHE_KEY, prods);
-        } catch (err) {
-            console.warn('Offline – using cached screens');
-            fromCache = true;
-            const cached = getCachedData(PRODUCTS_CACHE_KEY);
-            if (cached) prods = cached;
+        // Try to fetch from API if online
+        if (navigator.onLine) {
+            try {
+                const res = await fetch('/api/sales/products?category=Screen');
+                if (!res.ok) throw new Error();
+                prods = await res.json();
+                // Store in Dexie
+                if (db) {
+                    // Ensure each product has product_id
+                    for (const p of prods) {
+                        if (!p.product_id) {
+                            p.product_id = Date.now() + '_' + Math.random().toString(36).substr(2,6);
+                        }
+                    }
+                    await db.products.bulkPut(prods);
+                    // Store batches
+                    const batchMap = {};
+                    for (const p of prods) {
+                        if (p.batches && p.batches.length) {
+                            for (const b of p.batches) {
+                                if (!b.product_id) b.product_id = p.product_id;
+                                batchMap[b.batch_id] = b;
+                            }
+                        }
+                    }
+                    const batchList = Object.values(batchMap);
+                    if (batchList.length) {
+                        await db.batches.bulkPut(batchList);
+                    }
+                    console.log('✅ Screen products and batches stored in Dexie');
+                }
+            } catch (err) {
+                console.warn('Offline – using Dexie cached screens');
+                fromCache = true;
+                // fall through to Dexie
+            }
         }
 
+        // If no data from API (or offline), read from Dexie
+        if (prods.length === 0) {
+            try {
+                if (db) {
+                    const cached = await db.products.where('category').equals('Screen').toArray();
+                    if (cached.length > 0) {
+                        prods = cached;
+                        // Ensure batches are attached
+                        for (const p of prods) {
+                            if (p.batches && p.batches.length) continue;
+                            const batches = await db.batches.where('product_id').equals(p.product_id).toArray();
+                            if (batches.length) {
+                                p.batches = batches;
+                            }
+                        }
+                        fromCache = true;
+                        console.log('📦 Loaded screen products from Dexie');
+                    }
+                }
+            } catch (e) {
+                console.warn('Failed to read from Dexie:', e);
+            }
+        }
+
+        if (!prods || prods.length === 0) {
+            document.getElementById('productList').innerHTML = '';
+            noProductsBanner.classList.remove('hidden');
+            if (fromCache) {
+                document.getElementById('productList').innerHTML = 
+                    '<div class="text-gray-500 p-2">No cached screens – connect to refresh</div>';
+            }
+            products = [];
+            return;
+        }
+
+        // Group products by name+brand
         const grouped = {};
         prods.forEach(p => {
             const key = `${p.name}|${p.brand}`;
@@ -428,16 +478,12 @@
                 grouped[key].batches = grouped[key].batches.concat(p.batches);
             }
         });
-        
+
         products = Object.values(grouped);
-        
+
         if (products.length === 0) {
             document.getElementById('productList').innerHTML = '';
             noProductsBanner.classList.remove('hidden');
-            if (fromCache) {
-                document.getElementById('productList').innerHTML = 
-                    '<div class="text-gray-500 p-2">No cached screens – connect to refresh</div>';
-            }
         } else {
             renderProductList(products);
         }
@@ -566,6 +612,7 @@
             console.log('📦 Using batches from product object:', product.batches.length);
             batches = product.batches;
         } else {
+            // Try API first
             try {
                 const url = `/api/sales/batches/by_name?name=${encodeURIComponent(product.name)}&brand=${encodeURIComponent(product.brand)}`;
                 console.log('🔍 Fetching from:', url);
@@ -574,7 +621,7 @@
                     batches = await res.json();
                     console.log('📦 Fetched batches:', batches.length);
                     if (batches.length > 0) {
-                        cacheData(cacheKey, batches);
+                        try { localStorage.setItem(cacheKey, JSON.stringify(batches)); } catch(e) {}
                     }
                 } else {
                     console.warn('⚠️ API returned error:', res.status);
@@ -595,12 +642,31 @@
                 }
             }
             
-            if (batches.length === 0) {
-                const cached = getCachedData(cacheKey);
-                if (cached && cached.length > 0) {
-                    console.log('📦 Using cached batches:', cached.length);
-                    batches = cached;
+            // If still no batches, try Dexie
+            if (batches.length === 0 && db) {
+                try {
+                    const cachedBatches = await db.batches.where('product_id').equals(product.product_id).toArray();
+                    if (cachedBatches && cachedBatches.length > 0) {
+                        batches = cachedBatches;
+                        console.log('📦 Loaded batches from Dexie:', batches.length);
+                    }
+                } catch (e) {
+                    console.warn('Failed to read batches from Dexie:', e);
                 }
+            }
+            
+            // Fallback to localStorage cache
+            if (batches.length === 0) {
+                try {
+                    const cached = localStorage.getItem(cacheKey);
+                    if (cached) {
+                        const parsed = JSON.parse(cached);
+                        if (parsed && parsed.length > 0) {
+                            batches = parsed;
+                            console.log('📦 Using cached batches from localStorage:', batches.length);
+                        }
+                    }
+                } catch(e) {}
             }
         }
 

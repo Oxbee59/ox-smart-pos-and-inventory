@@ -226,184 +226,234 @@
 </style>
 
 <script>
-    // ---------- Cache helpers ----------
-    const CACHE_MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
-    const CLAIMS_CACHE_KEY = 'claims_cache';
-    const PENDING_CLAIMS_KEY = 'pendingClaims';
-    const PENDING_ACTIONS_KEY = 'pendingClaimActions';
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log("DOM loaded – initializing Claims with Dexie");
 
-    function cacheData(key, data) {
-        try {
-            localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }));
-        } catch(e) { console.warn('Cache write failed:', e); }
-    }
-
-    function getCachedData(key) {
-        try {
-            const raw = localStorage.getItem(key);
-            if (!raw) return null;
-            const parsed = JSON.parse(raw);
-            const ageMs = Date.now() - parsed.timestamp;
-            if (ageMs > CACHE_MAX_AGE) {
-                localStorage.removeItem(key);
-                return null;
-            }
-            return parsed.data;
-        } catch(e) {
-            console.warn('Cache read failed:', e);
-            return null;
-        }
-    }
-
-    function getPendingClaims() {
-        try {
-            return JSON.parse(localStorage.getItem(PENDING_CLAIMS_KEY) || '[]');
-        } catch(e) { return []; }
-    }
-
-    function setPendingClaims(pending) {
-        localStorage.setItem(PENDING_CLAIMS_KEY, JSON.stringify(pending));
-    }
-
-    function getPendingActions() {
-        try {
-            return JSON.parse(localStorage.getItem(PENDING_ACTIONS_KEY) || '[]');
-        } catch(e) { return []; }
-    }
-
-    function setPendingActions(actions) {
-        localStorage.setItem(PENDING_ACTIONS_KEY, JSON.stringify(actions));
-    }
-
-    function addPendingClaim(claimData, operation = 'create') {
-        const pending = getPendingClaims();
-        const id = 'claim_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-        pending.push({ id, operation, data: claimData, timestamp: Date.now() });
-        setPendingClaims(pending);
-        updatePendingBadge();
-        return id;
-    }
-
-    function removePendingClaim(pendingId) {
-        let pending = getPendingClaims();
-        pending = pending.filter(p => p.id !== pendingId);
-        setPendingClaims(pending);
-        updatePendingBadge();
-    }
-
-    function addPendingAction(actionType, claimId, data) {
-        const actions = getPendingActions();
-        const id = 'action_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-        actions.push({ id, actionType, claimId, data, timestamp: Date.now() });
-        setPendingActions(actions);
-        updatePendingBadge();
-        return id;
-    }
-
-    function removePendingAction(actionId) {
-        let actions = getPendingActions();
-        actions = actions.filter(a => a.id !== actionId);
-        setPendingActions(actions);
-        updatePendingBadge();
-    }
-
-    function updatePendingBadge() {
-        const total = getPendingClaims().length + getPendingActions().length;
-        const badge = document.getElementById('pending-badge');
-        if (badge) {
-            if (total > 0) {
-                badge.textContent = `${total} pending`;
-                badge.style.display = 'inline';
+        // ---------- Offline banner ----------
+        function updateOfflineBanner() {
+            const banner = document.getElementById('offlineBanner');
+            if (!navigator.onLine) {
+                banner.classList.remove('hidden');
             } else {
-                badge.textContent = '';
-                badge.style.display = 'none';
+                banner.classList.add('hidden');
             }
         }
-    }
+        window.addEventListener('online', updateOfflineBanner);
+        window.addEventListener('offline', updateOfflineBanner);
 
-    // ---------- Offline banner ----------
-    function updateOfflineBanner() {
-        const banner = document.getElementById('offlineBanner');
-        if (!navigator.onLine) {
-            banner.classList.remove('hidden');
-        } else {
-            banner.classList.add('hidden');
+        // ========== DEXIE HELPERS (using cache table) ==========
+        const CACHE_MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
+
+        async function getCacheEntry(key) {
+            if (!db) return null;
+            try {
+                let cacheTable = db.cache || db.table('cache');
+                const entry = await cacheTable.get(key);
+                if (entry && entry.value) {
+                    const age = Date.now() - (entry.timestamp || 0);
+                    if (age < CACHE_MAX_AGE) {
+                        return entry.value;
+                    } else {
+                        // Stale – remove
+                        await cacheTable.delete(key);
+                        return null;
+                    }
+                }
+                return null;
+            } catch (e) {
+                console.warn('Dexie cache read failed', e);
+                // Fallback to localStorage
+                try {
+                    const raw = localStorage.getItem(key);
+                    if (!raw) return null;
+                    const parsed = JSON.parse(raw);
+                    if (Date.now() - parsed.timestamp > CACHE_MAX_AGE) {
+                        localStorage.removeItem(key);
+                        return null;
+                    }
+                    return parsed.data;
+                } catch (e2) { return null; }
+            }
         }
-    }
-    window.addEventListener('online', updateOfflineBanner);
-    window.addEventListener('offline', updateOfflineBanner);
 
-    // ---------- Helper functions ----------
-    function escapeHtml(str) {
-        if (!str) return '';
-        return str.replace(/[&<>]/g, function(m) {
-            if (m === '&') return '&amp;';
-            if (m === '<') return '&lt;';
-            if (m === '>') return '&gt;';
-            return m;
-        });
-    }
-
-    function formatDate(dateStr) {
-        if (!dateStr) return 'N/A';
-        try {
-            const d = new Date(dateStr);
-            return d.toLocaleString();
-        } catch(e) { return dateStr; }
-    }
-
-    function getStatusBadge(status) {
-        if (status === 'resolved') {
-            return '<span class="inline-flex items-center bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs font-medium">✅ Resolved</span>';
+        async function putCacheEntry(key, value) {
+            if (!db) {
+                // localStorage fallback
+                try {
+                    localStorage.setItem(key, JSON.stringify({ data: value, timestamp: Date.now() }));
+                } catch(e) {}
+                return;
+            }
+            try {
+                let cacheTable = db.cache || db.table('cache');
+                await cacheTable.put({ key, value, timestamp: Date.now() });
+                console.log(`✅ Cache entry ${key} stored in Dexie`);
+            } catch (e) {
+                console.warn('Dexie cache write failed', e);
+                // fallback to localStorage
+                try {
+                    localStorage.setItem(key, JSON.stringify({ data: value, timestamp: Date.now() }));
+                } catch(e2) {}
+            }
         }
-        return '<span class="inline-flex items-center bg-red-100 text-red-800 px-2 py-0.5 rounded text-xs font-medium">⚠️ Active</span>';
-    }
 
-    function getIssueBadge(issueType) {
-        const colors = {
-            'Damaged': 'bg-orange-100 text-orange-800',
-            'Faulty': 'bg-red-100 text-red-800',
-            'Expired': 'bg-yellow-100 text-yellow-800',
-            'Wrong Item': 'bg-blue-100 text-blue-800',
-            'Quality Issue': 'bg-purple-100 text-purple-800',
-            'Other': 'bg-gray-100 text-gray-800'
-        };
-        const color = colors[issueType] || 'bg-gray-100 text-gray-800';
-        return `<span class="inline-flex items-center ${color} px-2 py-0.5 rounded text-xs font-medium">${escapeHtml(issueType)}</span>`;
-    }
+        async function removeCacheEntry(key) {
+            if (!db) {
+                try { localStorage.removeItem(key); } catch(e) {}
+                return;
+            }
+            try {
+                let cacheTable = db.cache || db.table('cache');
+                await cacheTable.delete(key);
+            } catch (e) {
+                try { localStorage.removeItem(key); } catch(e2) {}
+            }
+        }
 
-    // ---------- Main variables ----------
-    let currentClaims = [];
-    let editClaimId = null;
-    let selectedProduct = null;
-    let selectedBatch = null;
-    let claimProductSearchTimeout = null;
-    let searchResultsCache = [];
+        // ---------- Pending operations with Dexie ----------
+        const PENDING_CLAIMS_KEY = 'pending_claims';
+        const PENDING_ACTIONS_KEY = 'pending_actions';
 
-    // ---------- Load claims (with cache) ----------
-    async function loadClaims() {
-        updateOfflineBanner();
-        const container = document.getElementById('claimsList');
-        container.innerHTML = '<div class="text-center text-gray-400 py-8">Loading claims...</div>';
+        async function getPendingClaims() {
+            const data = await getCacheEntry(PENDING_CLAIMS_KEY);
+            return data || [];
+        }
 
-        // Try network first
-        try {
-            const res = await fetch('/api/claims');
-            if (res.ok) {
-                const data = await res.json();
-                if (data.success) {
-                    currentClaims = data.claims;
-                    cacheData(CLAIMS_CACHE_KEY, currentClaims);
-                    applyFilters();
-                    updateSummary();
-                    // Merge pending actions into displayed claims? We'll just rely on server data and show pending badge.
-                    return;
+        async function setPendingClaims(pending) {
+            await putCacheEntry(PENDING_CLAIMS_KEY, pending);
+            updatePendingBadge();
+        }
+
+        async function getPendingActions() {
+            const data = await getCacheEntry(PENDING_ACTIONS_KEY);
+            return data || [];
+        }
+
+        async function setPendingActions(actions) {
+            await putCacheEntry(PENDING_ACTIONS_KEY, actions);
+            updatePendingBadge();
+        }
+
+        async function addPendingClaim(claimData, operation = 'create') {
+            const pending = await getPendingClaims();
+            const id = 'claim_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+            pending.push({ id, operation, data: claimData, timestamp: Date.now() });
+            await setPendingClaims(pending);
+            return id;
+        }
+
+        async function removePendingClaim(pendingId) {
+            let pending = await getPendingClaims();
+            pending = pending.filter(p => p.id !== pendingId);
+            await setPendingClaims(pending);
+        }
+
+        async function addPendingAction(actionType, claimId, data) {
+            const actions = await getPendingActions();
+            const id = 'action_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+            actions.push({ id, actionType, claimId, data, timestamp: Date.now() });
+            await setPendingActions(actions);
+            return id;
+        }
+
+        async function removePendingAction(actionId) {
+            let actions = await getPendingActions();
+            actions = actions.filter(a => a.id !== actionId);
+            await setPendingActions(actions);
+        }
+
+        async function updatePendingBadge() {
+            const pendingClaims = await getPendingClaims();
+            const pendingActions = await getPendingActions();
+            const total = pendingClaims.length + pendingActions.length;
+            const badge = document.getElementById('pending-badge');
+            if (badge) {
+                if (total > 0) {
+                    badge.textContent = `${total} pending`;
+                    badge.style.display = 'inline';
+                } else {
+                    badge.textContent = '';
+                    badge.style.display = 'none';
                 }
             }
-            throw new Error('Network or server error');
-        } catch (error) {
-            console.warn('Offline – using cached claims', error);
-            const cached = getCachedData(CLAIMS_CACHE_KEY);
+        }
+
+        // ---------- Helper functions ----------
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
+            });
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return 'N/A';
+            try {
+                const d = new Date(dateStr);
+                return d.toLocaleString();
+            } catch(e) { return dateStr; }
+        }
+
+        function getStatusBadge(status) {
+            if (status === 'resolved') {
+                return '<span class="inline-flex items-center bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs font-medium">✅ Resolved</span>';
+            }
+            return '<span class="inline-flex items-center bg-red-100 text-red-800 px-2 py-0.5 rounded text-xs font-medium">⚠️ Active</span>';
+        }
+
+        function getIssueBadge(issueType) {
+            const colors = {
+                'Damaged': 'bg-orange-100 text-orange-800',
+                'Faulty': 'bg-red-100 text-red-800',
+                'Expired': 'bg-yellow-100 text-yellow-800',
+                'Wrong Item': 'bg-blue-100 text-blue-800',
+                'Quality Issue': 'bg-purple-100 text-purple-800',
+                'Other': 'bg-gray-100 text-gray-800'
+            };
+            const color = colors[issueType] || 'bg-gray-100 text-gray-800';
+            return `<span class="inline-flex items-center ${color} px-2 py-0.5 rounded text-xs font-medium">${escapeHtml(issueType)}</span>`;
+        }
+
+        // ---------- Main variables ----------
+        let currentClaims = [];
+        let editClaimId = null;
+        let selectedProduct = null;
+        let selectedBatch = null;
+        let claimProductSearchTimeout = null;
+        let searchResultsCache = [];
+
+        // ---------- Load claims (with Dexie cache) ----------
+        async function loadClaims() {
+            updateOfflineBanner();
+            const container = document.getElementById('claimsList');
+            container.innerHTML = '<div class="text-center text-gray-400 py-8">Loading claims...</div>';
+
+            // Try network first
+            if (navigator.onLine) {
+                try {
+                    const res = await fetch('/api/claims');
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.success) {
+                            currentClaims = data.claims;
+                            await putCacheEntry('claims_cache', currentClaims);
+                            applyFilters();
+                            updateSummary();
+                            return;
+                        }
+                    }
+                    throw new Error('Network or server error');
+                } catch (error) {
+                    console.warn('Offline – using cached claims', error);
+                    // fallthrough to cache
+                }
+            }
+
+            // Offline or API failed: read from Dexie cache
+            const cached = await getCacheEntry('claims_cache');
             if (cached && cached.length > 0) {
                 currentClaims = cached;
                 applyFilters();
@@ -415,669 +465,664 @@
                 container.appendChild(note);
                 return;
             }
+
             // No cache
             container.innerHTML = '<div class="text-center text-gray-400 py-8">No claims available offline. Please connect to the internet.</div>';
         }
-    }
 
-    // ---------- Update summary ----------
-    function updateSummary() {
-        const total = currentClaims.length;
-        const active = currentClaims.filter(c => c.status === 'active').length;
-        const resolved = currentClaims.filter(c => c.status === 'resolved').length;
-        const totalItems = currentClaims.reduce((sum, c) => sum + c.quantity, 0);
+        // ---------- Update summary ----------
+        function updateSummary() {
+            const total = currentClaims.length;
+            const active = currentClaims.filter(c => c.status === 'active').length;
+            const resolved = currentClaims.filter(c => c.status === 'resolved').length;
+            const totalItems = currentClaims.reduce((sum, c) => sum + c.quantity, 0);
 
-        document.getElementById('totalClaims').textContent = total;
-        document.getElementById('activeClaims').textContent = active;
-        document.getElementById('resolvedClaims').textContent = resolved;
-        document.getElementById('totalItemsClaimed').textContent = totalItems;
-    }
-
-    // ---------- Apply filters ----------
-    function applyFilters() {
-        const searchTerm = document.getElementById('searchInput').value.toLowerCase().trim();
-        const statusFilter = document.getElementById('statusFilter').value;
-
-        let filtered = currentClaims;
-
-        if (searchTerm) {
-            filtered = filtered.filter(c =>
-                c.product_name.toLowerCase().includes(searchTerm) ||
-                c.brand.toLowerCase().includes(searchTerm) ||
-                c.batch_id.toString().includes(searchTerm)
-            );
+            document.getElementById('totalClaims').textContent = total;
+            document.getElementById('activeClaims').textContent = active;
+            document.getElementById('resolvedClaims').textContent = resolved;
+            document.getElementById('totalItemsClaimed').textContent = totalItems;
         }
 
-        if (statusFilter !== 'all') {
-            filtered = filtered.filter(c => c.status === statusFilter);
+        // ---------- Apply filters ----------
+        function applyFilters() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase().trim();
+            const statusFilter = document.getElementById('statusFilter').value;
+
+            let filtered = currentClaims;
+
+            if (searchTerm) {
+                filtered = filtered.filter(c =>
+                    c.product_name.toLowerCase().includes(searchTerm) ||
+                    c.brand.toLowerCase().includes(searchTerm) ||
+                    c.batch_id.toString().includes(searchTerm)
+                );
+            }
+
+            if (statusFilter !== 'all') {
+                filtered = filtered.filter(c => c.status === statusFilter);
+            }
+
+            renderClaims(filtered);
         }
 
-        renderClaims(filtered);
-    }
+        // ---------- Render claims ----------
+        function renderClaims(claims) {
+            const container = document.getElementById('claimsList');
+            if (!claims || claims.length === 0) {
+                container.innerHTML = '<div class="text-center text-gray-400 py-8">No claims found.</div>';
+                return;
+            }
 
-    // ---------- Render claims ----------
-    function renderClaims(claims) {
-        const container = document.getElementById('claimsList');
-        if (!claims || claims.length === 0) {
-            container.innerHTML = '<div class="text-center text-gray-400 py-8">No claims found.</div>';
-            return;
-        }
-
-        container.innerHTML = claims.map(claim => {
-            const originalStock = claim.batch_original || (claim.batch_stock + claim.quantity);
-            const physicalStock = claim.batch_stock || 0;
-            const goodStock = claim.remaining_good || 0;
-            const sold = originalStock - physicalStock;
-
-            return `
-            <div class="claim-card bg-white rounded-xl shadow-md border p-3 md:p-4 ${claim.status === 'resolved' ? 'border-green-200' : 'border-red-200'}">
-                <div class="flex flex-wrap justify-between items-start gap-2">
-                    <div class="flex-1 min-w-0">
-                        <div class="claim-header">
-                            <h3 class="font-bold text-base md:text-lg text-indigo-700 truncate">${escapeHtml(claim.product_name)}</h3>
-                            ${getStatusBadge(claim.status)}
-                            ${getIssueBadge(claim.issue_type)}
-                        </div>
-                        <p class="text-xs md:text-sm text-gray-600 mt-1">
-                            Brand: ${escapeHtml(claim.brand)} | Category: ${escapeHtml(claim.category)}
-                        </p>
-                        <p class="text-xs md:text-sm text-gray-600">
-                            Batch #${claim.batch_id} | Claimed: <strong class="text-red-600">${claim.quantity}</strong>
-                        </p>
-                        <div class="mt-2">
-                            <div class="stock-breakdown">
-                                <div class="stock-item stock-total">
-                                    <span class="text-gray-500">Total</span>
-                                    <p class="font-bold text-gray-700 text-xs">${originalStock}</p>
-                                </div>
-                                <div class="stock-item stock-sold">
-                                    <span class="text-gray-500">Sold</span>
-                                    <p class="font-bold text-blue-600 text-xs">${sold}</p>
-                                </div>
-                                <div class="stock-item stock-physical">
-                                    <span class="text-gray-500">Physical</span>
-                                    <p class="font-bold text-indigo-600 text-xs">${physicalStock}</p>
-                                </div>
-                                <div class="stock-item stock-good">
-                                    <span class="text-gray-500">✅ Good</span>
-                                    <p class="font-bold text-green-600 text-xs">${goodStock}</p>
-                                </div>
-                            </div>
-                            <div class="text-xs text-gray-400 mt-1">
-                                💡 ${originalStock} total → ${sold} sold → ${physicalStock} physical → ${claim.quantity} claimed → ${goodStock} good
-                            </div>
-                        </div>
-                        ${claim.description ? `<p class="text-xs text-gray-500 mt-1">📝 ${escapeHtml(claim.description)}</p>` : ''}
-                        <p class="text-xs text-gray-400 mt-1">Created: ${formatDate(claim.created_at)}</p>
-                    </div>
-                    <div class="claim-actions">
-                        <button onclick="viewClaim(${claim.id})" class="bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs">👁 View</button>
-                        ${claim.status === 'active' ? `
-                            <button onclick="resolveClaim(${claim.id})" class="bg-green-500 hover:bg-green-600 text-white px-2 py-1 rounded text-xs">✅ Resolve</button>
-                            <button onclick="editClaim(${claim.id})" class="bg-yellow-500 hover:bg-yellow-600 text-white px-2 py-1 rounded text-xs">✏️ Edit</button>
-                        ` : `
-                            <span class="text-xs text-green-600 text-center">✓ Resolved</span>
-                        `}
-                        <button onclick="deleteClaim(${claim.id})" class="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-xs">🗑️ Delete</button>
-                    </div>
-                </div>
-            </div>
-        `}).join('');
-    }
-
-    // ---------- View claim ----------
-    async function viewClaim(claimId) {
-        try {
-            const res = await fetch(`/api/claims`);
-            const data = await res.json();
-            if (data.success) {
-                const claim = data.claims.find(c => c.id === claimId);
-                if (!claim) {
-                    alert('Claim not found');
-                    return;
-                }
-
+            container.innerHTML = claims.map(claim => {
                 const originalStock = claim.batch_original || (claim.batch_stock + claim.quantity);
                 const physicalStock = claim.batch_stock || 0;
                 const goodStock = claim.remaining_good || 0;
                 const sold = originalStock - physicalStock;
 
-                document.getElementById('viewClaimTitle').textContent = `Claim #${claim.id} - ${claim.product_name}`;
-                document.getElementById('viewClaimContent').innerHTML = `
-                    <div class="space-y-3">
-                        <div class="grid grid-cols-2 gap-3">
-                            <div class="bg-gray-50 p-3 rounded">
-                                <p class="text-xs text-gray-500">Product</p>
-                                <p class="font-bold text-indigo-700">${escapeHtml(claim.product_name)}</p>
-                                <p class="text-sm text-gray-600">${escapeHtml(claim.brand)} | ${escapeHtml(claim.category)}</p>
-                            </div>
-                            <div class="bg-gray-50 p-3 rounded">
-                                <p class="text-xs text-gray-500">Batch</p>
-                                <p class="font-bold">#${claim.batch_id}</p>
-                                <p class="text-sm text-gray-600">Status: ${claim.is_faulty ? '⚠️ Faulty' : '✅ Good'}</p>
-                            </div>
-                        </div>
-                        <div class="bg-gray-50 p-3 rounded">
-                            <p class="text-xs text-gray-500 font-medium mb-2">📊 Stock Breakdown</p>
-                            <div class="stock-breakdown">
-                                <div class="stock-item stock-total">
-                                    <span class="text-xs text-gray-500">Total</span>
-                                    <p class="font-bold text-gray-700">${originalStock}</p>
-                                </div>
-                                <div class="stock-item stock-sold">
-                                    <span class="text-xs text-gray-500">Sold</span>
-                                    <p class="font-bold text-blue-600">${sold}</p>
-                                </div>
-                                <div class="stock-item stock-physical">
-                                    <span class="text-xs text-gray-500">Physical</span>
-                                    <p class="font-bold text-indigo-600">${physicalStock}</p>
-                                </div>
-                                <div class="stock-item stock-good">
-                                    <span class="text-xs text-gray-500">✅ Good</span>
-                                    <p class="font-bold text-green-600">${goodStock}</p>
-                                </div>
-                            </div>
-                            <p class="text-xs text-gray-400 mt-1">${originalStock} total → ${sold} sold → ${physicalStock} physical → ${claim.quantity} claimed → ${goodStock} good</p>
-                        </div>
-                        <div class="grid grid-cols-2 gap-3">
-                            <div class="bg-gray-50 p-3 rounded">
-                                <p class="text-xs text-gray-500">Quantity Claimed</p>
-                                <p class="font-bold text-red-600">${claim.quantity}</p>
-                            </div>
-                            <div class="bg-gray-50 p-3 rounded">
-                                <p class="text-xs text-gray-500">Status</p>
+                return `
+                <div class="claim-card bg-white rounded-xl shadow-md border p-3 md:p-4 ${claim.status === 'resolved' ? 'border-green-200' : 'border-red-200'}">
+                    <div class="flex flex-wrap justify-between items-start gap-2">
+                        <div class="flex-1 min-w-0">
+                            <div class="claim-header">
+                                <h3 class="font-bold text-base md:text-lg text-indigo-700 truncate">${escapeHtml(claim.product_name)}</h3>
                                 ${getStatusBadge(claim.status)}
+                                ${getIssueBadge(claim.issue_type)}
                             </div>
-                        </div>
-                        <div class="bg-gray-50 p-3 rounded">
-                            <p class="text-xs text-gray-500">Issue Type</p>
-                            ${getIssueBadge(claim.issue_type)}
-                        </div>
-                        ${claim.description ? `
-                            <div class="bg-gray-50 p-3 rounded">
-                                <p class="text-xs text-gray-500">Description</p>
-                                <p class="text-sm">${escapeHtml(claim.description)}</p>
+                            <p class="text-xs md:text-sm text-gray-600 mt-1">
+                                Brand: ${escapeHtml(claim.brand)} | Category: ${escapeHtml(claim.category)}
+                            </p>
+                            <p class="text-xs md:text-sm text-gray-600">
+                                Batch #${claim.batch_id} | Claimed: <strong class="text-red-600">${claim.quantity}</strong>
+                            </p>
+                            <div class="mt-2">
+                                <div class="stock-breakdown">
+                                    <div class="stock-item stock-total">
+                                        <span class="text-gray-500">Total</span>
+                                        <p class="font-bold text-gray-700 text-xs">${originalStock}</p>
+                                    </div>
+                                    <div class="stock-item stock-sold">
+                                        <span class="text-gray-500">Sold</span>
+                                        <p class="font-bold text-blue-600 text-xs">${sold}</p>
+                                    </div>
+                                    <div class="stock-item stock-physical">
+                                        <span class="text-gray-500">Physical</span>
+                                        <p class="font-bold text-indigo-600 text-xs">${physicalStock}</p>
+                                    </div>
+                                    <div class="stock-item stock-good">
+                                        <span class="text-gray-500">✅ Good</span>
+                                        <p class="font-bold text-green-600 text-xs">${goodStock}</p>
+                                    </div>
+                                </div>
+                                <div class="text-xs text-gray-400 mt-1">
+                                    💡 ${originalStock} total → ${sold} sold → ${physicalStock} physical → ${claim.quantity} claimed → ${goodStock} good
+                                </div>
                             </div>
-                        ` : ''}
-                        <div class="bg-gray-50 p-3 rounded">
-                            <p class="text-xs text-gray-500">Created</p>
-                            <p class="text-sm">${formatDate(claim.created_at)}</p>
+                            ${claim.description ? `<p class="text-xs text-gray-500 mt-1">📝 ${escapeHtml(claim.description)}</p>` : ''}
+                            <p class="text-xs text-gray-400 mt-1">Created: ${formatDate(claim.created_at)}</p>
                         </div>
-                        ${claim.updated_at ? `
-                            <div class="bg-gray-50 p-3 rounded">
-                                <p class="text-xs text-gray-500">Last Updated</p>
-                                <p class="text-sm">${formatDate(claim.updated_at)}</p>
-                            </div>
-                        ` : ''}
-                        <div class="bg-blue-50 p-3 rounded border border-blue-200">
-                            <p class="text-xs text-blue-700">💡 Claimed items are removed from good stock. Resolving marks the claim as complete without restoring stock. Deleting restores stock.</p>
+                        <div class="claim-actions">
+                            <button onclick="viewClaim(${claim.id})" class="bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs">👁 View</button>
+                            ${claim.status === 'active' ? `
+                                <button onclick="resolveClaim(${claim.id})" class="bg-green-500 hover:bg-green-600 text-white px-2 py-1 rounded text-xs">✅ Resolve</button>
+                                <button onclick="editClaim(${claim.id})" class="bg-yellow-500 hover:bg-yellow-600 text-white px-2 py-1 rounded text-xs">✏️ Edit</button>
+                            ` : `
+                                <span class="text-xs text-green-600 text-center">✓ Resolved</span>
+                            `}
+                            <button onclick="deleteClaim(${claim.id})" class="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-xs">🗑️ Delete</button>
                         </div>
                     </div>
-                `;
-                document.getElementById('viewClaimModal').classList.remove('hidden');
-            }
-        } catch (error) {
-            alert('Error loading claim details: ' + error.message);
+                </div>
+            `}).join('');
         }
-    }
 
-    function closeViewClaimModal() {
-        document.getElementById('viewClaimModal').classList.add('hidden');
-    }
+        // ---------- View claim ----------
+        async function viewClaim(claimId) {
+            try {
+                const res = await fetch('/api/claims');
+                const data = await res.json();
+                if (data.success) {
+                    const claim = data.claims.find(c => c.id === claimId);
+                    if (!claim) {
+                        alert('Claim not found');
+                        return;
+                    }
 
-    // ---------- Resolve claim (offline-aware) ----------
-    async function resolveClaim(claimId) {
-        if (!confirm('Mark this claim as resolved? The claimed items will remain deducted from stock.')) return;
-        
-        if (!navigator.onLine) {
-            // Save as pending action
-            addPendingAction('resolve', claimId, null);
-            alert('📶 You are offline. The resolution will be synced when you reconnect.');
-            // Also update local claim status optimistically
+                    const originalStock = claim.batch_original || (claim.batch_stock + claim.quantity);
+                    const physicalStock = claim.batch_stock || 0;
+                    const goodStock = claim.remaining_good || 0;
+                    const sold = originalStock - physicalStock;
+
+                    document.getElementById('viewClaimTitle').textContent = `Claim #${claim.id} - ${claim.product_name}`;
+                    document.getElementById('viewClaimContent').innerHTML = `
+                        <div class="space-y-3">
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="bg-gray-50 p-3 rounded">
+                                    <p class="text-xs text-gray-500">Product</p>
+                                    <p class="font-bold text-indigo-700">${escapeHtml(claim.product_name)}</p>
+                                    <p class="text-sm text-gray-600">${escapeHtml(claim.brand)} | ${escapeHtml(claim.category)}</p>
+                                </div>
+                                <div class="bg-gray-50 p-3 rounded">
+                                    <p class="text-xs text-gray-500">Batch</p>
+                                    <p class="font-bold">#${claim.batch_id}</p>
+                                    <p class="text-sm text-gray-600">Status: ${claim.is_faulty ? '⚠️ Faulty' : '✅ Good'}</p>
+                                </div>
+                            </div>
+                            <div class="bg-gray-50 p-3 rounded">
+                                <p class="text-xs text-gray-500 font-medium mb-2">📊 Stock Breakdown</p>
+                                <div class="stock-breakdown">
+                                    <div class="stock-item stock-total">
+                                        <span class="text-xs text-gray-500">Total</span>
+                                        <p class="font-bold text-gray-700">${originalStock}</p>
+                                    </div>
+                                    <div class="stock-item stock-sold">
+                                        <span class="text-xs text-gray-500">Sold</span>
+                                        <p class="font-bold text-blue-600">${sold}</p>
+                                    </div>
+                                    <div class="stock-item stock-physical">
+                                        <span class="text-xs text-gray-500">Physical</span>
+                                        <p class="font-bold text-indigo-600">${physicalStock}</p>
+                                    </div>
+                                    <div class="stock-item stock-good">
+                                        <span class="text-xs text-gray-500">✅ Good</span>
+                                        <p class="font-bold text-green-600">${goodStock}</p>
+                                    </div>
+                                </div>
+                                <p class="text-xs text-gray-400 mt-1">${originalStock} total → ${sold} sold → ${physicalStock} physical → ${claim.quantity} claimed → ${goodStock} good</p>
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="bg-gray-50 p-3 rounded">
+                                    <p class="text-xs text-gray-500">Quantity Claimed</p>
+                                    <p class="font-bold text-red-600">${claim.quantity}</p>
+                                </div>
+                                <div class="bg-gray-50 p-3 rounded">
+                                    <p class="text-xs text-gray-500">Status</p>
+                                    ${getStatusBadge(claim.status)}
+                                </div>
+                            </div>
+                            <div class="bg-gray-50 p-3 rounded">
+                                <p class="text-xs text-gray-500">Issue Type</p>
+                                ${getIssueBadge(claim.issue_type)}
+                            </div>
+                            ${claim.description ? `
+                                <div class="bg-gray-50 p-3 rounded">
+                                    <p class="text-xs text-gray-500">Description</p>
+                                    <p class="text-sm">${escapeHtml(claim.description)}</p>
+                                </div>
+                            ` : ''}
+                            <div class="bg-gray-50 p-3 rounded">
+                                <p class="text-xs text-gray-500">Created</p>
+                                <p class="text-sm">${formatDate(claim.created_at)}</p>
+                            </div>
+                            ${claim.updated_at ? `
+                                <div class="bg-gray-50 p-3 rounded">
+                                    <p class="text-xs text-gray-500">Last Updated</p>
+                                    <p class="text-sm">${formatDate(claim.updated_at)}</p>
+                                </div>
+                            ` : ''}
+                            <div class="bg-blue-50 p-3 rounded border border-blue-200">
+                                <p class="text-xs text-blue-700">💡 Claimed items are removed from good stock. Resolving marks the claim as complete without restoring stock. Deleting restores stock.</p>
+                            </div>
+                        </div>
+                    `;
+                    document.getElementById('viewClaimModal').classList.remove('hidden');
+                }
+            } catch (error) {
+                alert('Error loading claim details: ' + error.message);
+            }
+        }
+
+        function closeViewClaimModal() {
+            document.getElementById('viewClaimModal').classList.add('hidden');
+        }
+
+        // ---------- Resolve claim (offline-aware) ----------
+        async function resolveClaim(claimId) {
+            if (!confirm('Mark this claim as resolved? The claimed items will remain deducted from stock.')) return;
+            
+            if (!navigator.onLine) {
+                await addPendingAction('resolve', claimId, null);
+                alert('📶 You are offline. The resolution will be synced when you reconnect.');
+                // Also update local claim status optimistically
+                const claim = currentClaims.find(c => c.id === claimId);
+                if (claim) {
+                    claim.status = 'resolved';
+                    applyFilters();
+                    updateSummary();
+                }
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/claims/${claimId}/resolve`, { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    alert('✅ Claim resolved successfully!');
+                    loadClaims();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                alert('Failed to resolve claim: ' + error.message);
+            }
+        }
+
+        // ---------- Delete claim (offline-aware) ----------
+        async function deleteClaim(claimId) {
             const claim = currentClaims.find(c => c.id === claimId);
-            if (claim) {
-                claim.status = 'resolved';
+            if (!claim) return;
+            
+            const message = claim.status === 'resolved' 
+                ? `⚠️ This claim is resolved. Deleting it will restore ${claim.quantity} units to inventory.\n\nContinue?`
+                : `⚠️ Are you sure you want to delete this claim? This will restore ${claim.quantity} units to inventory.\n\nContinue?`;
+            
+            if (!confirm(message)) return;
+
+            if (!navigator.onLine) {
+                await addPendingAction('delete', claimId, null);
+                alert('📶 You are offline. The deletion will be synced when you reconnect.');
+                // Remove from local list optimistically
+                currentClaims = currentClaims.filter(c => c.id !== claimId);
                 applyFilters();
                 updateSummary();
+                return;
             }
-            return;
-        }
 
-        try {
-            const res = await fetch(`/api/claims/${claimId}/resolve`, { method: 'POST' });
-            const data = await res.json();
-            if (data.success) {
-                alert('✅ Claim resolved successfully!');
-                loadClaims();
-            } else {
-                alert('Error: ' + data.error);
-            }
-        } catch (error) {
-            alert('Failed to resolve claim: ' + error.message);
-        }
-    }
-
-    // ---------- Delete claim (offline-aware) ----------
-    async function deleteClaim(claimId) {
-        const claim = currentClaims.find(c => c.id === claimId);
-        if (!claim) return;
-        
-        const message = claim.status === 'resolved' 
-            ? `⚠️ This claim is resolved. Deleting it will restore ${claim.quantity} units to inventory.\n\nContinue?`
-            : `⚠️ Are you sure you want to delete this claim? This will restore ${claim.quantity} units to inventory.\n\nContinue?`;
-        
-        if (!confirm(message)) return;
-
-        if (!navigator.onLine) {
-            addPendingAction('delete', claimId, null);
-            alert('📶 You are offline. The deletion will be synced when you reconnect.');
-            // Remove from local list optimistically
-            currentClaims = currentClaims.filter(c => c.id !== claimId);
-            applyFilters();
-            updateSummary();
-            return;
-        }
-
-        try {
-            const res = await fetch(`/api/claims/${claimId}`, { method: 'DELETE' });
-            const data = await res.json();
-            if (data.success) {
-                alert(`✅ Claim deleted successfully. ${claim.quantity} units restored to inventory.`);
-                loadClaims();
-            } else {
-                alert('Error: ' + data.error);
-            }
-        } catch (error) {
-            alert('Failed to delete claim: ' + error.message);
-        }
-    }
-
-    // ---------- Edit claim ----------
-    function editClaim(claimId) {
-        const claim = currentClaims.find(c => c.id === claimId);
-        if (!claim) {
-            alert('Claim not found');
-            return;
-        }
-        
-        editClaimId = claimId;
-        document.getElementById('claimModalTitle').textContent = '✏️ Edit Claim';
-        document.getElementById('saveClaimBtn').textContent = 'Update Claim';
-        
-        document.getElementById('claimIssueType').value = claim.issue_type;
-        document.getElementById('claimQuantity').value = claim.quantity;
-        document.getElementById('claimDescription').value = claim.description || '';
-        
-        selectedProduct = {
-            id: claim.product_id,
-            name: claim.product_name,
-            brand: claim.brand,
-            category: claim.category,
-            stock: claim.remaining_good + claim.quantity
-        };
-        displaySelectedProduct(selectedProduct);
-        
-        document.getElementById('batchSelectionContainer').classList.remove('hidden');
-        loadBatchesForProduct(claim.product_id, claim.batch_id);
-        
-        document.getElementById('claimModal').classList.remove('hidden');
-    }
-
-    // ---------- New claim ----------
-    function openNewClaimModal() {
-        editClaimId = null;
-        document.getElementById('claimModalTitle').textContent = '🔧 New Claim';
-        document.getElementById('saveClaimBtn').textContent = 'Save Claim';
-        document.getElementById('claimIssueType').value = 'Damaged';
-        document.getElementById('claimQuantity').value = '';
-        document.getElementById('claimDescription').value = '';
-        document.getElementById('claimProductSearch').value = '';
-        document.getElementById('selectedProductDisplay').classList.add('hidden');
-        document.getElementById('batchSelectionContainer').classList.add('hidden');
-        document.getElementById('claimSearchResults').classList.add('hidden');
-        document.getElementById('claimBatchSelect').innerHTML = '<option value="">Select a batch...</option>';
-        document.getElementById('batchInfoDisplay').classList.add('hidden');
-        document.getElementById('stockImpact').classList.add('hidden');
-        selectedProduct = null;
-        selectedBatch = null;
-        searchResultsCache = [];
-        document.getElementById('claimModal').classList.remove('hidden');
-    }
-
-    function closeClaimModal() {
-        document.getElementById('claimModal').classList.add('hidden');
-        editClaimId = null;
-        selectedProduct = null;
-        selectedBatch = null;
-        searchResultsCache = [];
-    }
-
-    // ---------- Display selected product ----------
-    function displaySelectedProduct(product) {
-        const display = document.getElementById('selectedProductDisplay');
-        document.getElementById('selectedProductName').textContent = `${product.name} (${product.brand})`;
-        document.getElementById('selectedProductDetails').textContent = `Category: ${product.category || 'N/A'}`;
-        document.getElementById('selectedProductStock').textContent = product.stock || 0;
-        display.classList.remove('hidden');
-    }
-
-    function clearSelectedProduct() {
-        selectedProduct = null;
-        selectedBatch = null;
-        document.getElementById('selectedProductDisplay').classList.add('hidden');
-        document.getElementById('batchSelectionContainer').classList.add('hidden');
-        document.getElementById('claimProductSearch').value = '';
-        document.getElementById('claimSearchResults').classList.add('hidden');
-        document.getElementById('claimBatchSelect').innerHTML = '<option value="">Select a batch...</option>';
-        document.getElementById('batchInfoDisplay').classList.add('hidden');
-        document.getElementById('stockImpact').classList.add('hidden');
-        searchResultsCache = [];
-    }
-
-    // ---------- Search products ----------
-    async function searchProducts(keyword) {
-        if (!keyword || keyword.length < 2) {
-            document.getElementById('claimSearchResults').classList.add('hidden');
-            searchResultsCache = [];
-            return;
-        }
-
-        try {
-            const res = await fetch(`/api/claims/search?q=${encodeURIComponent(keyword)}`);
-            const data = await res.json();
-            
-            searchResultsCache = data.success ? (data.products || []) : [];
-            
-            if (data.success && searchResultsCache.length > 0) {
-                const results = document.getElementById('claimSearchResults');
-                results.innerHTML = searchResultsCache.map(p => `
-                    <div class="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b" onclick="selectProduct(${p.id})">
-                        <div class="font-medium text-indigo-700">${escapeHtml(p.name)}</div>
-                        <div class="text-xs text-gray-500">${escapeHtml(p.brand)} | ${escapeHtml(p.category)} | Stock: ${p.stock}</div>
-                    </div>
-                `).join('');
-                results.classList.remove('hidden');
-            } else {
-                document.getElementById('claimSearchResults').innerHTML = `
-                    <div class="px-3 py-2 text-gray-500">No products found</div>
-                `;
-                document.getElementById('claimSearchResults').classList.remove('hidden');
-            }
-        } catch (error) {
-            console.error('Search error:', error);
-        }
-    }
-
-    // ---------- Select product ----------
-    function selectProduct(productId) {
-        const product = searchResultsCache.find(p => p.id === productId);
-        
-        if (product) {
-            selectedProduct = product;
-            displaySelectedProduct(product);
-            document.getElementById('claimSearchResults').classList.add('hidden');
-            loadBatchesForProduct(productId);
-        }
-    }
-
-    // ---------- Load batches for product ----------
-    async function loadBatchesForProduct(productId, selectedBatchId = null) {
-        try {
-            const res = await fetch(`/api/claims/product/${productId}/batches`);
-            const data = await res.json();
-            if (data.success && data.batches.length > 0) {
-                const select = document.getElementById('claimBatchSelect');
-                select.innerHTML = '<option value="">Select a batch...</option>';
-                data.batches.forEach(batch => {
-                    const option = document.createElement('option');
-                    option.value = batch.batch_id;
-                    const goodStock = batch.remaining_quantity - (batch.claimed_quantity || 0);
-                    const label = `#${batch.batch_id} - ${goodStock} good - ₵${batch.selling_price.toFixed(2)}`;
-                    option.textContent = label;
-                    if (selectedBatchId && batch.batch_id === selectedBatchId) {
-                        option.selected = true;
-                    }
-                    option.dataset.batchData = JSON.stringify(batch);
-                    select.appendChild(option);
-                });
-                document.getElementById('batchSelectionContainer').classList.remove('hidden');
-                
-                if (selectedBatchId) {
-                    const batch = data.batches.find(b => b.batch_id === selectedBatchId);
-                    if (batch) {
-                        showBatchInfo(batch);
-                        updateStockImpact(batch);
-                    }
+            try {
+                const res = await fetch(`/api/claims/${claimId}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (data.success) {
+                    alert(`✅ Claim deleted successfully. ${claim.quantity} units restored to inventory.`);
+                    loadClaims();
+                } else {
+                    alert('Error: ' + data.error);
                 }
-                
-                select.onchange = function() {
-                    if (this.value) {
-                        const batchData = JSON.parse(this.options[this.selectedIndex].dataset.batchData);
-                        showBatchInfo(batchData);
-                        selectedBatch = batchData;
-                        const goodStock = batchData.remaining_quantity - (batchData.claimed_quantity || 0);
-                        document.getElementById('claimQuantity').max = goodStock;
-                        updateStockImpact(batchData);
-                    } else {
-                        document.getElementById('batchInfoDisplay').classList.add('hidden');
-                        document.getElementById('stockImpact').classList.add('hidden');
-                        selectedBatch = null;
-                    }
-                };
-            } else {
-                document.getElementById('batchSelectionContainer').classList.add('hidden');
-                document.getElementById('claimBatchSelect').innerHTML = '<option value="">No batches available</option>';
+            } catch (error) {
+                alert('Failed to delete claim: ' + error.message);
             }
-        } catch (error) {
-            console.error('Error loading batches:', error);
         }
-    }
 
-    // ---------- Show batch info ----------
-    function showBatchInfo(batch) {
-        const display = document.getElementById('batchInfoDisplay');
-        const goodStock = batch.remaining_quantity - (batch.claimed_quantity || 0);
-        display.innerHTML = `
-            <span class="font-medium">Batch #${batch.batch_id}</span>
-            | Total: ${batch.quantity || batch.remaining_quantity + (batch.claimed_quantity || 0)}
-            | ✅ Good: ${goodStock}
-            | 💰 Price: ₵${batch.selling_price.toFixed(2)}
-            ${batch.claimed_quantity > 0 ? `<span class="text-orange-500 ml-2">📌 Claimed: ${batch.claimed_quantity}</span>` : ''}
-        `;
-        display.classList.remove('hidden');
-    }
+        // ---------- Edit claim ----------
+        function editClaim(claimId) {
+            const claim = currentClaims.find(c => c.id === claimId);
+            if (!claim) {
+                alert('Claim not found');
+                return;
+            }
+            
+            editClaimId = claimId;
+            document.getElementById('claimModalTitle').textContent = '✏️ Edit Claim';
+            document.getElementById('saveClaimBtn').textContent = 'Update Claim';
+            
+            document.getElementById('claimIssueType').value = claim.issue_type;
+            document.getElementById('claimQuantity').value = claim.quantity;
+            document.getElementById('claimDescription').value = claim.description || '';
+            
+            selectedProduct = {
+                id: claim.product_id,
+                name: claim.product_name,
+                brand: claim.brand,
+                category: claim.category,
+                stock: claim.remaining_good + claim.quantity
+            };
+            displaySelectedProduct(selectedProduct);
+            
+            document.getElementById('batchSelectionContainer').classList.remove('hidden');
+            loadBatchesForProduct(claim.product_id, claim.batch_id);
+            
+            document.getElementById('claimModal').classList.remove('hidden');
+        }
 
-    // ---------- Update stock impact ----------
-    function updateStockImpact(batch) {
-        const container = document.getElementById('stockImpact');
-        const currentStock = document.getElementById('currentStockDisplay');
-        const afterStock = document.getElementById('afterStockDisplay');
-        
-        const goodStock = batch.remaining_quantity - (batch.claimed_quantity || 0);
-        currentStock.textContent = goodStock;
-        
-        const quantityInput = document.getElementById('claimQuantity');
-        quantityInput.oninput = function() {
-            const qty = parseInt(this.value) || 0;
+        // ---------- New claim ----------
+        function openNewClaimModal() {
+            editClaimId = null;
+            document.getElementById('claimModalTitle').textContent = '🔧 New Claim';
+            document.getElementById('saveClaimBtn').textContent = 'Save Claim';
+            document.getElementById('claimIssueType').value = 'Damaged';
+            document.getElementById('claimQuantity').value = '';
+            document.getElementById('claimDescription').value = '';
+            document.getElementById('claimProductSearch').value = '';
+            document.getElementById('selectedProductDisplay').classList.add('hidden');
+            document.getElementById('batchSelectionContainer').classList.add('hidden');
+            document.getElementById('claimSearchResults').classList.add('hidden');
+            document.getElementById('claimBatchSelect').innerHTML = '<option value="">Select a batch...</option>';
+            document.getElementById('batchInfoDisplay').classList.add('hidden');
+            document.getElementById('stockImpact').classList.add('hidden');
+            selectedProduct = null;
+            selectedBatch = null;
+            searchResultsCache = [];
+            document.getElementById('claimModal').classList.remove('hidden');
+        }
+
+        function closeClaimModal() {
+            document.getElementById('claimModal').classList.add('hidden');
+            editClaimId = null;
+            selectedProduct = null;
+            selectedBatch = null;
+            searchResultsCache = [];
+        }
+
+        // ---------- Display selected product ----------
+        function displaySelectedProduct(product) {
+            const display = document.getElementById('selectedProductDisplay');
+            document.getElementById('selectedProductName').textContent = `${product.name} (${product.brand})`;
+            document.getElementById('selectedProductDetails').textContent = `Category: ${product.category || 'N/A'}`;
+            document.getElementById('selectedProductStock').textContent = product.stock || 0;
+            display.classList.remove('hidden');
+        }
+
+        function clearSelectedProduct() {
+            selectedProduct = null;
+            selectedBatch = null;
+            document.getElementById('selectedProductDisplay').classList.add('hidden');
+            document.getElementById('batchSelectionContainer').classList.add('hidden');
+            document.getElementById('claimProductSearch').value = '';
+            document.getElementById('claimSearchResults').classList.add('hidden');
+            document.getElementById('claimBatchSelect').innerHTML = '<option value="">Select a batch...</option>';
+            document.getElementById('batchInfoDisplay').classList.add('hidden');
+            document.getElementById('stockImpact').classList.add('hidden');
+            searchResultsCache = [];
+        }
+
+        // ---------- Search products ----------
+        async function searchProducts(keyword) {
+            if (!keyword || keyword.length < 2) {
+                document.getElementById('claimSearchResults').classList.add('hidden');
+                searchResultsCache = [];
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/claims/search?q=${encodeURIComponent(keyword)}`);
+                const data = await res.json();
+                
+                searchResultsCache = data.success ? (data.products || []) : [];
+                
+                if (data.success && searchResultsCache.length > 0) {
+                    const results = document.getElementById('claimSearchResults');
+                    results.innerHTML = searchResultsCache.map(p => `
+                        <div class="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b" onclick="selectProduct(${p.id})">
+                            <div class="font-medium text-indigo-700">${escapeHtml(p.name)}</div>
+                            <div class="text-xs text-gray-500">${escapeHtml(p.brand)} | ${escapeHtml(p.category)} | Stock: ${p.stock}</div>
+                        </div>
+                    `).join('');
+                    results.classList.remove('hidden');
+                } else {
+                    document.getElementById('claimSearchResults').innerHTML = `
+                        <div class="px-3 py-2 text-gray-500">No products found</div>
+                    `;
+                    document.getElementById('claimSearchResults').classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error('Search error:', error);
+            }
+        }
+
+        // ---------- Select product ----------
+        function selectProduct(productId) {
+            const product = searchResultsCache.find(p => p.id === productId);
+            
+            if (product) {
+                selectedProduct = product;
+                displaySelectedProduct(product);
+                document.getElementById('claimSearchResults').classList.add('hidden');
+                loadBatchesForProduct(productId);
+            }
+        }
+
+        // ---------- Load batches for product ----------
+        async function loadBatchesForProduct(productId, selectedBatchId = null) {
+            try {
+                const res = await fetch(`/api/claims/product/${productId}/batches`);
+                const data = await res.json();
+                if (data.success && data.batches.length > 0) {
+                    const select = document.getElementById('claimBatchSelect');
+                    select.innerHTML = '<option value="">Select a batch...</option>';
+                    data.batches.forEach(batch => {
+                        const option = document.createElement('option');
+                        option.value = batch.batch_id;
+                        const goodStock = batch.remaining_quantity - (batch.claimed_quantity || 0);
+                        const label = `#${batch.batch_id} - ${goodStock} good - ₵${batch.selling_price.toFixed(2)}`;
+                        option.textContent = label;
+                        if (selectedBatchId && batch.batch_id === selectedBatchId) {
+                            option.selected = true;
+                        }
+                        option.dataset.batchData = JSON.stringify(batch);
+                        select.appendChild(option);
+                    });
+                    document.getElementById('batchSelectionContainer').classList.remove('hidden');
+                    
+                    if (selectedBatchId) {
+                        const batch = data.batches.find(b => b.batch_id === selectedBatchId);
+                        if (batch) {
+                            showBatchInfo(batch);
+                            updateStockImpact(batch);
+                        }
+                    }
+                    
+                    select.onchange = function() {
+                        if (this.value) {
+                            const batchData = JSON.parse(this.options[this.selectedIndex].dataset.batchData);
+                            showBatchInfo(batchData);
+                            selectedBatch = batchData;
+                            const goodStock = batchData.remaining_quantity - (batchData.claimed_quantity || 0);
+                            document.getElementById('claimQuantity').max = goodStock;
+                            updateStockImpact(batchData);
+                        } else {
+                            document.getElementById('batchInfoDisplay').classList.add('hidden');
+                            document.getElementById('stockImpact').classList.add('hidden');
+                            selectedBatch = null;
+                        }
+                    };
+                } else {
+                    document.getElementById('batchSelectionContainer').classList.add('hidden');
+                    document.getElementById('claimBatchSelect').innerHTML = '<option value="">No batches available</option>';
+                }
+            } catch (error) {
+                console.error('Error loading batches:', error);
+            }
+        }
+
+        // ---------- Show batch info ----------
+        function showBatchInfo(batch) {
+            const display = document.getElementById('batchInfoDisplay');
+            const goodStock = batch.remaining_quantity - (batch.claimed_quantity || 0);
+            display.innerHTML = `
+                <span class="font-medium">Batch #${batch.batch_id}</span>
+                | Total: ${batch.quantity || batch.remaining_quantity + (batch.claimed_quantity || 0)}
+                | ✅ Good: ${goodStock}
+                | 💰 Price: ₵${batch.selling_price.toFixed(2)}
+                ${batch.claimed_quantity > 0 ? `<span class="text-orange-500 ml-2">📌 Claimed: ${batch.claimed_quantity}</span>` : ''}
+            `;
+            display.classList.remove('hidden');
+        }
+
+        // ---------- Update stock impact ----------
+        function updateStockImpact(batch) {
+            const container = document.getElementById('stockImpact');
+            const currentStock = document.getElementById('currentStockDisplay');
+            const afterStock = document.getElementById('afterStockDisplay');
+            
+            const goodStock = batch.remaining_quantity - (batch.claimed_quantity || 0);
+            currentStock.textContent = goodStock;
+            
+            const quantityInput = document.getElementById('claimQuantity');
+            quantityInput.oninput = function() {
+                const qty = parseInt(this.value) || 0;
+                const newStock = goodStock - qty;
+                afterStock.textContent = newStock >= 0 ? newStock : 0;
+                afterStock.className = `font-bold ${newStock >= 0 ? 'text-green-600' : 'text-red-600'}`;
+            };
+            
+            const qty = parseInt(quantityInput.value) || 0;
             const newStock = goodStock - qty;
             afterStock.textContent = newStock >= 0 ? newStock : 0;
             afterStock.className = `font-bold ${newStock >= 0 ? 'text-green-600' : 'text-red-600'}`;
-        };
-        
-        const qty = parseInt(quantityInput.value) || 0;
-        const newStock = goodStock - qty;
-        afterStock.textContent = newStock >= 0 ? newStock : 0;
-        afterStock.className = `font-bold ${newStock >= 0 ? 'text-green-600' : 'text-red-600'}`;
-        
-        container.classList.remove('hidden');
-    }
-
-    // ---------- Save claim (offline-aware) ----------
-    async function saveClaim() {
-        if (!selectedProduct) {
-            alert('Please search and select a product.');
-            return;
+            
+            container.classList.remove('hidden');
         }
 
-        const batchSelect = document.getElementById('claimBatchSelect');
-        if (!batchSelect.value) {
-            alert('Please select a batch.');
-            return;
-        }
-
-        const quantity = parseInt(document.getElementById('claimQuantity').value);
-        if (!quantity || quantity < 1) {
-            alert('Please enter a valid quantity.');
-            return;
-        }
-
-        if (selectedBatch) {
-            const goodStock = selectedBatch.remaining_quantity - (selectedBatch.claimed_quantity || 0);
-            if (quantity > goodStock) {
-                alert(`⚠️ You cannot claim more than the available good stock (${goodStock}).`);
+        // ---------- Save claim (offline-aware) ----------
+        async function saveClaim() {
+            if (!selectedProduct) {
+                alert('Please search and select a product.');
                 return;
             }
-        }
 
-        const issueType = document.getElementById('claimIssueType').value;
-        const description = document.getElementById('claimDescription').value.trim();
+            const batchSelect = document.getElementById('claimBatchSelect');
+            if (!batchSelect.value) {
+                alert('Please select a batch.');
+                return;
+            }
 
-        const payload = {
-            product_id: selectedProduct.id,
-            batch_id: parseInt(batchSelect.value),
-            product_name: selectedProduct.name,
-            brand: selectedProduct.brand || '',
-            category: selectedProduct.category || '',
-            issue_type: issueType,
-            description: description,
-            quantity: quantity
-        };
+            const quantity = parseInt(document.getElementById('claimQuantity').value);
+            if (!quantity || quantity < 1) {
+                alert('Please enter a valid quantity.');
+                return;
+            }
 
-        // Offline handling
-        if (!navigator.onLine) {
-            // Store as pending claim
-            const pendingId = addPendingClaim(payload, editClaimId ? 'update' : 'create');
-            alert('📶 You are offline. The claim will be saved and synced when you reconnect.');
-            closeClaimModal();
-            // Add to local list optimistically (for UI)
-            const newClaim = {
-                id: pendingId,
-                product_name: selectedProduct.name,
-                brand: selectedProduct.brand,
-                category: selectedProduct.category,
+            if (selectedBatch) {
+                const goodStock = selectedBatch.remaining_quantity - (selectedBatch.claimed_quantity || 0);
+                if (quantity > goodStock) {
+                    alert(`⚠️ You cannot claim more than the available good stock (${goodStock}).`);
+                    return;
+                }
+            }
+
+            const issueType = document.getElementById('claimIssueType').value;
+            const description = document.getElementById('claimDescription').value.trim();
+
+            const payload = {
+                product_id: selectedProduct.id,
                 batch_id: parseInt(batchSelect.value),
+                product_name: selectedProduct.name,
+                brand: selectedProduct.brand || '',
+                category: selectedProduct.category || '',
                 issue_type: issueType,
                 description: description,
-                quantity: quantity,
-                status: 'active',
-                created_at: new Date().toISOString(),
-                is_faulty: false,
-                batch_stock: selectedBatch.remaining_quantity,
-                remaining_good: selectedBatch.remaining_quantity - quantity,
-                batch_original: selectedBatch.quantity || selectedBatch.remaining_quantity + (selectedBatch.claimed_quantity || 0)
+                quantity: quantity
             };
-            if (editClaimId) {
-                // Update existing claim in local list
-                const idx = currentClaims.findIndex(c => c.id === editClaimId);
-                if (idx !== -1) {
-                    currentClaims[idx] = { ...currentClaims[idx], ...newClaim };
-                }
-            } else {
-                currentClaims.push(newClaim);
-            }
-            applyFilters();
-            updateSummary();
-            return;
-        }
 
-        try {
-            let url = '/api/claims';
-            let method = 'POST';
-            if (editClaimId) {
-                url = `/api/claims/${editClaimId}`;
-                method = 'PUT';
-            }
-
-            const res = await fetch(url, {
-                method: method,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            
-            const data = await res.json();
-            if (data.success) {
-                alert(editClaimId ? '✅ Claim updated successfully!' : '✅ Claim created successfully!');
+            // Offline handling
+            if (!navigator.onLine) {
+                const pendingId = await addPendingClaim(payload, editClaimId ? 'update' : 'create');
+                alert('📶 You are offline. The claim will be saved and synced when you reconnect.');
                 closeClaimModal();
-                loadClaims();
-            } else {
-                alert('Error: ' + data.error);
-            }
-        } catch (error) {
-            alert('Failed to save claim: ' + error.message);
-        }
-    }
-
-    // ---------- Sync pending claims ----------
-    async function syncPendingClaims() {
-        const pendingClaims = getPendingClaims();
-        const pendingActions = getPendingActions();
-        let synced = 0;
-
-        // Sync pending actions (resolve, delete)
-        for (const action of pendingActions) {
-            try {
-                if (action.actionType === 'resolve') {
-                    const res = await fetch(`/api/claims/${action.claimId}/resolve`, { method: 'POST' });
-                    if (res.ok) {
-                        removePendingAction(action.id);
-                        synced++;
+                // Add to local list optimistically (for UI)
+                const newClaim = {
+                    id: pendingId,
+                    product_name: selectedProduct.name,
+                    brand: selectedProduct.brand,
+                    category: selectedProduct.category,
+                    batch_id: parseInt(batchSelect.value),
+                    issue_type: issueType,
+                    description: description,
+                    quantity: quantity,
+                    status: 'active',
+                    created_at: new Date().toISOString(),
+                    is_faulty: false,
+                    batch_stock: selectedBatch.remaining_quantity,
+                    remaining_good: selectedBatch.remaining_quantity - quantity,
+                    batch_original: selectedBatch.quantity || selectedBatch.remaining_quantity + (selectedBatch.claimed_quantity || 0)
+                };
+                if (editClaimId) {
+                    const idx = currentClaims.findIndex(c => c.id === editClaimId);
+                    if (idx !== -1) {
+                        currentClaims[idx] = { ...currentClaims[idx], ...newClaim };
                     }
-                } else if (action.actionType === 'delete') {
-                    const res = await fetch(`/api/claims/${action.claimId}`, { method: 'DELETE' });
-                    if (res.ok) {
-                        removePendingAction(action.id);
-                        synced++;
-                    }
+                } else {
+                    currentClaims.push(newClaim);
                 }
-            } catch (e) {
-                console.warn('Failed to sync action:', e);
+                applyFilters();
+                updateSummary();
+                return;
             }
-        }
 
-        // Sync pending claims (create/update)
-        for (const pending of pendingClaims) {
             try {
                 let url = '/api/claims';
                 let method = 'POST';
-                if (pending.operation === 'update') {
-                    // We need the claim ID – we stored it in the data? We didn't, so we'll skip update for simplicity.
-                    // We'll handle updates differently: for update, we should store the claim ID with the pending data.
-                    // For now, we'll treat all pending claims as creates.
-                    continue;
+                if (editClaimId) {
+                    url = `/api/claims/${editClaimId}`;
+                    method = 'PUT';
                 }
+
                 const res = await fetch(url, {
                     method: method,
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(pending.data)
+                    body: JSON.stringify(payload)
                 });
-                if (res.ok) {
-                    removePendingClaim(pending.id);
-                    synced++;
+                
+                const data = await res.json();
+                if (data.success) {
+                    alert(editClaimId ? '✅ Claim updated successfully!' : '✅ Claim created successfully!');
+                    closeClaimModal();
+                    loadClaims();
+                } else {
+                    alert('Error: ' + data.error);
                 }
-            } catch (e) {
-                console.warn('Failed to sync pending claim:', e);
+            } catch (error) {
+                alert('Failed to save claim: ' + error.message);
             }
         }
 
-        if (synced > 0) {
-            console.log(`✅ ${synced} pending claims/actions synced.`);
-            loadClaims();
-        }
-        updatePendingBadge();
-    }
+        // ---------- Sync pending claims ----------
+        async function syncPendingClaims() {
+            const pendingClaims = await getPendingClaims();
+            const pendingActions = await getPendingActions();
+            let synced = 0;
 
-    // ---------- Event listeners ----------
-    document.addEventListener('DOMContentLoaded', function() {
+            // Sync pending actions (resolve, delete)
+            for (const action of pendingActions) {
+                try {
+                    if (action.actionType === 'resolve') {
+                        const res = await fetch(`/api/claims/${action.claimId}/resolve`, { method: 'POST' });
+                        if (res.ok) {
+                            await removePendingAction(action.id);
+                            synced++;
+                        }
+                    } else if (action.actionType === 'delete') {
+                        const res = await fetch(`/api/claims/${action.claimId}`, { method: 'DELETE' });
+                        if (res.ok) {
+                            await removePendingAction(action.id);
+                            synced++;
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Failed to sync action:', e);
+                }
+            }
+
+            // Sync pending claims (create/update)
+            for (const pending of pendingClaims) {
+                try {
+                    let url = '/api/claims';
+                    let method = 'POST';
+                    if (pending.operation === 'update') {
+                        // We need the claim ID – we stored it in the data? We didn't, so we'll skip update for simplicity.
+                        // For now, we'll treat all pending claims as creates.
+                        continue;
+                    }
+                    const res = await fetch(url, {
+                        method: method,
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(pending.data)
+                    });
+                    if (res.ok) {
+                        await removePendingClaim(pending.id);
+                        synced++;
+                    }
+                } catch (e) {
+                    console.warn('Failed to sync pending claim:', e);
+                }
+            }
+
+            if (synced > 0) {
+                console.log(`✅ ${synced} pending claims/actions synced.`);
+                loadClaims();
+            }
+            updatePendingBadge();
+        }
+
+        // ---------- Event listeners ----------
         loadClaims();
         updateOfflineBanner();
         updatePendingBadge();
@@ -1114,22 +1159,22 @@
         document.getElementById('refreshBtn').addEventListener('click', loadClaims);
         document.getElementById('searchInput').addEventListener('input', applyFilters);
         document.getElementById('statusFilter').addEventListener('change', applyFilters);
-    });
 
-    window.addEventListener('online', function() {
-        syncPendingClaims();
-        loadClaims();
-    });
+        window.addEventListener('online', function() {
+            syncPendingClaims();
+            loadClaims();
+        });
 
-    // Expose functions for inline onclick
-    window.viewClaim = viewClaim;
-    window.closeViewClaimModal = closeViewClaimModal;
-    window.resolveClaim = resolveClaim;
-    window.deleteClaim = deleteClaim;
-    window.editClaim = editClaim;
-    window.openNewClaimModal = openNewClaimModal;
-    window.closeClaimModal = closeClaimModal;
-    window.clearSelectedProduct = clearSelectedProduct;
-    window.selectProduct = selectProduct;
+        // Expose functions for inline onclick
+        window.viewClaim = viewClaim;
+        window.closeViewClaimModal = closeViewClaimModal;
+        window.resolveClaim = resolveClaim;
+        window.deleteClaim = deleteClaim;
+        window.editClaim = editClaim;
+        window.openNewClaimModal = openNewClaimModal;
+        window.closeClaimModal = closeClaimModal;
+        window.clearSelectedProduct = clearSelectedProduct;
+        window.selectProduct = selectProduct;
+    });
 </script>
 {% endblock %}

@@ -1,0 +1,26 @@
+{
+  "name": "ox-smart-web-sfgk",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sandraboakye128-png/OX-smart-pos-web-SFGK.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/sandraboakye128-png/OX-smart-pos-web-SFGK/issues"
+  },
+  "homepage": "https://github.com/sandraboakye128-png/OX-smart-pos-web-SFGK#readme",
+  "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/cli": "^8.5.0",
+    "@capacitor/core": "^8.5.0"
+  }
+}

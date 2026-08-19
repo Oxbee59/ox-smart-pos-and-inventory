@@ -88,271 +88,307 @@
 </div>
 
 <script>
-    // ---------- Offline banner ----------
-    function updateOfflineBanner() {
-        const banner = document.getElementById('offlineBanner');
-        if (!navigator.onLine) banner.classList.remove('hidden');
-        else banner.classList.add('hidden');
-    }
-    window.addEventListener('online', updateOfflineBanner);
-    window.addEventListener('offline', updateOfflineBanner);
+    document.addEventListener('DOMContentLoaded', function () {
+        console.log("DOM loaded – initializing Admin Users with Dexie");
 
-    // ---------- Cache helpers ----------
-    const USERS_CACHE_KEY = 'admin_users_cache';
-    const CACHE_TIMESTAMP_KEY = 'admin_users_cache_timestamp';
-    const CACHE_MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
+        // ---------- Offline banner ----------
+        function updateOfflineBanner() {
+            const banner = document.getElementById('offlineBanner');
+            if (!navigator.onLine) banner.classList.remove('hidden');
+            else banner.classList.add('hidden');
+        }
+        window.addEventListener('online', updateOfflineBanner);
+        window.addEventListener('offline', updateOfflineBanner);
 
-    function cacheUsers(users) {
-        try {
-            localStorage.setItem(USERS_CACHE_KEY, JSON.stringify(users));
-            localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
-        } catch (e) {}
-    }
+        // Get the logged-in user's ID and username from the hidden input
+        const currentUserId = parseInt(document.getElementById('currentUserId').value) || 0;
+        const currentUsername = document.getElementById('currentUsername').value || '';
 
-    function getCachedUsers() {
-        try {
-            const raw = localStorage.getItem(USERS_CACHE_KEY);
-            const timestamp = parseInt(localStorage.getItem(CACHE_TIMESTAMP_KEY) || '0');
-            if (!raw) return null;
-            // Check age
-            if (Date.now() - timestamp > CACHE_MAX_AGE) {
-                // Stale – remove and return null
-                localStorage.removeItem(USERS_CACHE_KEY);
-                localStorage.removeItem(CACHE_TIMESTAMP_KEY);
+        // ========== DEXIE HELPERS (cache table) ==========
+        async function storeUsersInDexie(users) {
+            if (!db) return;
+            try {
+                // Use a generic cache table – if not defined, fallback to localStorage
+                let cacheTable = db.cache || db.table('cache');
+                // If the table doesn't exist, we can't use it – fallback to localStorage
+                // We'll check if it exists by trying to put
+                await cacheTable.put({ key: 'admin_users', value: users, timestamp: Date.now() });
+                console.log('✅ Users cached in Dexie');
+            } catch (e) {
+                console.warn('Dexie cache not available, using localStorage fallback', e);
+                // Fallback to localStorage
+                try {
+                    localStorage.setItem('admin_users_cache', JSON.stringify(users));
+                    localStorage.setItem('admin_users_cache_timestamp', Date.now().toString());
+                } catch (e2) {}
+            }
+        }
+
+        async function loadUsersFromDexie() {
+            if (!db) return null;
+            try {
+                let cacheTable = db.cache || db.table('cache');
+                const entry = await cacheTable.get('admin_users');
+                if (entry && entry.value) {
+                    // Check age (24 hours)
+                    const age = Date.now() - (entry.timestamp || 0);
+                    if (age < 24 * 60 * 60 * 1000) {
+                        return entry.value;
+                    } else {
+                        // Stale – remove
+                        await cacheTable.delete('admin_users');
+                        return null;
+                    }
+                }
                 return null;
-            }
-            return JSON.parse(raw);
-        } catch (e) { return null; }
-    }
-
-    // Get the logged-in user's ID and username from the hidden input
-    const currentUserId = parseInt(document.getElementById('currentUserId').value) || 0;
-    const currentUsername = document.getElementById('currentUsername').value || '';
-
-    // ---------- Error Modal ----------
-    function showErrorModal(message, details) {
-        const modal = document.getElementById('errorModal');
-        const msgEl = document.getElementById('errorModalMessage');
-        const detailsEl = document.getElementById('errorModalDetails');
-        const detailsText = document.getElementById('errorModalDetailsText');
-
-        msgEl.textContent = message;
-        if (details) {
-            detailsText.textContent = details;
-            detailsEl.classList.remove('hidden');
-        } else {
-            detailsEl.classList.add('hidden');
-        }
-        modal.classList.remove('hidden');
-    }
-
-    function closeErrorModal() {
-        document.getElementById('errorModal').classList.add('hidden');
-    }
-    // Close modal on background click
-    document.getElementById('errorModal').addEventListener('click', function(e) {
-        if (e.target === this) closeErrorModal();
-    });
-
-    // ---------- Fetch users (with cache fallback) ----------
-    async function fetchUsers() {
-        updateOfflineBanner();
-        try {
-            const res = await fetch('/api/admin/users');
-            if (!res.ok) throw new Error('Failed to fetch users');
-            const users = await res.json();
-            cacheUsers(users);
-            return users;
-        } catch (err) {
-            console.warn('⚠️ Network failed – using cached users', err.message);
-            const cached = getCachedUsers();
-            if (cached) {
-                return cached;
-            }
-            throw new Error('No cached users available. Please connect to the internet and refresh.');
-        }
-    }
-
-    // ---------- Render table ----------
-    function getStatusBadge(role, isProtected) {
-        if (isProtected) {
-            return '<span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">🔒 Protected</span>';
-        }
-        if (role === 'admin') {
-            return '<span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Admin</span>';
-        }
-        return '<span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">User</span>';
-    }
-
-    function escapeHtml(text) {
-        if (!text) return '';
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
-    function renderUsers(users) {
-        const tbody = document.getElementById('usersTableBody');
-        tbody.innerHTML = '';
-        if (!users || users.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-gray-500">No users found.</td></tr>`;
-            return;
-        }
-        users.forEach(user => {
-            const tr = document.createElement('tr');
-            const isCurrentUser = user.id === currentUserId;
-            const isProtected = user.username && user.username.toLowerCase() === 'oxbee';
-            const statusBadge = getStatusBadge(user.role, isProtected);
-
-            tr.innerHTML = `
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${user.id}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    ${escapeHtml(user.username)}
-                    ${isCurrentUser ? ' <span class="text-xs text-gray-400">(You)</span>' : ''}
-                    ${isProtected ? ' <span class="text-xs text-red-500 font-bold">🔒</span>' : ''}
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm">
-                    ${statusBadge}
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${user.created_at ? new Date(user.created_at).toLocaleString() : '—'}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                    <a href="/admin/users/${user.id}/edit" 
-                       class="text-blue-600 hover:text-blue-900 ${isProtected ? 'opacity-50 cursor-not-allowed' : ''}"
-                       ${isProtected ? 'onclick="return false;" title="Cannot edit system administrator"' : ''}>
-                        ✏️ Edit
-                    </a>
-
-                    ${!isCurrentUser && !isProtected ? `
-                        <button class="role-toggle text-indigo-600 hover:text-indigo-900 ml-2" 
-                                data-id="${user.id}" 
-                                data-role="${user.role === 'admin' ? 'user' : 'admin'}">
-                            ${user.role === 'admin' ? 'Demote' : 'Promote'}
-                        </button>
-                        <button class="delete-user text-red-600 hover:text-red-900 ml-2" data-id="${user.id}">Delete</button>
-                    ` : ''}
-
-                    ${isProtected && !isCurrentUser ? `
-                        <span class="text-gray-400 text-xs ml-2">🔒 System Protected</span>
-                    ` : ''}
-                </td>
-            `;
-            tbody.appendChild(tr);
-        });
-
-        // Attach event listeners for role toggle (only if online)
-        document.querySelectorAll('.role-toggle').forEach(btn => {
-            btn.addEventListener('click', async function() {
-                if (!navigator.onLine) {
-                    alert('You are offline. Please connect to the internet to change roles.');
-                    return;
-                }
-                const userId = this.dataset.id;
-                const newRole = this.dataset.role;
-                if (!confirm(`Change role to "${newRole}"?`)) return;
+            } catch (e) {
+                console.warn('Dexie read failed, trying localStorage', e);
                 try {
-                    const res = await fetch(`/api/admin/users/${userId}/role`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ role: newRole })
-                    });
-                    const data = await res.json();
-                    if (data.success) {
-                        loadUsers();
-                    } else {
-                        showErrorModal('Failed to update role', data.error || 'Unknown error');
+                    const raw = localStorage.getItem('admin_users_cache');
+                    const timestamp = parseInt(localStorage.getItem('admin_users_cache_timestamp') || '0');
+                    if (!raw) return null;
+                    if (Date.now() - timestamp > 24 * 60 * 60 * 1000) {
+                        localStorage.removeItem('admin_users_cache');
+                        localStorage.removeItem('admin_users_cache_timestamp');
+                        return null;
                     }
-                } catch (err) {
-                    showErrorModal('Network error', err.message);
+                    return JSON.parse(raw);
+                } catch (e2) {
+                    return null;
                 }
-            });
-        });
-
-        // Attach event listeners for delete (only if online)
-        document.querySelectorAll('.delete-user').forEach(btn => {
-            btn.addEventListener('click', async function() {
-                if (!navigator.onLine) {
-                    alert('You are offline. Please connect to the internet to delete users.');
-                    return;
-                }
-                const userId = this.dataset.id;
-                if (!confirm('Delete this user? This cannot be undone.')) return;
-                if (!confirm('Are you sure? This action is permanent.')) return;
-                try {
-                    const res = await fetch(`/api/admin/users/${userId}`, { method: 'DELETE' });
-                    const data = await res.json();
-                    if (data.success) {
-                        loadUsers();
-                    } else {
-                        showErrorModal('Cannot delete user', data.error || 'Unknown error');
-                    }
-                } catch (err) {
-                    showErrorModal('Network error', err.message);
-                }
-            });
-        });
-    }
-
-    async function loadUsers() {
-        try {
-            const users = await fetchUsers();
-            renderUsers(users);
-        } catch (err) {
-            console.error(err);
-            document.getElementById('usersTableBody').innerHTML =
-                `<tr><td colspan="5" class="text-center py-4 text-red-500">${err.message}</td></tr>`;
-        }
-    }
-
-    // ---------- Create user form submission ----------
-    document.getElementById('createUserForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        if (!navigator.onLine) {
-            alert('You are offline. Please connect to the internet to create users.');
-            return;
-        }
-        const username = document.getElementById('newUsername').value.trim();
-        const password = document.getElementById('newPassword').value.trim();
-        const role = document.getElementById('newRole').value;
-        const msg = document.getElementById('createMessage');
-
-        if (!username || !password) {
-            msg.className = 'text-red-500';
-            msg.textContent = 'Username and password are required.';
-            return;
+            }
         }
 
-        try {
-            const res = await fetch('/api/admin/users', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password, role })
-            });
-            const data = await res.json();
-            if (data.success) {
-                msg.className = 'text-green-500';
-                msg.textContent = 'User created successfully!';
-                document.getElementById('newUsername').value = '';
-                document.getElementById('newPassword').value = '';
-                loadUsers(); // refresh list
+        // ---------- Error Modal ----------
+        function showErrorModal(message, details) {
+            const modal = document.getElementById('errorModal');
+            const msgEl = document.getElementById('errorModalMessage');
+            const detailsEl = document.getElementById('errorModalDetails');
+            const detailsText = document.getElementById('errorModalDetailsText');
+
+            msgEl.textContent = message;
+            if (details) {
+                detailsText.textContent = details;
+                detailsEl.classList.remove('hidden');
             } else {
-                msg.className = 'text-red-500';
-                msg.textContent = 'Error: ' + (data.error || 'Unknown error');
+                detailsEl.classList.add('hidden');
             }
-        } catch (err) {
-            msg.className = 'text-red-500';
-            msg.textContent = 'Network error: ' + err.message;
+            modal.classList.remove('hidden');
         }
-    });
 
-    // ---------- Initial load ----------
-    document.addEventListener('DOMContentLoaded', function() {
+        function closeErrorModal() {
+            document.getElementById('errorModal').classList.add('hidden');
+        }
+        document.getElementById('errorModal').addEventListener('click', function(e) {
+            if (e.target === this) closeErrorModal();
+        });
+
+        // ---------- Fetch users (API first, fallback Dexie) ----------
+        async function fetchUsers() {
+            updateOfflineBanner();
+            // Try API if online
+            if (navigator.onLine) {
+                try {
+                    const res = await fetch('/api/admin/users');
+                    if (!res.ok) throw new Error('Failed to fetch users');
+                    const users = await res.json();
+                    // Store in Dexie
+                    await storeUsersInDexie(users);
+                    return users;
+                } catch (err) {
+                    console.warn('⚠️ API failed – using cached users', err.message);
+                    // Fallback to Dexie cache
+                    const cached = await loadUsersFromDexie();
+                    if (cached) return cached;
+                    throw new Error('No cached users available. Please connect to the internet and refresh.');
+                }
+            } else {
+                // Offline – read from Dexie
+                const cached = await loadUsersFromDexie();
+                if (cached) return cached;
+                throw new Error('No cached users available offline. Please connect to the internet and refresh.');
+            }
+        }
+
+        // ---------- Render table ----------
+        function getStatusBadge(role, isProtected) {
+            if (isProtected) {
+                return '<span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">🔒 Protected</span>';
+            }
+            if (role === 'admin') {
+                return '<span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Admin</span>';
+            }
+            return '<span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">User</span>';
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function renderUsers(users) {
+            const tbody = document.getElementById('usersTableBody');
+            tbody.innerHTML = '';
+            if (!users || users.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-gray-500">No users found.</td></tr>`;
+                return;
+            }
+            users.forEach(user => {
+                const tr = document.createElement('tr');
+                const isCurrentUser = user.id === currentUserId;
+                const isProtected = user.username && user.username.toLowerCase() === 'oxbee';
+                const statusBadge = getStatusBadge(user.role, isProtected);
+
+                tr.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${user.id}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        ${escapeHtml(user.username)}
+                        ${isCurrentUser ? ' <span class="text-xs text-gray-400">(You)</span>' : ''}
+                        ${isProtected ? ' <span class="text-xs text-red-500 font-bold">🔒</span>' : ''}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm">
+                        ${statusBadge}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${user.created_at ? new Date(user.created_at).toLocaleString() : '—'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                        <a href="/admin/users/${user.id}/edit" 
+                           class="text-blue-600 hover:text-blue-900 ${isProtected ? 'opacity-50 cursor-not-allowed' : ''}"
+                           ${isProtected ? 'onclick="return false;" title="Cannot edit system administrator"' : ''}>
+                            ✏️ Edit
+                        </a>
+
+                        ${!isCurrentUser && !isProtected ? `
+                            <button class="role-toggle text-indigo-600 hover:text-indigo-900 ml-2" 
+                                    data-id="${user.id}" 
+                                    data-role="${user.role === 'admin' ? 'user' : 'admin'}">
+                                ${user.role === 'admin' ? 'Demote' : 'Promote'}
+                            </button>
+                            <button class="delete-user text-red-600 hover:text-red-900 ml-2" data-id="${user.id}">Delete</button>
+                        ` : ''}
+
+                        ${isProtected && !isCurrentUser ? `
+                            <span class="text-gray-400 text-xs ml-2">🔒 System Protected</span>
+                        ` : ''}
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            // Attach event listeners for role toggle (online only)
+            document.querySelectorAll('.role-toggle').forEach(btn => {
+                btn.addEventListener('click', async function() {
+                    if (!navigator.onLine) {
+                        alert('You are offline. Please connect to the internet to change roles.');
+                        return;
+                    }
+                    const userId = this.dataset.id;
+                    const newRole = this.dataset.role;
+                    if (!confirm(`Change role to "${newRole}"?`)) return;
+                    try {
+                        const res = await fetch(`/api/admin/users/${userId}/role`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ role: newRole })
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            loadUsers();
+                        } else {
+                            showErrorModal('Failed to update role', data.error || 'Unknown error');
+                        }
+                    } catch (err) {
+                        showErrorModal('Network error', err.message);
+                    }
+                });
+            });
+
+            // Attach event listeners for delete (online only)
+            document.querySelectorAll('.delete-user').forEach(btn => {
+                btn.addEventListener('click', async function() {
+                    if (!navigator.onLine) {
+                        alert('You are offline. Please connect to the internet to delete users.');
+                        return;
+                    }
+                    const userId = this.dataset.id;
+                    if (!confirm('Delete this user? This cannot be undone.')) return;
+                    if (!confirm('Are you sure? This action is permanent.')) return;
+                    try {
+                        const res = await fetch(`/api/admin/users/${userId}`, { method: 'DELETE' });
+                        const data = await res.json();
+                        if (data.success) {
+                            loadUsers();
+                        } else {
+                            showErrorModal('Cannot delete user', data.error || 'Unknown error');
+                        }
+                    } catch (err) {
+                        showErrorModal('Network error', err.message);
+                    }
+                });
+            });
+        }
+
+        async function loadUsers() {
+            try {
+                const users = await fetchUsers();
+                renderUsers(users);
+            } catch (err) {
+                console.error(err);
+                document.getElementById('usersTableBody').innerHTML =
+                    `<tr><td colspan="5" class="text-center py-4 text-red-500">${err.message}</td></tr>`;
+            }
+        }
+
+        // ---------- Create user form submission ----------
+        document.getElementById('createUserForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!navigator.onLine) {
+                alert('You are offline. Please connect to the internet to create users.');
+                return;
+            }
+            const username = document.getElementById('newUsername').value.trim();
+            const password = document.getElementById('newPassword').value.trim();
+            const role = document.getElementById('newRole').value;
+            const msg = document.getElementById('createMessage');
+
+            if (!username || !password) {
+                msg.className = 'text-red-500';
+                msg.textContent = 'Username and password are required.';
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/admin/users', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password, role })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    msg.className = 'text-green-500';
+                    msg.textContent = 'User created successfully!';
+                    document.getElementById('newUsername').value = '';
+                    document.getElementById('newPassword').value = '';
+                    loadUsers(); // refresh list (will also update Dexie cache)
+                } else {
+                    msg.className = 'text-red-500';
+                    msg.textContent = 'Error: ' + (data.error || 'Unknown error');
+                }
+            } catch (err) {
+                msg.className = 'text-red-500';
+                msg.textContent = 'Network error: ' + err.message;
+            }
+        });
+
+        // ---------- Initial load ----------
         updateOfflineBanner();
         loadUsers();
-    });
 
-    // Refresh when coming online
-    window.addEventListener('online', function() {
-        loadUsers(); // reload fresh data when back online
+        // Refresh when coming online
+        window.addEventListener('online', function() {
+            loadUsers(); // reload fresh data when back online
+        });
     });
 </script>
 {% endblock %}
