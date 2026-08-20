@@ -852,7 +852,7 @@
     window.addEventListener('offline', updateOfflineBanner);
 
     // =============================================================
-    //  NEW: Load products with Dexie integration
+    //  FIXED: Load products with Dexie integration – ALWAYS compute summary from actual data
     // =============================================================
     async function loadProducts(forceRefresh = false) {
         if (isLoading) return;
@@ -860,7 +860,6 @@
         updateOfflineBanner();
 
         let productsData = [];
-        let summaryData = { total_products: 0, total_batches: 0, total_quantity: 0, total_claimed: 0, total_good: 0 };
         let fromCache = false;
 
         // Try to fetch from API if online
@@ -874,25 +873,8 @@
                     // Store in Dexie
                     if (db) {
                         await db.products.bulkPut(productsData);
-                        // Also store each product's batches separately (optional)
-                        // We'll store product with batches array already – fine.
                         console.log('✅ Products stored in Dexie');
                     }
-                    // Compute summary
-                    let totalQty = 0, totalClaimed = 0, totalBatches = data.total_batches || 0;
-                    productsData.forEach(p => {
-                        totalQty += p.stock || 0;
-                        if (p.batches) {
-                            p.batches.forEach(b => { totalClaimed += b.claimed_quantity || 0; });
-                        }
-                    });
-                    summaryData = {
-                        total_products: data.total_products || productsData.length,
-                        total_batches: totalBatches,
-                        total_quantity: totalQty,
-                        total_claimed: totalClaimed,
-                        total_good: Math.max(totalQty - totalClaimed, 0)
-                    };
                     fromCache = false;
                 } else {
                     throw new Error('Invalid data format');
@@ -908,27 +890,16 @@
         if (productsData.length === 0) {
             try {
                 if (db) {
-                    const cached = await db.products.where('category').notEqual('Screen').toArray();
+                    let cached;
+                    try {
+                        cached = await db.products.where('category').notEqual('Screen').toArray();
+                    } catch (e) {
+                        console.warn('Category index not available, filtering manually', e);
+                        cached = await db.products.toArray();
+                        cached = cached.filter(p => p.category !== 'Screen');
+                    }
                     if (cached && cached.length > 0) {
                         productsData = cached;
-                        // Recompute summary from Dexie
-                        let totalQty = 0, totalClaimed = 0, totalBatches = 0;
-                        productsData.forEach(p => {
-                            totalQty += p.stock || 0;
-                            if (p.batches) {
-                                p.batches.forEach(b => { 
-                                    totalClaimed += b.claimed_quantity || 0;
-                                    totalBatches++;
-                                });
-                            }
-                        });
-                        summaryData = {
-                            total_products: productsData.length,
-                            total_batches: totalBatches,
-                            total_quantity: totalQty,
-                            total_claimed: totalClaimed,
-                            total_good: Math.max(totalQty - totalClaimed, 0)
-                        };
                         fromCache = true;
                         console.log('📦 Loaded products from Dexie');
                     }
@@ -938,13 +909,41 @@
             }
         }
 
-        if (productsData.length === 0) {
-            // Still nothing – show empty
-            productsData = [];
-            summaryData = { total_products: 0, total_batches: 0, total_quantity: 0, total_claimed: 0, total_good: 0 };
-        }
+        // =============================================================
+        //  ✅ COMPUTE SUMMARY FROM productsData (always)
+        // =============================================================
+        let totalProducts = productsData.length;
+        let totalBatches = 0;
+        let totalQty = 0;
+        let totalClaimed = 0;
+
+        productsData.forEach(p => {
+            totalQty += p.stock || 0;
+            if (p.batches && p.batches.length > 0) {
+                totalBatches += p.batches.length;
+                p.batches.forEach(b => {
+                    totalClaimed += b.claimed_quantity || 0;
+                });
+            } else {
+                // If no batches but stock > 0, count as one "virtual" batch
+                if (p.stock > 0) {
+                    totalBatches += 1;
+                }
+            }
+        });
+        const totalGood = Math.max(totalQty - totalClaimed, 0);
+
+        const summaryData = {
+            total_products: totalProducts,
+            total_batches: totalBatches,
+            total_quantity: totalQty,
+            total_claimed: totalClaimed,
+            total_good: totalGood
+        };
 
         currentProducts = productsData;
+
+        // Update DOM
         document.getElementById('totalProductsCount').textContent = summaryData.total_products || 0;
         document.getElementById('totalBatchesCount').textContent = summaryData.total_batches || 0;
         document.getElementById('totalQuantityCount').textContent = summaryData.total_quantity || 0;
@@ -997,7 +996,13 @@
     async function computeLowStockFromDexie() {
         if (!db) return [];
         try {
-            const products = await db.products.where('category').notEqual('Screen').toArray();
+            let products;
+            try {
+                products = await db.products.where('category').notEqual('Screen').toArray();
+            } catch (e) {
+                products = await db.products.toArray();
+                products = products.filter(p => p.category !== 'Screen');
+            }
             const batches = await db.batches.toArray();
             const result = [];
             for (const p of products) {
