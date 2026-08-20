@@ -1,18 +1,17 @@
 // static/sw.js
-const CACHE_NAME = 'oxsmart-v7';
+const CACHE_NAME = 'oxsmart-v8';
 
-// Add CDN resources and missing JS files
+// Local assets – no CDN dependencies
 const STATIC_ASSETS = [
   '/static/css/style.css',
+  '/static/css/tailwind.min.css',   // ✅ local Tailwind CSS
+  '/static/css/all.min.css',         // ✅ local Font Awesome CSS
   '/static/js/offline.js',
   '/static/js/db.js',
   '/static/js/sync.js',
   '/static/manifest.json',
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png',
-  // 🔥 CDN resources for offline styling
-  'https://cdn.tailwindcss.com',
-  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css'
 ];
 
 self.addEventListener('install', event => {
@@ -63,7 +62,7 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // For all other resources (including CDN) – cache first, fallback to network
+  // For all other resources – cache first, fallback to network
   event.respondWith(
     caches.match(request)
       .then(cachedResponse => {

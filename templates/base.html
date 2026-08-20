@@ -12,9 +12,9 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
     <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.min.css') }}">
     <!-- Font Awesome Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/all.min.css') }}">
     <!-- Your custom CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 
@@ -28,9 +28,9 @@
     <!-- ===== SERVICE WORKER WITH CACHE-BUSTING ===== -->
     <script>
         if ('serviceWorker' in navigator) {
-            // ✅ Updated to v=7 to force SW update
-            navigator.serviceWorker.register('/sw.js?v=7')
-                .then(() => console.log('✅ Service Worker registered (v7)'))
+            // ✅ Updated to v=8 to force SW update with local assets
+            navigator.serviceWorker.register('/sw.js?v=8')
+                .then(() => console.log('✅ Service Worker registered (v8)'))
                 .catch(err => console.log('❌ SW registration failed:', err));
         }
     </script>
@@ -637,7 +637,7 @@
 <script src="{{ url_for('static', filename='js/offline.js') }}"></script>
 <script>
     // ============================================================
-    //  APP MODE DETECTION
+    //  APP MODE DETECTION – all offline features are gated by this
     // ============================================================
     function isAppMode() {
         return window.matchMedia('(display-mode: standalone)').matches;
@@ -1300,9 +1300,10 @@
             }
 
             if (isLoggedIn) {
-                // Pre‑cache all protected pages (service worker)
+                // Pre‑cache all protected pages (service worker) – this is done for both browser and PWA
                 cacheAllPages();
 
+                // ===== PWA‑ONLY FEATURES =====
                 if (isAppMode()) {
                     if (navigator.onLine) {
                         // Download all data for offline use
@@ -1335,7 +1336,9 @@
                         startOfflinePrompt();
                     }
                 } else {
+                    // ===== BROWSER MODE – no Dexie sync or offline prompts =====
                     if (navigator.onLine) {
+                        // Only sync pending operations if needed (light)
                         if (typeof window.syncAllPending === 'function') {
                             await window.syncAllPending();
                         }
