@@ -116,13 +116,14 @@
             <p class="text-xs text-gray-500">✅ Good Stock</p>
             <p id="totalGoodCount" class="text-xl md:text-2xl font-bold text-green-600">0</p>
         </div>
-        <!-- NEW: Low Stock Items -->
+        <!-- Low Stock Items -->
         <div class="bg-white rounded-xl shadow-md p-3 text-center border border-gray-100">
             <p class="text-xs text-gray-500">⚠️ Low Stock Items</p>
             <p id="lowStockCount" class="text-xl md:text-2xl font-bold text-red-600">0</p>
         </div>
     </div>
-    <div id="cacheStatus" class="text-xs text-gray-400 mt-2 text-center"></div>
+    <!-- Cache status - now hidden -->
+    <div id="cacheStatus" class="text-xs text-gray-400 mt-2 text-center hidden"></div>
 </div>
 
 <!-- Low Stock Items List -->
@@ -148,13 +149,15 @@
 <!-- ===== MODALS ===== -->
 <!-- Modal: View Batches -->
 <div id="batchModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-60 flex items-center justify-center p-4">
-    <div class="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-        <div class="sticky top-0 bg-white p-4 border-b flex justify-between items-center">
+    <!-- Inner container – flex column to keep header/footer sticky -->
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+        <!-- Sticky Header -->
+        <div class="sticky top-0 bg-white p-4 border-b flex justify-between items-center z-10">
             <h3 class="text-xl font-bold" id="modalTitle">Batches</h3>
             <button onclick="closeBatchModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
         </div>
-        <!-- Batch Search Bar -->
-        <div class="p-4 border-b bg-gray-50">
+        <!-- Batch Search Bar (not sticky) -->
+        <div class="p-4 border-b bg-gray-50 flex-shrink-0">
             <div class="flex items-center gap-3">
                 <div class="flex-1">
                     <input type="text" id="batchSearchInput" placeholder="🔍 Search batch by ID..." 
@@ -166,8 +169,10 @@
                 </div>
             </div>
         </div>
-        <div id="batchList" class="p-4 space-y-3"></div>
-        <div class="sticky bottom-0 bg-white p-4 border-t flex flex-wrap justify-between gap-2">
+        <!-- Scrollable Batch List -->
+        <div id="batchList" class="p-4 space-y-3 overflow-y-auto flex-1 max-h-[60vh]"></div>
+        <!-- Sticky Footer -->
+        <div class="sticky bottom-0 bg-white p-4 border-t flex flex-wrap justify-between gap-2 flex-shrink-0">
             <div class="flex gap-2">
                 <button onclick="selectAllBatches()" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm">Select All</button>
                 <button onclick="deselectAllBatches()" class="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1 rounded text-sm">Deselect All</button>
@@ -195,13 +200,13 @@
 
 <!-- Modal: View Claim Details -->
 <div id="claimModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-60 flex items-center justify-center p-4">
-    <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div class="sticky top-0 bg-white p-4 border-b flex justify-between items-center">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+        <div class="sticky top-0 bg-white p-4 border-b flex justify-between items-center z-10">
             <h3 class="text-xl font-bold" id="claimModalTitle">Claim Details</h3>
             <button onclick="closeClaimModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
         </div>
-        <div id="claimList" class="p-4 space-y-3"></div>
-        <div class="sticky bottom-0 bg-white p-4 border-t text-right">
+        <div id="claimList" class="p-4 space-y-3 overflow-y-auto flex-1"></div>
+        <div class="sticky bottom-0 bg-white p-4 border-t text-right flex-shrink-0">
             <button onclick="closeClaimModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">Close</button>
         </div>
     </div>
@@ -266,7 +271,6 @@
             return;
         }
         try {
-            // Clear Dexie products/batches
             if (db) {
                 db.products.clear();
                 db.batches.clear();
@@ -867,7 +871,6 @@
                 const data = await res.json();
                 if (data && data.products && Array.isArray(data.products)) {
                     productsData = data.products;
-                    // Store in Dexie
                     if (db) {
                         await db.products.bulkPut(productsData);
                         console.log('✅ Screen products stored in Dexie');
@@ -906,9 +909,7 @@
             }
         }
 
-        // =============================================================
-        //  ✅ COMPUTE SUMMARY FROM productsData (always)
-        // =============================================================
+        // Compute summary from productsData
         let totalProducts = productsData.length;
         let totalBatches = 0;
         let totalQty = 0;
@@ -922,7 +923,6 @@
                     totalClaimed += b.claimed_quantity || 0;
                 });
             } else {
-                // If no batches but stock > 0, count as one "virtual" batch
                 if (p.stock > 0) {
                     totalBatches += 1;
                 }
@@ -940,25 +940,15 @@
 
         currentProducts = productsData;
 
-        // Update DOM
         document.getElementById('totalProductsCount').textContent = summaryData.total_products || 0;
         document.getElementById('totalBatchesCount').textContent = summaryData.total_batches || 0;
         document.getElementById('totalQuantityCount').textContent = summaryData.total_quantity || 0;
         document.getElementById('totalClaimedCount').textContent = summaryData.total_claimed || 0;
         document.getElementById('totalGoodCount').textContent = summaryData.total_good || 0;
 
-        const cacheStatus = document.getElementById('cacheStatus');
-        if (fromCache) {
-            cacheStatus.textContent = '📦 Showing cached data (Dexie)';
-            cacheStatus.className = 'text-xs text-orange-500 mt-2 text-center';
-        } else {
-            cacheStatus.textContent = '✅ Live data';
-            cacheStatus.className = 'text-xs text-green-500 mt-2 text-center';
-        }
+        // cacheStatus is now hidden – no need to update text
 
-        // ---------- Load low stock ----------
         await loadLowStock();
-
         applyAdvancedSearch();
         autoOpenBatches();
         isLoading = false;
@@ -979,7 +969,6 @@
                 console.warn('Could not load low stock data, computing from Dexie:', e);
             }
         }
-        // Fallback: compute from Dexie products
         try {
             const computed = await computeLowStockFromDexie();
             lowStockProducts = computed;
