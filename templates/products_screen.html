@@ -149,7 +149,7 @@
 <!-- ===== MODALS ===== -->
 <!-- Modal: View Batches (FIXED: footer always visible) -->
 <div id="batchModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-60 flex items-center justify-center p-4">
-    <div class="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-4xl h-[90vh] max-h-[90vh] flex flex-col overflow-hidden">
         <!-- Header (fixed) -->
         <div class="bg-white p-4 border-b flex justify-between items-center flex-shrink-0">
             <h3 class="text-xl font-bold" id="modalTitle">Batches</h3>
@@ -168,8 +168,8 @@
                 </div>
             </div>
         </div>
-        <!-- Scrollable Batch List -->
-        <div id="batchList" class="p-4 space-y-3 overflow-y-auto flex-1" style="min-height: 0;"></div>
+        <!-- Scrollable Batch List (takes all remaining space) -->
+        <div id="batchList" class="p-4 space-y-3 overflow-y-auto flex-1 min-h-0"></div>
         <!-- Footer (fixed) -->
         <div class="bg-white p-4 border-t flex flex-wrap justify-between gap-2 flex-shrink-0">
             <div class="flex gap-2">
@@ -199,12 +199,12 @@
 
 <!-- Modal: View Claim Details -->
 <div id="claimModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-60 flex items-center justify-center p-4">
-    <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl h-[90vh] max-h-[90vh] flex flex-col overflow-hidden">
         <div class="bg-white p-4 border-b flex justify-between items-center flex-shrink-0">
             <h3 class="text-xl font-bold" id="claimModalTitle">Claim Details</h3>
             <button onclick="closeClaimModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
         </div>
-        <div id="claimList" class="p-4 space-y-3 overflow-y-auto flex-1" style="min-height: 0;"></div>
+        <div id="claimList" class="p-4 space-y-3 overflow-y-auto flex-1 min-h-0"></div>
         <div class="bg-white p-4 border-t text-right flex-shrink-0">
             <button onclick="closeClaimModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">Close</button>
         </div>
