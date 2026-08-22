@@ -167,13 +167,15 @@
     </button>
 </div>
 
-<!-- PURCHASES LIST (scrollable) -->
+<!-- PURCHASES LIST (scrollable) + SUMMARY (outside scrollable container) -->
 <div class="bg-white rounded-xl shadow-md p-4">
     <div id="purchasesList" class="max-h-[500px] overflow-y-auto space-y-3">
         <!-- dynamically loaded -->
     </div>
-    <div id="summary" class="mt-4 p-3 bg-gray-50 rounded-lg font-bold text-center text-teal-700"></div>
 </div>
+
+<!-- SUMMARY - now outside the scrollable container, always visible below the list -->
+<div id="summary" class="mt-4 p-3 bg-gray-50 rounded-lg font-bold text-center text-teal-700"></div>
 
 <!-- PENDING PURCHASES MODAL -->
 <div id="pendingModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
