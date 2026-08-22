@@ -3,7 +3,7 @@
 {% block content %}
 <!-- Offline banner -->
 <div id="offlineBanner" class="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded hidden">
-    ⚠️ You are offline – showing cached screen products. Deletions will be saved and applied when you reconnect.
+    ⚠️ You are offline – showing cached accessory products. Deletions will be saved and applied when you reconnect.
 </div>
 
 <!-- Force Refresh / Clear Cache Banner -->
@@ -27,9 +27,9 @@
 <div class="bg-white rounded-xl shadow-md p-6 mb-6">
     <div class="flex items-center gap-2">
         <h2 class="text-2xl font-bold text-indigo-600 mb-0">📦 Product Manager</h2>
-        <span class="bg-purple-100 text-purple-800 text-xs font-semibold px-2.5 py-0.5 rounded">Screens Only</span>
+        <span class="bg-green-100 text-green-800 text-xs font-semibold px-2.5 py-0.5 rounded">Accessories</span>
     </div>
-    <p class="text-gray-600 mt-1">Manage your screen products and batches</p>
+    <p class="text-gray-600 mt-1">Manage your accessory products and batches</p>
 </div>
 
 <!-- Search Bar with Advanced Options -->
@@ -188,7 +188,7 @@
 <!-- Modal: Delete Product Options -->
 <div id="deleteProductModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-60 flex items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-        <h3 class="text-xl font-bold mb-2">Delete Screen Product</h3>
+        <h3 class="text-xl font-bold mb-2">Delete Accessory Product</h3>
         <p id="deleteProductName" class="mb-4 text-gray-600 text-sm"></p>
         <button id="deleteKeepBtn" class="w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded mb-2 text-sm">📦 Keep History (Recommended)</button>
         <p class="text-xs text-gray-500 mb-3">✓ Product deleted but sales/purchase history remains<br>✓ Can be restored from Archive</p>
@@ -348,7 +348,7 @@
     }
 
     function navigateToPurchase(batchId) {
-        window.open(`/purchases/screens?edit_batch=${batchId}`, '_blank');
+        window.open(`/purchases?edit_batch=${batchId}`, '_blank');
     }
 
     // ---------- Search helpers ----------
@@ -420,10 +420,13 @@
             const div = document.createElement('div');
             div.className = 'border-b pb-1 flex justify-between items-center hover:bg-blue-50 p-2 rounded transition-colors cursor-pointer text-sm';
             div.dataset.productName = name;
-            div.dataset.productCategory = category || 'Screen';
+            div.dataset.productCategory = category || 'Accessory';
 
             div.addEventListener('click', function(e) {
-                let page = '/products/screens';
+                let page = '/products';
+                if (category && category.toLowerCase() === 'screen') {
+                    page = '/products/screens';
+                }
                 sessionStorage.setItem('autoOpenProduct', name);
                 sessionStorage.setItem('autoOpenBatches', 'true');
                 window.location.href = page;
@@ -448,7 +451,7 @@
     function renderProducts(products, batchKeyword = null) {
         const container = document.getElementById('productsList');
         if (!products || products.length === 0) {
-            const msg = batchKeyword ? `No products found with batch #${batchKeyword.replace('#', '')}` : 'No screen products found.';
+            const msg = batchKeyword ? `No products found with batch #${batchKeyword.replace('#', '')}` : 'No accessory products found.';
             container.innerHTML = `<div class="text-center text-gray-400 py-8">${msg}</div>`;
             return;
         }
@@ -711,7 +714,7 @@
     // ---------- Delete product ----------
     function confirmDeleteProduct(productId, productName) {
         currentProductIdForDelete = productId;
-        document.getElementById('deleteProductName').innerHTML = `Screen Product: ${productName}`;
+        document.getElementById('deleteProductName').innerHTML = `Accessory Product: ${productName}`;
         document.getElementById('deleteProductModal').classList.remove('hidden');
     }
 
@@ -726,7 +729,7 @@
             const res = await fetch(`/api/products/${currentProductIdForDelete}?type=${deleteType}`, { method: 'DELETE' });
             const data = await res.json();
             if (data.success) {
-                alert(`Screen product ${deleteType === 'clean' ? 'permanently deleted' : 'deleted (history kept)'}.`);
+                alert(`Accessory product ${deleteType === 'clean' ? 'permanently deleted' : 'deleted (history kept)'}.`);
                 closeDeleteProductModal();
                 loadProducts(true);
             } else {
@@ -735,7 +738,7 @@
         } catch (err) {
             console.warn('Product deletion failed (offline), saving for later:', err);
             savePendingProductDeletion(currentProductIdForDelete, deleteType);
-            alert(`Screen product deletion saved offline. It will be applied when you reconnect.`);
+            alert(`Accessory product deletion saved offline. It will be applied when you reconnect.`);
             closeDeleteProductModal();
             loadProducts();
         }
@@ -853,7 +856,7 @@
     window.addEventListener('offline', updateOfflineBanner);
 
     // =============================================================
-    //  FIXED: Load screen products with Dexie – ALWAYS compute summary from actual data
+    //  FIXED: Load products with Dexie integration – ALWAYS compute summary from actual data
     // =============================================================
     async function loadProducts(forceRefresh = false) {
         if (isLoading) return;
@@ -866,14 +869,14 @@
         // Try to fetch from API if online
         if (navigator.onLine && !forceRefresh) {
             try {
-                const res = await fetch('/api/products?category=Screen');
+                const res = await fetch('/api/products?exclude_category=Screen');
                 if (!res.ok) throw new Error('Network error');
                 const data = await res.json();
                 if (data && data.products && Array.isArray(data.products)) {
                     productsData = data.products;
                     if (db) {
                         await db.products.bulkPut(productsData);
-                        console.log('✅ Screen products stored in Dexie');
+                        console.log('✅ Products stored in Dexie');
                     }
                     fromCache = false;
                 } else {
@@ -892,16 +895,16 @@
                 if (db) {
                     let cached;
                     try {
-                        cached = await db.products.where('category').equals('Screen').toArray();
+                        cached = await db.products.where('category').notEqual('Screen').toArray();
                     } catch (e) {
                         console.warn('Category index not available, filtering manually', e);
                         cached = await db.products.toArray();
-                        cached = cached.filter(p => p.category === 'Screen');
+                        cached = cached.filter(p => p.category !== 'Screen');
                     }
                     if (cached && cached.length > 0) {
                         productsData = cached;
                         fromCache = true;
-                        console.log('📦 Loaded screen products from Dexie');
+                        console.log('📦 Loaded products from Dexie');
                     }
                 }
             } catch (e) {
@@ -958,7 +961,7 @@
     async function loadLowStock() {
         if (navigator.onLine) {
             try {
-                const lowRes = await fetch('/api/products/low_stock?threshold=10&category=Screen');
+                const lowRes = await fetch('/api/products/low_stock?threshold=10&exclude_category=Screen');
                 if (lowRes.ok) {
                     lowStockProducts = await lowRes.json();
                     document.getElementById('lowStockCount').textContent = lowStockProducts.length;
@@ -984,10 +987,10 @@
         try {
             let products;
             try {
-                products = await db.products.where('category').equals('Screen').toArray();
+                products = await db.products.where('category').notEqual('Screen').toArray();
             } catch (e) {
                 products = await db.products.toArray();
-                products = products.filter(p => p.category === 'Screen');
+                products = products.filter(p => p.category !== 'Screen');
             }
             const batches = await db.batches.toArray();
             const result = [];
