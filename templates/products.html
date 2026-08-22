@@ -146,16 +146,15 @@
     <!-- dynamic content -->
 </div>
 
-<!-- ===== MODALS ===== -->
-<!-- Modal: View Batches (FIXED: footer always visible) -->
+<!-- Modal: View Batches (ULTRA-FIXED) -->
 <div id="batchModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-60 flex items-center justify-center p-4">
-    <div class="bg-white rounded-xl shadow-xl w-full max-w-4xl h-[90vh] max-h-[90vh] flex flex-col overflow-hidden">
-        <!-- Header (fixed) -->
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-4xl" style="height: 90vh; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden;">
+        <!-- Header -->
         <div class="bg-white p-4 border-b flex justify-between items-center flex-shrink-0">
             <h3 class="text-xl font-bold" id="modalTitle">Batches</h3>
             <button onclick="closeBatchModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
         </div>
-        <!-- Search Bar (fixed) -->
+        <!-- Search Bar -->
         <div class="p-4 border-b bg-gray-50 flex-shrink-0">
             <div class="flex items-center gap-3">
                 <div class="flex-1">
@@ -168,9 +167,9 @@
                 </div>
             </div>
         </div>
-        <!-- Scrollable Batch List (takes all remaining space) -->
-        <div id="batchList" class="p-4 space-y-3 overflow-y-auto flex-1 min-h-0"></div>
-        <!-- Footer (fixed) -->
+        <!-- Scrollable list – takes remaining space -->
+        <div id="batchList" class="p-4 space-y-3 overflow-y-auto" style="flex: 1 1 0; min-height: 0;"></div>
+        <!-- Footer -->
         <div class="bg-white p-4 border-t flex flex-wrap justify-between gap-2 flex-shrink-0">
             <div class="flex gap-2">
                 <button onclick="selectAllBatches()" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm">Select All</button>
@@ -183,7 +182,6 @@
         </div>
     </div>
 </div>
-
 <!-- Modal: Delete Product Options -->
 <div id="deleteProductModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-60 flex items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
