@@ -8,7 +8,7 @@
 
 <!-- Cache banner (only for app mode) -->
 <div id="cacheBanner" class="mb-4 bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded hidden">
-    ⚠️ Showing cached data (last updated: <span id="cacheTimestamp"></span>). 
+    ⚠️ Showing cached data (last updated: <span id="cacheTimestamp"></span>).
     <button onclick="refreshData()" class="underline font-bold">Click here to refresh</button>
 </div>
 
@@ -174,20 +174,41 @@
     </div>
 </div>
 
-<!-- SUMMARY - Sticky at the bottom of the viewport -->
-<div id="summary" class="fixed bottom-0 left-0 right-0 z-50 p-3 md:p-4 bg-gray-900 rounded-none md:rounded-t-xl text-teal-400 text-center font-bold shadow-lg text-xs md:text-sm" style="border-top: 2px solid #2d3748; max-height: 200px; overflow-y: auto;">
-    <!-- totals will appear here -->
+<!-- ============================================================ -->
+<!-- COLLAPSIBLE SUMMARY – Sticky at bottom with toggle            -->
+<!-- ============================================================ -->
+<div id="summary" class="fixed bottom-0 left-0 right-0 z-50 bg-gray-900 rounded-none md:rounded-t-xl shadow-lg" style="border-top: 2px solid #2d3748;">
+
+    <!-- Toggle header – always visible -->
+    <div id="summaryToggle" class="flex items-center justify-between px-3 py-1.5 cursor-pointer hover:bg-gray-800 transition-colors select-none">
+        <span class="text-gray-400 text-xs font-medium flex items-center gap-1.5">
+            <span>📊</span> Inventory Summary
+            <span id="summaryStatusBadge" class="text-[10px] text-gray-500 ml-1"></span>
+        </span>
+        <button id="summaryArrowBtn" class="text-gray-400 hover:text-white transition-transform duration-300 focus:outline-none" title="Toggle summary">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" id="summaryArrowIcon">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+            </svg>
+        </button>
+    </div>
+
+    <!-- Collapsible content -->
+    <div id="summaryContent" class="p-3 md:p-4 text-teal-400 text-center font-bold text-xs md:text-sm overflow-y-auto" style="border-top: 1px solid #374151; max-height: 220px;">
+        <!-- totals will appear here (populated by updateSummary) -->
+    </div>
 </div>
 
-<!-- PENDING PURCHASES MODAL -->
-<div id="pendingModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
-    <div class="bg-white rounded-xl shadow-xl w-11/12 max-w-4xl max-h-[90vh] overflow-y-auto">
-        <div class="sticky top-0 bg-white p-4 border-b flex justify-between items-center">
+<!-- ============================================================ -->
+<!-- PENDING PURCHASES MODAL                                       -->
+<!-- ============================================================ -->
+<div id="pendingModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+        <div class="flex-shrink-0 p-4 border-b flex justify-between items-center bg-white rounded-t-xl">
             <h3 class="text-xl font-bold">⏳ Pending Purchases</h3>
             <button onclick="closePendingModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
         </div>
-        <div id="pendingList" class="p-4 space-y-3"><!-- dynamically loaded --></div>
-        <div class="sticky bottom-0 bg-white p-4 border-t flex justify-between">
+        <div id="pendingList" class="flex-1 overflow-y-auto p-4 space-y-3"><!-- dynamically loaded --></div>
+        <div class="flex-shrink-0 p-4 border-t flex justify-between bg-white rounded-b-xl">
             <div>
                 <button onclick="syncAllPending()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">🔄 Sync All</button>
                 <button onclick="clearAllPending()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded ml-2">🗑️ Clear All</button>
@@ -197,21 +218,30 @@
     </div>
 </div>
 
-<!-- ========== PURCHASE HISTORY MODAL ========== -->
+<!-- ============================================================ -->
+<!-- PURCHASE HISTORY MODAL – fixed flex layout, scrollable       -->
+<!-- ============================================================ -->
 <div id="historyModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-        <div class="sticky top-0 bg-white p-4 border-b flex justify-between items-center">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+        <!-- Header – always visible -->
+        <div class="flex-shrink-0 p-4 border-b flex justify-between items-center bg-white rounded-t-xl">
             <h3 class="text-xl font-bold" id="historyModalTitle">📋 Batch History</h3>
             <button onclick="closeHistoryModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
         </div>
-        <div id="historyContent" class="p-4 space-y-4"><!-- dynamically loaded --></div>
-        <div class="sticky bottom-0 bg-white p-4 border-t text-right">
+        <!-- Scrollable content -->
+        <div id="historyContent" class="flex-1 overflow-y-auto p-4 space-y-4">
+            <!-- dynamically loaded -->
+        </div>
+        <!-- Footer – always visible -->
+        <div class="flex-shrink-0 p-4 border-t text-right bg-white rounded-b-xl">
             <button onclick="closeHistoryModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">Close</button>
         </div>
     </div>
 </div>
 
-<!-- ========== UPDATE MODE CONFIRM MODAL ========== -->
+<!-- ============================================================ -->
+<!-- UPDATE MODE CONFIRM MODAL                                     -->
+<!-- ============================================================ -->
 <div id="updateModeModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-60 flex items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
         <h3 class="text-xl font-bold mb-2">🔄 Update Mode</h3>
@@ -228,7 +258,9 @@
     </div>
 </div>
 
-<!-- ========== CREATE NEW BATCH OPTIONS MODAL ========== -->
+<!-- ============================================================ -->
+<!-- CREATE NEW BATCH OPTIONS MODAL                                -->
+<!-- ============================================================ -->
 <div id="createBatchModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-70 flex items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
         <h3 class="text-xl font-bold mb-2">📦 Create New Batch</h3>
@@ -268,16 +300,44 @@
             padding-bottom: 200px !important;
         }
     }
-    #summary {
-        transition: all 0.3s ease;
+
+    /* Smooth transitions for summary */
+    #summaryContent {
+        transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.25s ease;
+        overflow: hidden;
     }
-    #summary .grid {
-        gap: 0.25rem;
+    #summaryContent.collapsed {
+        max-height: 0 !important;
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+        opacity: 0;
+        border-top: none !important;
     }
-    #summary .bg-white {
-        background: rgba(255,255,255,0.1);
+
+    /* Modal body scrollbar styling */
+    #historyContent::-webkit-scrollbar,
+    #pendingList::-webkit-scrollbar {
+        width: 6px;
+    }
+    #historyContent::-webkit-scrollbar-track,
+    #pendingList::-webkit-scrollbar-track {
+        background: #f1f1f1;
         border-radius: 4px;
-        padding: 4px 6px;
+    }
+    #historyContent::-webkit-scrollbar-thumb,
+    #pendingList::-webkit-scrollbar-thumb {
+        background: #c1c1c1;
+        border-radius: 4px;
+    }
+    #historyContent::-webkit-scrollbar-thumb:hover,
+    #pendingList::-webkit-scrollbar-thumb:hover {
+        background: #a8a8a8;
+    }
+
+    /* Summary grid items */
+    #summaryContent .grid .bg-gray-800 {
+        background: rgba(31, 41, 55, 0.6);
+        backdrop-filter: blur(2px);
     }
 </style>
 
@@ -321,8 +381,8 @@
 
     function clearAllLocalData() {
         if (!confirm('⚠️⚠️⚠️ WARNING: This will delete ALL locally stored data including:\n\n' +
-                     '- Cached products\n- Cached purchases\n- Pending sales\n- Pending purchases\n- Pending deletions\n\n' +
-                     'Are you sure you want to continue?')) return;
+                '- Cached products\n- Cached purchases\n- Pending sales\n- Pending purchases\n- Pending deletions\n\n' +
+                'Are you sure you want to continue?')) return;
         try {
             const keysToClear = [
                 'cached_products_accessories', 'cached_products_screen',
@@ -332,7 +392,7 @@
                 'sales_products_cache_accessories', 'sales_products_cache_screens',
                 'sales_license_cache', 'offline_sales'
             ];
-            keysToClear.forEach(key => { try { localStorage.removeItem(key); } catch(e) {} });
+            keysToClear.forEach(key => { try { localStorage.removeItem(key); } catch (e) {} });
             const allKeys = Object.keys(localStorage);
             allKeys.forEach(key => {
                 if (key.startsWith('batches_')) localStorage.removeItem(key);
@@ -365,6 +425,10 @@
     let pendingCreatePayload = null;
     let pendingCreateBatchId = null;
 
+    // ---------- Summary toggle state ----------
+    const SUMMARY_STATE_KEY = 'accessory_summary_collapsed';
+    let summaryCollapsed = false;
+
     // ---------- Helper functions ----------
     function escapeHtml(str) {
         if (!str) return '';
@@ -386,30 +450,89 @@
         return '₵' + safeToFixed(amount);
     }
 
+    // ---------- Summary toggle logic ----------
+    function initSummaryToggle() {
+        const toggle = document.getElementById('summaryToggle');
+        const content = document.getElementById('summaryContent');
+        const arrow = document.getElementById('summaryArrowIcon');
+        const badge = document.getElementById('summaryStatusBadge');
+
+        // Load saved state
+        try {
+            const saved = localStorage.getItem(SUMMARY_STATE_KEY);
+            if (saved === 'true') summaryCollapsed = true;
+            else summaryCollapsed = false;
+        } catch (e) { summaryCollapsed = false; }
+
+        function applyState(collapsed) {
+            if (collapsed) {
+                content.classList.add('collapsed');
+                arrow.setAttribute('d', 'M9 5l7 7-7 7');
+                badge.textContent = '(collapsed)';
+            } else {
+                content.classList.remove('collapsed');
+                arrow.setAttribute('d', 'M19 9l-7 7-7-7');
+                badge.textContent = '';
+            }
+            // Save state
+            try { localStorage.setItem(SUMMARY_STATE_KEY, String(collapsed)); } catch (e) {}
+            summaryCollapsed = collapsed;
+            // Trigger a resize/refresh of the summary content positioning
+            window.dispatchEvent(new Event('resize'));
+        }
+
+        // Click handler
+        toggle.addEventListener('click', function(e) {
+            // Ignore if click was on the arrow button itself (handled separately)
+            if (e.target.closest('#summaryArrowBtn')) return;
+            applyState(!summaryCollapsed);
+        });
+
+        // Arrow button handler
+        document.getElementById('summaryArrowBtn').addEventListener('click', function(e) {
+            e.stopPropagation();
+            applyState(!summaryCollapsed);
+        });
+
+        // Apply initial state
+        applyState(summaryCollapsed);
+    }
+
     // ---------- Advanced Search ----------
     function matchesSearch(value, searchTerm, mode, caseSensitive) {
         if (!value) return false;
-        let searchValue = value, term = searchTerm;
-        if (!caseSensitive) { searchValue = searchValue.toLowerCase(); term = term.toLowerCase(); }
-        switch(mode) {
-            case 'exact': return searchValue === term;
-            case 'starts': return searchValue.startsWith(term);
-            case 'ends': return searchValue.endsWith(term);
+        let searchValue = value,
+            term = searchTerm;
+        if (!caseSensitive) { searchValue = searchValue.toLowerCase();
+            term = term.toLowerCase(); }
+        switch (mode) {
+            case 'exact':
+                return searchValue === term;
+            case 'starts':
+                return searchValue.startsWith(term);
+            case 'ends':
+                return searchValue.endsWith(term);
             case 'words': {
                 const words = term.split(/\s+/).filter(w => w.length > 0);
                 return words.every(word => searchValue.includes(word));
             }
-            default: return searchValue.includes(term);
+            default:
+                return searchValue.includes(term);
         }
     }
 
     function getSearchableText(purchase, field) {
-        switch(field) {
-            case 'name': return purchase.name || '';
-            case 'brand': return purchase.brand || '';
-            case 'category': return purchase.category || '';
-            case 'source': return purchase.source || '';
-            default: return [purchase.name, purchase.brand, purchase.category, purchase.source].filter(Boolean).join(' ');
+        switch (field) {
+            case 'name':
+                return purchase.name || '';
+            case 'brand':
+                return purchase.brand || '';
+            case 'category':
+                return purchase.category || '';
+            case 'source':
+                return purchase.source || '';
+            default:
+                return [purchase.name, purchase.brand, purchase.category, purchase.source].filter(Boolean).join(' ');
         }
     }
 
@@ -459,18 +582,21 @@
 
     // ---------- Caching ----------
     function getCacheTimestamp() {
-        try { return localStorage.getItem(CACHE_TIMESTAMP_KEY); } catch(e) { return null; }
+        try { return localStorage.getItem(CACHE_TIMESTAMP_KEY); } catch (e) { return null; }
     }
+
     function cachePurchases(purchases) {
         try {
             localStorage.setItem(CACHE_KEY, JSON.stringify(purchases));
             localStorage.setItem(CACHE_TIMESTAMP_KEY, new Date().toISOString());
             isDataFresh = true;
-        } catch(e) {}
+        } catch (e) {}
     }
+
     function loadCachedPurchases() {
-        try { const raw = localStorage.getItem(CACHE_KEY); if (!raw) return null; return JSON.parse(raw); } catch(e) { return null; }
+        try { const raw = localStorage.getItem(CACHE_KEY); if (!raw) return null; return JSON.parse(raw); } catch (e) { return null; }
     }
+
     function updateCacheBanner() {
         const cacheBanner = document.getElementById('cacheBanner');
         const timestampSpan = document.getElementById('cacheTimestamp');
@@ -490,11 +616,13 @@
 
     // ---------- PENDING PURCHASES ----------
     function getPendingPurchases() {
-        try { return JSON.parse(localStorage.getItem('pendingPurchases') || '[]'); } catch(e) { return []; }
+        try { return JSON.parse(localStorage.getItem('pendingPurchases') || '[]'); } catch (e) { return []; }
     }
+
     function savePendingPurchases(pending) {
-        try { localStorage.setItem('pendingPurchases', JSON.stringify(pending)); } catch(e) {}
+        try { localStorage.setItem('pendingPurchases', JSON.stringify(pending)); } catch (e) {}
     }
+
     function updatePendingBadge() {
         const pending = getPendingPurchases();
         const count = pending.length;
@@ -505,6 +633,7 @@
             else badge.classList.remove('hidden');
         }
     }
+
     function viewPendingPurchases() {
         const pending = getPendingPurchases();
         const container = document.getElementById('pendingList');
@@ -513,38 +642,40 @@
             container.innerHTML = `<div class="text-center text-gray-400 py-8"><p class="text-2xl mb-2">📭</p><p>No pending purchases.</p><p class="text-sm">All purchases have been synced to the server.</p></div>`;
         } else {
             container.innerHTML = pending.map((p, index) => `
-                <div class="border rounded-lg p-4 hover:shadow transition">
-                    <div class="flex justify-between items-start">
-                        <div>
-                            <div class="flex items-center gap-2">
-                                <span class="text-sm font-semibold ${p.type === 'add' ? 'text-green-600' : 'text-yellow-600'}">
-                                    ${p.type === 'add' ? '➕ Add' : '✏️ Update'}
-                                </span>
-                                <span class="text-xs text-gray-400">${new Date(p.timestamp).toLocaleString()}</span>
-                                ${p.batchId ? `<span class="text-xs bg-gray-100 px-2 py-0.5 rounded">Batch #${p.batchId}</span>` : ''}
+                    <div class="border rounded-lg p-4 hover:shadow transition">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-sm font-semibold ${p.type === 'add' ? 'text-green-600' : 'text-yellow-600'}">
+                                        ${p.type === 'add' ? '➕ Add' : '✏️ Update'}
+                                    </span>
+                                    <span class="text-xs text-gray-400">${new Date(p.timestamp).toLocaleString()}</span>
+                                    ${p.batchId ? `<span class="text-xs bg-gray-100 px-2 py-0.5 rounded">Batch #${p.batchId}</span>` : ''}
+                                </div>
+                                <h3 class="font-bold text-lg mt-1">${escapeHtml(p.data.name)} (${escapeHtml(p.data.brand)})</h3>
+                                <p class="text-sm text-gray-600">
+                                    Qty: ${p.data.quantity} | Cost: ₵${safeToFixed(p.data.cost_price)} | Selling: ₵${safeToFixed(p.data.selling_price)}
+                                    ${p.data.discount ? `| Discount: ₵${safeToFixed(p.data.discount)}` : ''}
+                                </p>
+                                <p class="text-sm text-gray-500">Category: ${p.data.category || 'Accessory'}</p>
+                                <p class="text-sm text-gray-500">Source: ${p.data.source || 'Unknown'}</p>
                             </div>
-                            <h3 class="font-bold text-lg mt-1">${escapeHtml(p.data.name)} (${escapeHtml(p.data.brand)})</h3>
-                            <p class="text-sm text-gray-600">
-                                Qty: ${p.data.quantity} | Cost: ₵${safeToFixed(p.data.cost_price)} | Selling: ₵${safeToFixed(p.data.selling_price)}
-                                ${p.data.discount ? `| Discount: ₵${safeToFixed(p.data.discount)}` : ''}
-                            </p>
-                            <p class="text-sm text-gray-500">Category: ${p.data.category || 'Accessory'}</p>
-                            <p class="text-sm text-gray-500">Source: ${p.data.source || 'Unknown'}</p>
-                        </div>
-                        <div class="flex flex-col gap-1">
-                            <button onclick="syncPendingItem(${index})" class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm">🔄 Sync</button>
-                            <button onclick="removePendingItem(${index})" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">🗑️ Remove</button>
+                            <div class="flex flex-col gap-1">
+                                <button onclick="syncPendingItem(${index})" class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm">🔄 Sync</button>
+                                <button onclick="removePendingItem(${index})" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">🗑️ Remove</button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            `).join('');
+                `).join('');
         }
         updatePendingBadge();
         modal.classList.remove('hidden');
     }
+
     function closePendingModal() {
         document.getElementById('pendingModal').classList.add('hidden');
     }
+
     async function syncPendingItem(index) {
         const pending = getPendingPurchases();
         const item = pending[index];
@@ -578,11 +709,13 @@
             alert('❌ Failed to sync: ' + error.message);
         }
     }
+
     async function syncAllPending() {
         const pending = getPendingPurchases();
         if (pending.length === 0) { alert('No pending items to sync.'); return; }
         if (!confirm(`Sync all ${pending.length} pending purchase(s)?`)) return;
-        let successCount = 0, failCount = 0;
+        let successCount = 0,
+            failCount = 0;
         for (let i = pending.length - 1; i >= 0; i--) {
             const item = pending[i];
             try {
@@ -599,8 +732,8 @@
                 });
                 if (res.ok) {
                     const data = await res.json();
-                    if (data.success) { pending.splice(i, 1); successCount++; }
-                    else { failCount++; }
+                    if (data.success) { pending.splice(i, 1);
+                        successCount++; } else { failCount++; }
                 } else { failCount++; }
             } catch (error) { failCount++; }
         }
@@ -610,6 +743,7 @@
         loadPurchases(true);
         alert(`✅ Synced: ${successCount} | ❌ Failed: ${failCount}`);
     }
+
     function removePendingItem(index) {
         const pending = getPendingPurchases();
         const item = pending[index];
@@ -619,6 +753,7 @@
         updatePendingBadge();
         viewPendingPurchases();
     }
+
     function clearAllPending() {
         const pending = getPendingPurchases();
         if (pending.length === 0) { alert('No pending items to clear.'); return; }
@@ -670,98 +805,98 @@
             const updateHistory = data.update_history || [];
 
             let html = `
-                <!-- Purchase Info -->
-                <div class="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                    <h4 class="font-bold text-blue-700 mb-2">📦 Original Purchase</h4>
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
-                        <div><span class="text-gray-500">Date:</span> <strong>${formatDate(purchase.original_date)}</strong></div>
-                        <div><span class="text-gray-500">Quantity:</span> <strong>${purchase.original_quantity}</strong></div>
-                        <div><span class="text-gray-500">Cost:</span> <strong>₵${safeToFixed(purchase.original_cost_price)}</strong></div>
-                        <div><span class="text-gray-500">Selling:</span> <strong>₵${safeToFixed(purchase.original_selling_price)}</strong></div>
-                    </div>
-                    ${purchase.current_quantity !== purchase.original_quantity ? `
-                        <div class="mt-2 text-xs text-blue-600">
-                            📝 Updated: Qty ${purchase.current_quantity} | Cost ₵${safeToFixed(purchase.current_cost_price)} | Selling ₵${safeToFixed(purchase.current_selling_price)}
+                    <!-- Purchase Info -->
+                    <div class="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                        <h4 class="font-bold text-blue-700 mb-2">📦 Original Purchase</h4>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                            <div><span class="text-gray-500">Date:</span> <strong>${formatDate(purchase.original_date)}</strong></div>
+                            <div><span class="text-gray-500">Quantity:</span> <strong>${purchase.original_quantity}</strong></div>
+                            <div><span class="text-gray-500">Cost:</span> <strong>₵${safeToFixed(purchase.original_cost_price)}</strong></div>
+                            <div><span class="text-gray-500">Selling:</span> <strong>₵${safeToFixed(purchase.original_selling_price)}</strong></div>
                         </div>
-                    ` : ''}
-                    <div class="mt-2 text-xs text-gray-500">Source: ${escapeHtml(purchase.source)} | Category: ${escapeHtml(purchase.category)}</div>
-                    <div class="mt-1 text-xs text-gray-400">Batch #${purchase.batch_id} | ${escapeHtml(purchase.name)} (${escapeHtml(purchase.brand)})</div>
-                    <div class="mt-1 text-xs text-gray-400">Last updated: ${formatDate(purchase.last_updated)}</div>
-                </div>
-                
-                <!-- Sold History -->
-                <div class="bg-green-50 rounded-lg p-4 border border-green-200">
-                    <div class="flex justify-between items-center mb-2">
-                        <h4 class="font-bold text-green-700">📊 Sold History (${totalSold} units)</h4>
+                        ${purchase.current_quantity !== purchase.original_quantity ? `
+                            <div class="mt-2 text-xs text-blue-600">
+                                📝 Updated: Qty ${purchase.current_quantity} | Cost ₵${safeToFixed(purchase.current_cost_price)} | Selling ₵${safeToFixed(purchase.current_selling_price)}
+                            </div>
+                        ` : ''}
+                        <div class="mt-2 text-xs text-gray-500">Source: ${escapeHtml(purchase.source)} | Category: ${escapeHtml(purchase.category)}</div>
+                        <div class="mt-1 text-xs text-gray-400">Batch #${purchase.batch_id} | ${escapeHtml(purchase.name)} (${escapeHtml(purchase.brand)})</div>
+                        <div class="mt-1 text-xs text-gray-400">Last updated: ${formatDate(purchase.last_updated)}</div>
                     </div>
-                    ${soldItems.length === 0 ? `
-                        <div class="text-center text-gray-400 py-4">No sales recorded for this batch yet.</div>
-                    ` : `
-                        <div class="space-y-2 max-h-60 overflow-y-auto">
-                            ${soldItems.map(item => `
-                                <div class="bg-white rounded-lg p-3 border border-gray-200 flex flex-wrap justify-between items-center">
-                                    <div>
-                                        <span class="font-medium">${item.quantity} units</span>
-                                        <span class="text-sm text-gray-500 ml-2">@ ₵${safeToFixed(item.selling_price)}</span>
-                                        <span class="text-xs text-gray-400 block">Profit: ₵${safeToFixed(item.profit)}</span>
+
+                    <!-- Sold History -->
+                    <div class="bg-green-50 rounded-lg p-4 border border-green-200">
+                        <div class="flex justify-between items-center mb-2">
+                            <h4 class="font-bold text-green-700">📊 Sold History (${totalSold} units)</h4>
+                        </div>
+                        ${soldItems.length === 0 ? `
+                            <div class="text-center text-gray-400 py-4">No sales recorded for this batch yet.</div>
+                        ` : `
+                            <div class="space-y-2 max-h-60 overflow-y-auto">
+                                ${soldItems.map(item => `
+                                    <div class="bg-white rounded-lg p-3 border border-gray-200 flex flex-wrap justify-between items-center">
+                                        <div>
+                                            <span class="font-medium">${item.quantity} units</span>
+                                            <span class="text-sm text-gray-500 ml-2">@ ₵${safeToFixed(item.selling_price)}</span>
+                                            <span class="text-xs text-gray-400 block">Profit: ₵${safeToFixed(item.profit)}</span>
+                                        </div>
+                                        <div class="text-right text-xs">
+                                            <div class="text-gray-600">${formatDate(item.sale_date)}</div>
+                                            <div class="text-gray-400">Sale #${item.sale_id}</div>
+                                            ${item.username ? `<div class="text-gray-400">👤 ${escapeHtml(item.username)}</div>` : ''}
+                                        </div>
                                     </div>
-                                    <div class="text-right text-xs">
-                                        <div class="text-gray-600">${formatDate(item.sale_date)}</div>
-                                        <div class="text-gray-400">Sale #${item.sale_id}</div>
-                                        ${item.username ? `<div class="text-gray-400">👤 ${escapeHtml(item.username)}</div>` : ''}
-                                    </div>
+                                `).join('')}
+                            </div>
+                        `}
+                    </div>
+
+                    <!-- Update History -->
+                    <div class="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
+                        <div class="flex justify-between items-center mb-2">
+                            <h4 class="font-bold text-yellow-700">📝 Update History (${updateHistory.length})</h4>
+                            ${updateHistory.length > 2 ? `<button onclick="toggleUpdateHistory()" class="text-sm text-blue-600 underline">Show All</button>` : ''}
+                        </div>
+                        <div id="updatesList" class="space-y-2 max-h-40 overflow-y-auto">
+                            ${updateHistory.slice(0, 2).map(u => `
+                                <div class="text-xs text-gray-600 border-b pb-1">
+                                    <span class="font-medium">${formatDate(u.date)}</span>
+                                    <ul class="ml-2 mt-1">
+                                        ${Object.entries(u.changes).map(([key, val]) => `
+                                            <li>${key}: ${val.old} → ${val.new}</li>
+                                        `).join('')}
+                                    </ul>
                                 </div>
                             `).join('')}
-                        </div>
-                    `}
-                </div>
-                
-                <!-- Update History -->
-                <div class="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
-                    <div class="flex justify-between items-center mb-2">
-                        <h4 class="font-bold text-yellow-700">📝 Update History (${updateHistory.length})</h4>
-                        ${updateHistory.length > 2 ? `<button onclick="toggleUpdateHistory()" class="text-sm text-blue-600 underline">Show All</button>` : ''}
-                    </div>
-                    <div id="updatesList" class="space-y-2 max-h-40 overflow-y-auto">
-                        ${updateHistory.slice(0, 2).map(u => `
-                            <div class="text-xs text-gray-600 border-b pb-1">
-                                <span class="font-medium">${formatDate(u.date)}</span>
-                                <ul class="ml-2 mt-1">
-                                    ${Object.entries(u.changes).map(([key, val]) => `
-                                        <li>${key}: ${val.old} → ${val.new}</li>
-                                    `).join('')}
-                                </ul>
-                            </div>
-                        `).join('')}
-                        ${updateHistory.length > 2 ? `<div id="moreUpdates" class="hidden">${updateHistory.slice(2).map(u => `
-                            <div class="text-xs text-gray-600 border-b pb-1 mt-1">
-                                <span class="font-medium">${formatDate(u.date)}</span>
-                                <ul class="ml-2 mt-1">
-                                    ${Object.entries(u.changes).map(([key, val]) => `
-                                        <li>${key}: ${val.old} → ${val.new}</li>
-                                    `).join('')}
-                                </ul>
-                            </div>
-                        `).join('')}</div>` : ''}
-                    </div>
-                </div>
-                
-                <!-- Summary -->
-                <div class="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                    <div class="grid grid-cols-3 md:grid-cols-5 gap-2 text-sm text-center">
-                        <div><span class="text-gray-500 block">Original</span><span class="font-bold">${purchase.original_quantity}</span></div>
-                        <div><span class="text-gray-500 block">Sold</span><span class="font-bold text-blue-600">${totalSold}</span></div>
-                        <div><span class="text-gray-500 block">Remaining</span><span class="font-bold text-green-600">${purchase.remaining_quantity || 0}</span></div>
-                        <div><span class="text-gray-500 block">Current</span><span class="font-bold">${purchase.current_quantity}</span></div>
-                        <div>
-                            <span class="text-gray-500 block">Status</span>
-                            <span class="font-bold ${purchase.remaining_quantity > 0 ? 'text-green-600' : 'text-red-600'}">
-                                ${purchase.remaining_quantity > 0 ? '✅ In Stock' : '❌ Depleted'}
-                            </span>
+                            ${updateHistory.length > 2 ? `<div id="moreUpdates" class="hidden">${updateHistory.slice(2).map(u => `
+                                <div class="text-xs text-gray-600 border-b pb-1 mt-1">
+                                    <span class="font-medium">${formatDate(u.date)}</span>
+                                    <ul class="ml-2 mt-1">
+                                        ${Object.entries(u.changes).map(([key, val]) => `
+                                            <li>${key}: ${val.old} → ${val.new}</li>
+                                        `).join('')}
+                                    </ul>
+                                </div>
+                            `).join('')}</div>` : ''}
                         </div>
                     </div>
-                </div>
-            `;
+
+                    <!-- Summary -->
+                    <div class="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                        <div class="grid grid-cols-3 md:grid-cols-5 gap-2 text-sm text-center">
+                            <div><span class="text-gray-500 block">Original</span><span class="font-bold">${purchase.original_quantity}</span></div>
+                            <div><span class="text-gray-500 block">Sold</span><span class="font-bold text-blue-600">${totalSold}</span></div>
+                            <div><span class="text-gray-500 block">Remaining</span><span class="font-bold text-green-600">${purchase.remaining_quantity || 0}</span></div>
+                            <div><span class="text-gray-500 block">Current</span><span class="font-bold">${purchase.current_quantity}</span></div>
+                            <div>
+                                <span class="text-gray-500 block">Status</span>
+                                <span class="font-bold ${purchase.remaining_quantity > 0 ? 'text-green-600' : 'text-red-600'}">
+                                    ${purchase.remaining_quantity > 0 ? '✅ In Stock' : '❌ Depleted'}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                `;
 
             document.getElementById('historyContent').innerHTML = html;
             document.getElementById('historyModalTitle').textContent = `📋 Batch #${batchId} - ${escapeHtml(purchase.name)}`;
@@ -795,7 +930,8 @@
         updateOfflineBanner();
         if (forceRefresh) {
             isDataFresh = false;
-            try { localStorage.removeItem(CACHE_KEY); localStorage.removeItem(CACHE_TIMESTAMP_KEY); } catch(e) {}
+            try { localStorage.removeItem(CACHE_KEY);
+                localStorage.removeItem(CACHE_TIMESTAMP_KEY); } catch (e) {}
         }
 
         let purchases = [];
@@ -804,14 +940,11 @@
         // --- APP MODE: READ FROM DEXIE ---
         if (isAppMode() && db) {
             try {
-                // Read batches from Dexie
                 const batches = await db.batches.where('product_id').above(0).toArray();
-                // Get product names
                 const productIds = [...new Set(batches.map(b => b.product_id))];
                 const products = await db.products.where('id').anyOf(productIds).toArray();
                 const productMap = {};
                 products.forEach(p => productMap[p.id] = p);
-                // Enrich batches
                 purchases = batches.map(b => ({
                     batch_id: b.id,
                     name: productMap[b.product_id]?.name || 'Unknown',
@@ -832,14 +965,12 @@
                     original_cost_price: b.original_cost_price,
                     original_selling_price: b.original_selling_price
                 }));
-                // Filter category
-                purchases = purchases.filter(p => p.category !== 'Screen'); // exclude screens
+                purchases = purchases.filter(p => p.category !== 'Screen');
                 fromCache = true;
-                isDataFresh = false; // Dexie data is local, not necessarily fresh
+                isDataFresh = false;
                 console.log('📦 Loaded purchases from Dexie (App mode)');
             } catch (err) {
                 console.warn('Failed to load from Dexie, falling back to API:', err);
-                // fall through to online fetch
             }
         }
 
@@ -862,7 +993,6 @@
                         isDataFresh = true;
                         fromCache = false;
                         console.log('✅ Data loaded from API (fresh)');
-                        // If in app mode, also update Dexie in background
                         if (isAppMode() && typeof pullData === 'function') {
                             pullData().catch(e => console.warn('Background pullData failed:', e));
                         }
@@ -884,7 +1014,6 @@
                 }
             }
         } else if (purchases.length === 0 && !navigator.onLine) {
-            // Offline and no Dexie data? Use localStorage cache
             const cached = loadCachedPurchases();
             if (cached && Array.isArray(cached)) {
                 purchases = cached;
@@ -923,44 +1052,54 @@
             const updatedBadge = isUpdated ? `<span class="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded ml-2">🔄 Updated</span>` : '';
 
             return `
-            <div class="border rounded-lg p-4 hover:shadow transition">
-                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
-                    <div class="flex-1 w-full">
-                        <div class="flex items-center gap-2 flex-wrap">
-                            <h3 class="font-bold text-lg">${escapeHtml(p.name)} (${escapeHtml(p.brand)})</h3>
-                            ${claimedQty > 0 ? `<span class="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">⚠️ ${claimedQty} Claimed (₵${safeToFixed(claimedCost)})</span>` : ''}
-                            ${soldBadge}
-                            ${updatedBadge}
+                <div class="border rounded-lg p-4 hover:shadow transition">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
+                        <div class="flex-1 w-full">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <h3 class="font-bold text-lg">${escapeHtml(p.name)} (${escapeHtml(p.brand)})</h3>
+                                ${claimedQty > 0 ? `<span class="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">⚠️ ${claimedQty} Claimed (₵${safeToFixed(claimedCost)})</span>` : ''}
+                                ${soldBadge}
+                                ${updatedBadge}
+                            </div>
+                            <p class="text-sm text-gray-600">Batch #${p.batch_id}</p>
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-1 mt-1 text-xs">
+                                <span>Total: <strong>${p.quantity || 0}</strong></span>
+                                <span>Sold: <strong class="text-blue-600">${soldQty}</strong></span>
+                                <span>Remaining: <strong>${p.remaining_quantity || 0}</strong></span>
+                                <span>✅ Good: <strong class="text-green-600">${Math.max(goodStock, 0)}</strong></span>
+                            </div>
+                            <p class="text-sm mt-1">Cost: ₵${safeToFixed(p.cost_price)} | Discount: ₵${safeToFixed(p.discount)} | Selling: ₵${safeToFixed(p.selling_price)}</p>
+                            <p class="text-sm">Total: ₵${safeToFixed(p.total_cost)} | Date: ${formatDate(p.date)}</p>
+                            <p class="text-sm text-gray-500"><span class="font-medium">Source:</span> ${escapeHtml(p.source || 'Unknown')}</p>
+                            <p class="text-sm font-bold ${profitColor}">💎 Profit: ${formatMoney(batchProfit)}</p>
+                            ${claimedQty > 0 ? `<p class="text-xs text-red-500">⚠️ ${claimedQty} units claimed as faulty (Cost: ₵${safeToFixed(claimedCost)})</p>` : ''}
+                            ${p.original_date ? `<p class="text-xs text-gray-400">📅 Originally purchased: ${formatDate(p.original_date)}</p>` : ''}
+                            ${isUpdated ? `<p class="text-xs text-gray-400">🔄 Last updated: ${formatDate(p.date)}</p>` : ''}
                         </div>
-                        <p class="text-sm text-gray-600">Batch #${p.batch_id}</p>
-                        <div class="grid grid-cols-2 md:grid-cols-4 gap-1 mt-1 text-xs">
-                            <span>Total: <strong>${p.quantity || 0}</strong></span>
-                            <span>Sold: <strong class="text-blue-600">${soldQty}</strong></span>
-                            <span>Remaining: <strong>${p.remaining_quantity || 0}</strong></span>
-                            <span>✅ Good: <strong class="text-green-600">${Math.max(goodStock, 0)}</strong></span>
+                        <div class="flex flex-wrap gap-1">
+                            <button onclick="viewPurchaseHistory(${p.batch_id})" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm flex items-center gap-1">📋 View History</button>
+                            <button onclick="editPurchase(${p.batch_id})" class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-sm flex items-center gap-1">✏️ Update</button>
                         </div>
-                        <p class="text-sm mt-1">Cost: ₵${safeToFixed(p.cost_price)} | Discount: ₵${safeToFixed(p.discount)} | Selling: ₵${safeToFixed(p.selling_price)}</p>
-                        <p class="text-sm">Total: ₵${safeToFixed(p.total_cost)} | Date: ${formatDate(p.date)}</p>
-                        <p class="text-sm text-gray-500"><span class="font-medium">Source:</span> ${escapeHtml(p.source || 'Unknown')}</p>
-                        <p class="text-sm font-bold ${profitColor}">💎 Profit: ${formatMoney(batchProfit)}</p>
-                        ${claimedQty > 0 ? `<p class="text-xs text-red-500">⚠️ ${claimedQty} units claimed as faulty (Cost: ₵${safeToFixed(claimedCost)})</p>` : ''}
-                        ${p.original_date ? `<p class="text-xs text-gray-400">📅 Originally purchased: ${formatDate(p.original_date)}</p>` : ''}
-                        ${isUpdated ? `<p class="text-xs text-gray-400">🔄 Last updated: ${formatDate(p.date)}</p>` : ''}
-                    </div>
-                    <div class="flex flex-wrap gap-1">
-                        <button onclick="viewPurchaseHistory(${p.batch_id})" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm flex items-center gap-1">📋 View History</button>
-                        <button onclick="editPurchase(${p.batch_id})" class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-sm flex items-center gap-1">✏️ Update</button>
                     </div>
                 </div>
-            </div>
-        `}).join('');
+            `;
+        }).join('');
         updateSummary(purchases);
     }
 
     // ---------- Summary – CORRECTED TOTAL COST & CAPITAL ----------
     function updateSummary(purchases) {
-        let totalQty = 0, totalRemaining = 0, totalCost = 0, totalDiscount = 0, totalSelling = 0, totalProfit = 0;
-        let totalCapital = 0, totalClaimed = 0, totalGood = 0, totalClaimedCost = 0, totalSold = 0;
+        let totalQty = 0,
+            totalRemaining = 0,
+            totalCost = 0,
+            totalDiscount = 0,
+            totalSelling = 0,
+            totalProfit = 0;
+        let totalCapital = 0,
+            totalClaimed = 0,
+            totalGood = 0,
+            totalClaimedCost = 0,
+            totalSold = 0;
         const totalBatches = purchases ? purchases.length : 0;
         if (purchases && purchases.length > 0) {
             purchases.forEach(p => {
@@ -982,11 +1121,8 @@
                 totalClaimedCost += claimed * itemCost;
                 const itemProfit = (itemSelling - itemCost) * itemQty - itemDiscount;
                 totalProfit += itemProfit;
-                // Capital: use adjusted capital (total cost - claimed cost)
-                // We'll compute after loop
             });
         }
-        // Capital = Total Cost – Claimed Cost
         totalCapital = totalCost - totalClaimedCost;
 
         const isOffline = !navigator.onLine;
@@ -994,41 +1130,41 @@
         const soldPercentage = totalQty > 0 ? ((totalSold / totalQty) * 100) : 0;
         const soldColor = soldPercentage > 70 ? 'text-green-600' : (soldPercentage > 30 ? 'text-orange-600' : 'text-red-600');
 
-        // Update the sticky summary bar
-        document.getElementById('summary').innerHTML = `
-            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-10 gap-1 text-xs">
-                <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">📦 Batches</span><br><span class="text-lg font-bold text-indigo-400">${totalBatches}</span></div>
-                <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">🧾 Total Qty</span><br><span class="text-lg font-bold text-teal-400">${totalQty}</span></div>
-                <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">📦 Remaining</span><br><span class="text-lg font-bold text-blue-400">${totalRemaining}</span></div>
-                <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">📊 Sold</span><br><span class="text-lg font-bold text-purple-400">${totalSold}</span></div>
-                <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">⚠️ Claimed</span><br><span class="text-lg font-bold text-red-400">${totalClaimed}</span></div>
-                <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">✅ Good</span><br><span class="text-lg font-bold text-green-400">${Math.max(totalGood, 0)}</span></div>
-                <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">💰 Total Cost</span><br><span class="text-lg font-bold text-gray-300">${formatMoney(totalCost)}</span></div>
-                <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">📉 Claimed Cost</span><br><span class="text-lg font-bold text-red-300">${formatMoney(totalClaimedCost)}</span></div>
-                <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">💰 Capital</span><br><span class="text-lg font-bold text-purple-300">${formatMoney(totalCapital)}</span></div>
-                <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">📊 Sold %</span><br><span class="text-lg font-bold ${soldColor}">${soldPercentage.toFixed(0)}%</span></div>
-            </div>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-1 text-xs mt-1">
-                <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">📈 Total Selling</span><br><span class="text-lg font-bold text-green-400">${formatMoney(totalSelling)}</span></div>
-                <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">📉 Total Discount</span><br><span class="text-lg font-bold text-orange-400">${formatMoney(totalDiscount)}</span></div>
-                <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">💎 Gross Profit</span><br><span class="text-lg font-bold ${totalProfit >= 0 ? 'text-teal-400' : 'text-red-400'}">${formatMoney(totalProfit)}</span></div>
-                <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">📊 Avg Profit/Batch</span><br><span class="text-lg font-bold ${totalBatches > 0 && totalProfit / totalBatches >= 0 ? 'text-teal-400' : 'text-red-400'}">${totalBatches > 0 ? formatMoney(totalProfit / totalBatches) : '₵0.00'}</span></div>
-            </div>
-            <div class="text-xs text-gray-500 mt-1">
-                💡 Total: ${totalQty} | Remaining: ${totalRemaining} | Sold: ${totalSold} | Claimed: ${totalClaimed} | Good: ${Math.max(totalGood, 0)} | Capital: ${formatMoney(totalCapital)}
-                ${isOffline ? ' | ⚠️ Offline mode' : ''}
-                ${isCached ? ' | 📦 Showing cached data' : ''}
-                ${!isOffline && !isCached ? ' | ✅ Live data' : ''}
-                ${totalQty > 0 ? ` | 📊 ${soldPercentage.toFixed(0)}% sold` : ''}
-            </div>
-        `;
+        // Update the summary content (inside the collapsible area)
+        document.getElementById('summaryContent').innerHTML = `
+                <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-10 gap-1 text-xs">
+                    <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">📦 Batches</span><br><span class="text-lg font-bold text-indigo-400">${totalBatches}</span></div>
+                    <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">🧾 Total Qty</span><br><span class="text-lg font-bold text-teal-400">${totalQty}</span></div>
+                    <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">📦 Remaining</span><br><span class="text-lg font-bold text-blue-400">${totalRemaining}</span></div>
+                    <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">📊 Sold</span><br><span class="text-lg font-bold text-purple-400">${totalSold}</span></div>
+                    <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">⚠️ Claimed</span><br><span class="text-lg font-bold text-red-400">${totalClaimed}</span></div>
+                    <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">✅ Good</span><br><span class="text-lg font-bold text-green-400">${Math.max(totalGood, 0)}</span></div>
+                    <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">💰 Total Cost</span><br><span class="text-lg font-bold text-gray-300">${formatMoney(totalCost)}</span></div>
+                    <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">📉 Claimed Cost</span><br><span class="text-lg font-bold text-red-300">${formatMoney(totalClaimedCost)}</span></div>
+                    <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">💰 Capital</span><br><span class="text-lg font-bold text-purple-300">${formatMoney(totalCapital)}</span></div>
+                    <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">📊 Sold %</span><br><span class="text-lg font-bold ${soldColor}">${soldPercentage.toFixed(0)}%</span></div>
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-1 text-xs mt-1">
+                    <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">📈 Total Selling</span><br><span class="text-lg font-bold text-green-400">${formatMoney(totalSelling)}</span></div>
+                    <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">📉 Total Discount</span><br><span class="text-lg font-bold text-orange-400">${formatMoney(totalDiscount)}</span></div>
+                    <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">💎 Gross Profit</span><br><span class="text-lg font-bold ${totalProfit >= 0 ? 'text-teal-400' : 'text-red-400'}">${formatMoney(totalProfit)}</span></div>
+                    <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">📊 Avg Profit/Batch</span><br><span class="text-lg font-bold ${totalBatches > 0 && totalProfit / totalBatches >= 0 ? 'text-teal-400' : 'text-red-400'}">${totalBatches > 0 ? formatMoney(totalProfit / totalBatches) : '₵0.00'}</span></div>
+                </div>
+                <div class="text-xs text-gray-500 mt-1">
+                    💡 Total: ${totalQty} | Remaining: ${totalRemaining} | Sold: ${totalSold} | Claimed: ${totalClaimed} | Good: ${Math.max(totalGood, 0)} | Capital: ${formatMoney(totalCapital)}
+                    ${isOffline ? ' | ⚠️ Offline mode' : ''}
+                    ${isCached ? ' | 📦 Showing cached data' : ''}
+                    ${!isOffline && !isCached ? ' | ✅ Live data' : ''}
+                    ${totalQty > 0 ? ` | 📊 ${soldPercentage.toFixed(0)}% sold` : ''}
+                </div>
+            `;
     }
 
     // ---------- Save pending purchase (legacy localStorage) ----------
     function savePendingPurchase(payload, actionType, batchId) {
         let pending = getPendingPurchases();
         pending.push({
-            id: Date.now() + '_' + Math.random().toString(36).substr(2,5),
+            id: Date.now() + '_' + Math.random().toString(36).substr(2, 5),
             type: actionType || 'add',
             batchId: batchId || null,
             data: payload,
@@ -1051,7 +1187,7 @@
             selling_price: parseFloat(document.getElementById('selling_price').value),
             source: document.getElementById('source').value.trim() || 'Unknown'
         };
-        
+
         if (!payload.name || !payload.brand || !payload.quantity || !payload.cost_price || !payload.selling_price) {
             alert('Please fill required fields: Name, Brand, Quantity, Cost Price, Selling Price');
             return;
@@ -1107,16 +1243,13 @@
             try {
                 let localBatchId = batchId;
                 if (actionType === 'add' || actionType === 'create') {
-                    // Generate temporary ID
-                    const tempId = Date.now() + '_' + Math.random().toString(36).substr(2,6);
+                    const tempId = Date.now() + '_' + Math.random().toString(36).substr(2, 6);
                     localBatchId = tempId;
-                    // Find product by name/brand
                     const product = await db.products.where({ name: payload.name, brand: payload.brand }).first();
                     if (!product) {
                         alert('Product not found locally. Please sync first or create the product online.');
                         return;
                     }
-                    // Add batch locally
                     await db.batches.add({
                         id: tempId,
                         product_id: product.id,
@@ -1135,10 +1268,8 @@
                         original_selling_price: payload.selling_price,
                         original_discount: payload.discount
                     });
-                    // Update product stock locally
                     await db.products.update(product.id, { stock: (product.stock || 0) + payload.quantity });
                 } else if (actionType === 'update' || actionType === 'auto') {
-                    // Update existing batch locally
                     const oldBatch = await db.batches.get(batchId);
                     if (!oldBatch) throw new Error('Batch not found locally');
                     const soldQty = oldBatch.quantity - oldBatch.remaining_quantity;
@@ -1154,7 +1285,6 @@
                     });
                 }
 
-                // Queue the operation
                 await db.pending_ops.add({
                     operation: actionType === 'add' ? 'add' : 'update',
                     table: 'batches',
@@ -1165,7 +1295,6 @@
                     synced: 0
                 });
 
-                // If online, try to sync immediately
                 if (navigator.onLine) {
                     await pushPending();
                 }
@@ -1189,9 +1318,7 @@
                 url = `/api/purchases/${batchId}`;
                 method = 'PUT';
                 payload.update_mode = actionType === 'create' ? 'create' : 'update';
-                if (typeof payload.keep_sold_with_old !== 'undefined') {
-                    // keep as is
-                }
+                if (typeof payload.keep_sold_with_old !== 'undefined') {}
             }
             const res = await fetch(url, {
                 method: method,
@@ -1346,7 +1473,8 @@
 
         if (fromDate && toDate) {
             try {
-                let url = `/api/purchases/filter?start_date=${fromDate}&end_date=${toDate}&exclude_category=Screen&date_type=${dateType}&show_updated_only=${showUpdatedOnly}`;
+                let url =
+                    `/api/purchases/filter?start_date=${fromDate}&end_date=${toDate}&exclude_category=Screen&date_type=${dateType}&show_updated_only=${showUpdatedOnly}`;
                 const res = await fetch(url);
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const data = await res.json();
@@ -1420,8 +1548,16 @@
             return;
         }
 
-        let totalQty = 0, totalCost = 0, totalDiscount = 0, totalSelling = 0, totalProfit = 0, totalCapital = 0;
-        let totalClaimed = 0, totalClaimedCost = 0, totalRemaining = 0, totalSold = 0;
+        let totalQty = 0,
+            totalCost = 0,
+            totalDiscount = 0,
+            totalSelling = 0,
+            totalProfit = 0,
+            totalCapital = 0;
+        let totalClaimed = 0,
+            totalClaimedCost = 0,
+            totalRemaining = 0,
+            totalSold = 0;
         purchasesToExport.forEach(p => {
             const itemQty = p.quantity || 0;
             const remainingQty = p.remaining_quantity || 0;
@@ -1481,7 +1617,7 @@
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `Purchases_Accessories_${new Date().toISOString().slice(0,19)}.pdf`;
+            a.download = `Purchases_Accessories_${new Date().toISOString().slice(0, 19)}.pdf`;
             document.body.appendChild(a);
             a.click();
             a.remove();
@@ -1506,8 +1642,8 @@
             return;
         }
         try {
-            // 🔥 Exclude Screen category from product suggestions
-            const res = await fetch(`/api/purchases/suggestions/product?q=${encodeURIComponent(q)}&exclude_category=Screen`);
+            const res = await fetch(
+                `/api/purchases/suggestions/product?q=${encodeURIComponent(q)}&exclude_category=Screen`);
             if (!res.ok) throw new Error();
             const suggestions = await res.json();
             const box = document.getElementById(suggestionsId);
@@ -1516,12 +1652,12 @@
                 return;
             }
             box.innerHTML = suggestions.map(s => `
-                <div class="px-3 py-1.5 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-0 text-sm" 
-                     onclick="selectProductSuggestion('${escapeHtml(s.name)}', '${escapeHtml(s.brand)}', '${escapeHtml(s.category)}')">
-                    <div class="font-medium">${escapeHtml(s.name)}</div>
-                    <div class="text-xs text-gray-500">${escapeHtml(s.brand)}${s.category ? ` · ${escapeHtml(s.category)}` : ''}</div>
-                </div>
-            `).join('');
+                    <div class="px-3 py-1.5 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-0 text-sm" 
+                         onclick="selectProductSuggestion('${escapeHtml(s.name)}', '${escapeHtml(s.brand)}', '${escapeHtml(s.category)}')">
+                        <div class="font-medium">${escapeHtml(s.name)}</div>
+                        <div class="text-xs text-gray-500">${escapeHtml(s.brand)}${s.category ? ` · ${escapeHtml(s.category)}` : ''}</div>
+                    </div>
+                `).join('');
             box.classList.remove('hidden');
             const rect = document.getElementById(inputId).getBoundingClientRect();
             box.style.top = rect.bottom + window.scrollY + 'px';
@@ -1540,7 +1676,6 @@
         document.getElementById('brandSuggestions').classList.add('hidden');
     };
 
-    // Category suggestions already exclude Screen (via endpoint)
     async function fetchCategorySuggestions() {
         if (!navigator.onLine) {
             document.getElementById('categorySuggestions').classList.add('hidden');
@@ -1554,7 +1689,9 @@
             const suggestions = await res.json();
             const box = document.getElementById('categorySuggestions');
             if (!suggestions || suggestions.length === 0) { box.classList.add('hidden'); return; }
-            box.innerHTML = suggestions.map(s => `<div class="px-3 py-1 hover:bg-gray-100 cursor-pointer" onclick="selectCategorySuggestion('${escapeHtml(s.category)}')">${escapeHtml(s.category)}</div>`).join('');
+            box.innerHTML = suggestions.map(s =>
+                    `<div class="px-3 py-1 hover:bg-gray-100 cursor-pointer" onclick="selectCategorySuggestion('${escapeHtml(s.category)}')">${escapeHtml(s.category)}</div>`
+                ).join('');
             box.classList.remove('hidden');
             const rect = document.getElementById('category').getBoundingClientRect();
             box.style.top = rect.bottom + window.scrollY + 'px';
@@ -1578,7 +1715,9 @@
             const suggestions = await res.json();
             const box = document.getElementById('sourceSuggestions');
             if (!suggestions || suggestions.length === 0) { box.classList.add('hidden'); return; }
-            box.innerHTML = suggestions.map(s => `<div class="px-3 py-1 hover:bg-gray-100 cursor-pointer" onclick="selectSourceSuggestion('${escapeHtml(s.source)}')">${escapeHtml(s.source)}</div>`).join('');
+            box.innerHTML = suggestions.map(s =>
+                    `<div class="px-3 py-1 hover:bg-gray-100 cursor-pointer" onclick="selectSourceSuggestion('${escapeHtml(s.source)}')">${escapeHtml(s.source)}</div>`
+                ).join('');
             box.classList.remove('hidden');
             const rect = document.getElementById('source').getBoundingClientRect();
             box.style.top = rect.bottom + window.scrollY + 'px';
@@ -1601,6 +1740,9 @@
 
     // ---------- Event listeners ----------
     document.addEventListener('DOMContentLoaded', function() {
+        // Init summary toggle
+        initSummaryToggle();
+
         loadPurchases();
         if (typeof updatePendingBadge === 'function') updatePendingBadge();
 
@@ -1641,8 +1783,10 @@
             clearTimeout(brandTimeout);
             brandTimeout = setTimeout(() => fetchProductSuggestions('brand', 'brandSuggestions'), 300);
         });
-        document.getElementById('category').addEventListener('input', () => { clearTimeout(catTimeout); catTimeout = setTimeout(fetchCategorySuggestions, 300); });
-        document.getElementById('source').addEventListener('input', () => { clearTimeout(sourceTimeout); sourceTimeout = setTimeout(fetchSourceSuggestions, 300); });
+        document.getElementById('category').addEventListener('input', () => { clearTimeout(catTimeout);
+            catTimeout = setTimeout(fetchCategorySuggestions, 300); });
+        document.getElementById('source').addEventListener('input', () => { clearTimeout(sourceTimeout);
+            sourceTimeout = setTimeout(fetchSourceSuggestions, 300); });
 
         document.addEventListener('click', function(e) {
             if (!e.target.closest('#name')) document.getElementById('nameSuggestions').classList.add('hidden');
@@ -1658,5 +1802,13 @@
     window.viewPurchaseHistory = viewPurchaseHistory;
     window.closeHistoryModal = closeHistoryModal;
     window.toggleUpdateHistory = toggleUpdateHistory;
+    window.editPurchase = editPurchase;
+    window.resetForm = resetForm;
+    window.closePendingModal = closePendingModal;
+    window.syncPendingItem = syncPendingItem;
+    window.removePendingItem = removePendingItem;
+    window.syncAllPending = syncAllPending;
+    window.clearAllPending = clearAllPending;
+    window.viewPendingPurchases = viewPendingPurchases;
 </script>
 {% endblock %}
