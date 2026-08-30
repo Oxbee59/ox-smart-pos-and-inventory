@@ -192,7 +192,7 @@
         </button>
     </div>
 
-    <!-- Collapsible content -->
+    <!-- Collapsible content – scrollable if content overflows -->
     <div id="summaryContent" class="p-3 md:p-4 text-teal-400 text-center font-bold text-xs md:text-sm overflow-y-auto" style="border-top: 1px solid #374151; max-height: 220px;">
         <!-- totals will appear here (populated by updateSummary) -->
     </div>
@@ -222,14 +222,14 @@
 <!-- PURCHASE HISTORY MODAL – fixed flex layout, scrollable       -->
 <!-- ============================================================ -->
 <div id="historyModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[95vh] sm:max-h-[90vh] flex flex-col">
         <!-- Header – always visible -->
         <div class="flex-shrink-0 p-4 border-b flex justify-between items-center bg-white rounded-t-xl">
             <h3 class="text-xl font-bold" id="historyModalTitle">📋 Batch History</h3>
             <button onclick="closeHistoryModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
         </div>
-        <!-- Scrollable content -->
-        <div id="historyContent" class="flex-1 overflow-y-auto p-4 space-y-4">
+        <!-- Scrollable content – with horizontal scroll for wide tables -->
+        <div id="historyContent" class="flex-1 overflow-y-auto overflow-x-auto p-4 space-y-4">
             <!-- dynamically loaded -->
         </div>
         <!-- Footer – always visible -->
