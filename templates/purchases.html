@@ -167,15 +167,17 @@
     </button>
 </div>
 
-<!-- PURCHASES LIST (scrollable) + SUMMARY (outside scrollable container) -->
-<div class="bg-white rounded-xl shadow-md p-4">
+<!-- PURCHASES LIST (scrollable) -->
+<div class="bg-white rounded-xl shadow-md p-4" style="margin-bottom: 120px;">
     <div id="purchasesList" class="max-h-[500px] overflow-y-auto space-y-3">
         <!-- dynamically loaded -->
     </div>
 </div>
 
-<!-- SUMMARY - now outside the scrollable container, always visible below the list -->
-<div id="summary" class="mt-4 p-3 bg-gray-50 rounded-lg font-bold text-center text-teal-700"></div>
+<!-- SUMMARY - Sticky at the bottom of the viewport -->
+<div id="summary" class="fixed bottom-0 left-0 right-0 z-50 p-3 md:p-4 bg-gray-900 rounded-none md:rounded-t-xl text-teal-400 text-center font-bold shadow-lg text-xs md:text-sm" style="border-top: 2px solid #2d3748; max-height: 200px; overflow-y: auto;">
+    <!-- totals will appear here -->
+</div>
 
 <!-- PENDING PURCHASES MODAL -->
 <div id="pendingModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
@@ -255,6 +257,29 @@
         </div>
     </div>
 </div>
+
+<style>
+    /* Ensure main content has padding at the bottom so the fixed summary doesn't overlap */
+    .main-content {
+        padding-bottom: 160px !important;
+    }
+    @media (max-width: 768px) {
+        .main-content {
+            padding-bottom: 200px !important;
+        }
+    }
+    #summary {
+        transition: all 0.3s ease;
+    }
+    #summary .grid {
+        gap: 0.25rem;
+    }
+    #summary .bg-white {
+        background: rgba(255,255,255,0.1);
+        border-radius: 4px;
+        padding: 4px 6px;
+    }
+</style>
 
 <script>
     // ---------- Safe number formatting helper ----------
@@ -969,26 +994,27 @@
         const soldPercentage = totalQty > 0 ? ((totalSold / totalQty) * 100) : 0;
         const soldColor = soldPercentage > 70 ? 'text-green-600' : (soldPercentage > 30 ? 'text-orange-600' : 'text-red-600');
 
+        // Update the sticky summary bar
         document.getElementById('summary').innerHTML = `
-            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-10 gap-2 text-sm">
-                <div class="bg-white rounded p-2 shadow"><span class="text-gray-500">📦 Batches</span><br><span class="text-lg font-bold text-indigo-600">${totalBatches}</span></div>
-                <div class="bg-white rounded p-2 shadow"><span class="text-gray-500">🧾 Total Qty</span><br><span class="text-lg font-bold text-teal-600">${totalQty}</span></div>
-                <div class="bg-white rounded p-2 shadow"><span class="text-gray-500">📦 Remaining</span><br><span class="text-lg font-bold text-blue-600">${totalRemaining}</span></div>
-                <div class="bg-white rounded p-2 shadow"><span class="text-gray-500">📊 Sold</span><br><span class="text-lg font-bold text-purple-600">${totalSold}</span></div>
-                <div class="bg-white rounded p-2 shadow"><span class="text-gray-500">⚠️ Claimed</span><br><span class="text-lg font-bold text-red-600">${totalClaimed}</span></div>
-                <div class="bg-white rounded p-2 shadow"><span class="text-gray-500">✅ Good</span><br><span class="text-lg font-bold text-green-600">${Math.max(totalGood, 0)}</span></div>
-                <div class="bg-white rounded p-2 shadow"><span class="text-gray-500">💰 Total Cost</span><br><span class="text-lg font-bold text-gray-700">${formatMoney(totalCost)}</span></div>
-                <div class="bg-white rounded p-2 shadow"><span class="text-gray-500">📉 Claimed Cost</span><br><span class="text-lg font-bold text-red-600">${formatMoney(totalClaimedCost)}</span></div>
-                <div class="bg-white rounded p-2 shadow"><span class="text-gray-500">💰 Capital</span><br><span class="text-lg font-bold text-purple-600">${formatMoney(totalCapital)}</span></div>
-                <div class="bg-white rounded p-2 shadow"><span class="text-gray-500">📊 Sold %</span><br><span class="text-lg font-bold ${soldColor}">${soldPercentage.toFixed(0)}%</span></div>
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-10 gap-1 text-xs">
+                <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">📦 Batches</span><br><span class="text-lg font-bold text-indigo-400">${totalBatches}</span></div>
+                <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">🧾 Total Qty</span><br><span class="text-lg font-bold text-teal-400">${totalQty}</span></div>
+                <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">📦 Remaining</span><br><span class="text-lg font-bold text-blue-400">${totalRemaining}</span></div>
+                <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">📊 Sold</span><br><span class="text-lg font-bold text-purple-400">${totalSold}</span></div>
+                <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">⚠️ Claimed</span><br><span class="text-lg font-bold text-red-400">${totalClaimed}</span></div>
+                <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">✅ Good</span><br><span class="text-lg font-bold text-green-400">${Math.max(totalGood, 0)}</span></div>
+                <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">💰 Total Cost</span><br><span class="text-lg font-bold text-gray-300">${formatMoney(totalCost)}</span></div>
+                <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">📉 Claimed Cost</span><br><span class="text-lg font-bold text-red-300">${formatMoney(totalClaimedCost)}</span></div>
+                <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">💰 Capital</span><br><span class="text-lg font-bold text-purple-300">${formatMoney(totalCapital)}</span></div>
+                <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">📊 Sold %</span><br><span class="text-lg font-bold ${soldColor}">${soldPercentage.toFixed(0)}%</span></div>
             </div>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm mt-2">
-                <div class="bg-white rounded p-2 shadow"><span class="text-gray-500">📈 Total Selling</span><br><span class="text-lg font-bold text-green-600">${formatMoney(totalSelling)}</span></div>
-                <div class="bg-white rounded p-2 shadow"><span class="text-gray-500">📉 Total Discount</span><br><span class="text-lg font-bold text-orange-600">${formatMoney(totalDiscount)}</span></div>
-                <div class="bg-white rounded p-2 shadow"><span class="text-gray-500">💎 Gross Profit</span><br><span class="text-lg font-bold ${totalProfit >= 0 ? 'text-teal-600' : 'text-red-600'}">${formatMoney(totalProfit)}</span></div>
-                <div class="bg-white rounded p-2 shadow"><span class="text-gray-500">📊 Avg Profit/Batch</span><br><span class="text-lg font-bold ${totalBatches > 0 && totalProfit / totalBatches >= 0 ? 'text-teal-600' : 'text-red-600'}">${totalBatches > 0 ? formatMoney(totalProfit / totalBatches) : '₵0.00'}</span></div>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-1 text-xs mt-1">
+                <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">📈 Total Selling</span><br><span class="text-lg font-bold text-green-400">${formatMoney(totalSelling)}</span></div>
+                <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">📉 Total Discount</span><br><span class="text-lg font-bold text-orange-400">${formatMoney(totalDiscount)}</span></div>
+                <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">💎 Gross Profit</span><br><span class="text-lg font-bold ${totalProfit >= 0 ? 'text-teal-400' : 'text-red-400'}">${formatMoney(totalProfit)}</span></div>
+                <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">📊 Avg Profit/Batch</span><br><span class="text-lg font-bold ${totalBatches > 0 && totalProfit / totalBatches >= 0 ? 'text-teal-400' : 'text-red-400'}">${totalBatches > 0 ? formatMoney(totalProfit / totalBatches) : '₵0.00'}</span></div>
             </div>
-            <div class="mt-2 text-xs text-gray-400">
+            <div class="text-xs text-gray-500 mt-1">
                 💡 Total: ${totalQty} | Remaining: ${totalRemaining} | Sold: ${totalSold} | Claimed: ${totalClaimed} | Good: ${Math.max(totalGood, 0)} | Capital: ${formatMoney(totalCapital)}
                 ${isOffline ? ' | ⚠️ Offline mode' : ''}
                 ${isCached ? ' | 📦 Showing cached data' : ''}

@@ -76,7 +76,7 @@
         </div>
     </div>
     
-    <p class="text-xs text-gray-500 mt-1">🔎 Type to filter screen sales records | <span id="resultCount" class="font-semibold">0</span> results found</p>
+    <p class="text-xs text-gray-500 mt-1">🔎 Type to filter screen sales records | <span id="resultCount" class="font-semibold">0</span> sales found</p>
 </div>
 
 <!-- Period Filter Buttons -->
@@ -455,6 +455,7 @@
             }
         }
 
+        // FIXED: applyAdvancedSearchAndRender now counts distinct sales
         function applyAdvancedSearchAndRender() {
             const searchInput = document.getElementById('searchInput');
             currentSearchTerm = searchInput ? searchInput.value : '';
@@ -477,13 +478,20 @@
             updateFilterInfo();
             renderSales(filtered, currentSearchTerm);
             
+            // Count distinct sales (by sale_id) for the result count
+            const distinctSales = new Set();
+            filtered.forEach(item => distinctSales.add(item.sale_id));
+            const distinctCount = distinctSales.size;
+            const totalDistinct = new Set();
+            currentSalesData.forEach(item => totalDistinct.add(item.sale_id));
+            const totalDistinctCount = totalDistinct.size;
+            
             const resultCount = document.getElementById('resultCount');
             if (resultCount) {
-                const total = currentSalesData.length;
-                const found = filtered.length;
-                resultCount.textContent = found;
                 if (currentSearchTerm.trim()) {
-                    resultCount.textContent = `${found} (of ${total})`;
+                    resultCount.textContent = `${distinctCount} (of ${totalDistinctCount})`;
+                } else {
+                    resultCount.textContent = distinctCount;
                 }
             }
         }
@@ -722,8 +730,9 @@
             }
         }
 
-        // ---------- View Details: open modal with items ----------
+        // ---------- View Details: open modal with items (only if admin) ----------
         window.openViewDetailsModal = function (saleId, saleItems) {
+            if (!isAdmin) return; // extra safety
             currentViewSaleId = saleId;
             const container = document.getElementById('viewDetailsItemList');
             container.innerHTML = '';
@@ -778,7 +787,7 @@
             currentViewItems = [];
         };
 
-        // ---------- Show batch details in a new modal ----------
+        // ---------- Show batch details using the purchase history endpoint ----------
         window.showBatchDetails = async function (batchId, productName, productBrand, quantitySold, sellingPrice, costPrice) {
             if (batchId === -1) {
                 // Deleted batch – show only sale info
@@ -800,30 +809,35 @@
                 return;
             }
 
-            // Fetch batch details from API
+            // Use the purchase history endpoint (which we know works)
             try {
-                const response = await fetch(`/api/batches/${batchId}`);
+                const response = await fetch(`/api/purchases/${batchId}/history`);
                 if (!response.ok) {
                     if (response.status === 404) {
                         throw new Error('Batch not found');
                     }
                     throw new Error('Failed to fetch batch details');
                 }
-                const batch = await response.json();
-                // Calculate remaining, sold, claimed, good
-                const totalQty = batch.quantity || 0;
-                const remainingQty = batch.remaining_quantity || 0;
-                const claimedQty = batch.claimed_quantity || 0;
+                const data = await response.json();
+                if (!data.success) {
+                    throw new Error(data.error || 'Unknown error');
+                }
+                const purchase = data.purchase; // contains all batch fields
+
+                // Calculate stats
+                const totalQty = purchase.original_quantity || purchase.current_quantity || 0;
+                const remainingQty = purchase.remaining_quantity || 0;
+                const claimedQty = purchase.claimed_quantity || 0;
                 const soldQty = totalQty - remainingQty;
                 const goodQty = remainingQty - claimedQty;
 
-                document.getElementById('batchDetailsTitle').innerHTML = `Batch #${batch.batch_id} – ${productName} (${productBrand})`;
+                document.getElementById('batchDetailsTitle').innerHTML = `Batch #${batchId} – ${productName} (${productBrand})`;
                 document.getElementById('batchDetailsContent').innerHTML = `
                     <div class="grid grid-cols-2 gap-2 text-sm">
                         <div class="bg-gray-50 p-2 rounded">Product: <strong>${escapeHtml(productName)}</strong></div>
                         <div class="bg-gray-50 p-2 rounded">Brand: <strong>${escapeHtml(productBrand)}</strong></div>
-                        <div class="bg-gray-50 p-2 rounded">Batch ID: <strong>#${batch.batch_id}</strong></div>
-                        <div class="bg-gray-50 p-2 rounded">Date: <strong>${batch.date ? new Date(batch.date).toLocaleString() : 'N/A'}</strong></div>
+                        <div class="bg-gray-50 p-2 rounded">Batch ID: <strong>#${purchase.batch_id}</strong></div>
+                        <div class="bg-gray-50 p-2 rounded">Original Date: <strong>${formatDate(purchase.original_date)}</strong></div>
                         <div class="bg-blue-50 p-2 rounded">Total Quantity: <strong>${totalQty}</strong></div>
                         <div class="bg-blue-50 p-2 rounded">Sold: <strong>${soldQty}</strong></div>
                         <div class="bg-gray-50 p-2 rounded">Remaining: <strong>${remainingQty}</strong></div>
@@ -831,19 +845,19 @@
                         <div class="bg-green-50 p-2 rounded">✅ Good Stock: <strong>${Math.max(goodQty, 0)}</strong></div>
                     </div>
                     <div class="grid grid-cols-2 gap-2 mt-3 text-sm border-t pt-3">
-                        <div class="bg-gray-50 p-2 rounded">Cost Price: <strong>${formatMoney(batch.cost_price)}</strong></div>
-                        <div class="bg-gray-50 p-2 rounded">Selling Price: <strong>${formatMoney(batch.selling_price)}</strong></div>
-                        ${batch.discount > 0 ? `<div class="bg-gray-50 p-2 rounded col-span-2">Discount: <strong>${formatMoney(batch.discount)}</strong></div>` : ''}
+                        <div class="bg-gray-50 p-2 rounded">Cost Price: <strong>${formatMoney(purchase.original_cost_price)}</strong></div>
+                        <div class="bg-gray-50 p-2 rounded">Selling Price: <strong>${formatMoney(purchase.original_selling_price)}</strong></div>
+                        ${purchase.original_discount > 0 ? `<div class="bg-gray-50 p-2 rounded col-span-2">Discount: <strong>${formatMoney(purchase.original_discount)}</strong></div>` : ''}
                     </div>
                     <div class="mt-3 text-sm">
                         <div class="bg-yellow-50 p-2 rounded">📌 This sale sold <strong>${quantitySold}</strong> unit(s) from this batch at <strong>${formatMoney(sellingPrice)}</strong> each.</div>
-                        ${isAdmin ? `<div class="bg-teal-50 p-2 rounded mt-2">📈 Profit on this sale: <strong>${formatMoney((sellingPrice - batch.cost_price) * quantitySold)}</strong></div>` : ''}
+                        ${isAdmin ? `<div class="bg-teal-50 p-2 rounded mt-2">📈 Profit on this sale: <strong>${formatMoney((sellingPrice - purchase.original_cost_price) * quantitySold)}</strong></div>` : ''}
                     </div>
                 `;
                 document.getElementById('batchDetailsModal').classList.remove('hidden');
             } catch (error) {
                 alert('Could not load batch details: ' + error.message);
-                // Still show basic info
+                // Still show basic sale info
                 document.getElementById('batchDetailsTitle').innerHTML = `Batch #${batchId} – ${productName} (${productBrand})`;
                 document.getElementById('batchDetailsContent').innerHTML = `
                     <div class="bg-red-50 border-l-4 border-red-400 p-4 mb-4">
@@ -861,6 +875,12 @@
                 document.getElementById('batchDetailsModal').classList.remove('hidden');
             }
         };
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '';
+            const d = new Date(dateStr);
+            return d.toLocaleString();
+        }
 
         window.closeBatchDetailsModal = function () {
             document.getElementById('batchDetailsModal').classList.add('hidden');
@@ -964,7 +984,7 @@
                         <div class="mt-1 md:mt-2 pt-1 md:pt-2 border-t flex flex-wrap justify-between items-center gap-2">
                             <div class="flex gap-1">
                                 <button class="reverse-sale-btn bg-red-500 hover:bg-red-600 text-white px-2 py-0.5 md:px-3 md:py-1 rounded text-xs md:text-sm" data-sale-id="${saleId}" data-sale-items='${JSON.stringify(saleGroup.items)}'>↺ Reverse</button>
-                                <button class="view-details-btn bg-blue-500 hover:bg-blue-600 text-white px-2 py-0.5 md:px-3 md:py-1 rounded text-xs md:text-sm" data-sale-id="${saleId}" data-sale-items='${JSON.stringify(saleGroup.items)}'>📋 Details</button>
+                                ${isAdmin ? `<button class="view-details-btn bg-blue-500 hover:bg-blue-600 text-white px-2 py-0.5 md:px-3 md:py-1 rounded text-xs md:text-sm" data-sale-id="${saleId}" data-sale-items='${JSON.stringify(saleGroup.items)}'>📋 Details</button>` : ''}
                             </div>
                             <div class="flex flex-wrap items-center gap-1 md:gap-2">
                                 <span class="text-xs md:text-sm">Discount: ${formatMoney(saleGroup.discount)}</span>
@@ -989,14 +1009,16 @@
                 });
             });
 
-            // Attach view details event listeners
-            document.querySelectorAll('.view-details-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    const saleId = parseInt(btn.getAttribute('data-sale-id'));
-                    const saleItems = JSON.parse(btn.getAttribute('data-sale-items'));
-                    openViewDetailsModal(saleId, saleItems);
+            // Attach view details event listeners (only if admin)
+            if (isAdmin) {
+                document.querySelectorAll('.view-details-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const saleId = parseInt(btn.getAttribute('data-sale-id'));
+                        const saleItems = JSON.parse(btn.getAttribute('data-sale-items'));
+                        openViewDetailsModal(saleId, saleItems);
+                    });
                 });
-            });
+            }
             
             console.log(`✅ Rendered ${saleCount} screen sales with ${sales.length} total items`);
         }

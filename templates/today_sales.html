@@ -76,7 +76,7 @@
         </div>
     </div>
     
-    <p class="text-xs text-gray-500 mt-1">🔎 Type to filter sales records | <span id="resultCount" class="font-semibold">0</span> results found</p>
+    <p class="text-xs text-gray-500 mt-1">🔎 Type to filter sales records | <span id="resultCount" class="font-semibold">0</span> sales found</p>
 </div>
 
 <!-- Period Filter Buttons -->
@@ -420,6 +420,7 @@
             }
         }
 
+        // FIXED: applyAdvancedSearchAndRender now counts distinct sales
         function applyAdvancedSearchAndRender() {
             const searchInput = document.getElementById('searchInput');
             currentSearchTerm = searchInput ? searchInput.value : '';
@@ -438,13 +439,21 @@
             currentFilteredData = filtered;
             updateFilterInfo();
             renderSales(filtered, currentSearchTerm);
+            
+            // Count distinct sales (by sale_id) for the result count
+            const distinctSales = new Set();
+            filtered.forEach(item => distinctSales.add(item.sale_id));
+            const distinctCount = distinctSales.size;
+            const totalDistinct = new Set();
+            currentSalesData.forEach(item => totalDistinct.add(item.sale_id));
+            const totalDistinctCount = totalDistinct.size;
+            
             const resultCount = document.getElementById('resultCount');
             if (resultCount) {
-                const total = currentSalesData.length;
-                const found = filtered.length;
-                resultCount.textContent = found;
                 if (currentSearchTerm.trim()) {
-                    resultCount.textContent = `${found} (of ${total})`;
+                    resultCount.textContent = `${distinctCount} (of ${totalDistinctCount})`;
+                } else {
+                    resultCount.textContent = distinctCount;
                 }
             }
         }
