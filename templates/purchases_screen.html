@@ -216,14 +216,14 @@
 
 <!-- ========== PURCHASE HISTORY MODAL – fixed flex, scrollable ========== -->
 <div id="historyModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[95vh] sm:max-h-[90vh] flex flex-col">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden">
         <!-- Header – always visible -->
         <div class="flex-shrink-0 p-4 border-b flex justify-between items-center bg-white rounded-t-xl">
             <h3 class="text-xl font-bold" id="historyModalTitle">📋 Batch History</h3>
             <button onclick="closeHistoryModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
         </div>
         <!-- Scrollable content – with horizontal scroll for wide tables -->
-        <div id="historyContent" class="flex-1 overflow-y-auto overflow-x-auto p-4 space-y-4">
+        <div id="historyContent" class="flex-1 overflow-y-auto overflow-x-auto p-4 space-y-4 min-h-0">
             <!-- dynamically loaded -->
         </div>
         <!-- Footer – always visible -->
@@ -291,10 +291,11 @@
         }
     }
 
-    /* Smooth transitions for summary */
+    /* Smooth transitions for summary – and allow vertical scroll when expanded */
     #summaryContent {
         transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.25s ease;
-        overflow: hidden;
+        overflow-y: auto; /* allow scroll when expanded */
+        -webkit-overflow-scrolling: touch; /* smooth on iOS */
     }
     #summaryContent.collapsed {
         max-height: 0 !important;
@@ -302,6 +303,7 @@
         padding-bottom: 0 !important;
         opacity: 0;
         border-top: none !important;
+        overflow: hidden !important; /* hide scroll when collapsed */
     }
 
     /* Modal body scrollbar styling */
@@ -328,6 +330,14 @@
     #summaryContent .grid .bg-gray-800 {
         background: rgba(31, 41, 55, 0.6);
         backdrop-filter: blur(2px);
+    }
+
+    /* Ensure history modal content area can shrink and scroll */
+    #historyModal .flex-1 {
+        min-height: 0;
+    }
+    #historyContent {
+        min-height: 0;
     }
 </style>
 
