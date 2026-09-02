@@ -790,10 +790,10 @@
             currentViewItems = [];
         };
 
-        // ---------- Open in Purchases (screen version) – FIXED: use /purchases with category=Screen ----------
+        // ========== FIXED: Open in Purchases for screens ==========
         window.openInPurchases = function(batchId) {
             if (batchId && batchId !== -1) {
-                window.location.href = `/purchases?category=Screen&show_history=${batchId}`;
+                window.location.href = `/purchases_screen?show_history=${batchId}`;
             }
         };
 
