@@ -647,8 +647,8 @@
     //  VERSION & PASSWORD – CHANGE TO FORCE REINSTALL
     // ============================================================
     const APP_VERSION = 'v3';
-    const INSTALL_PASSWORD = 'oxsmart2026';
-    const PIN_CODE = '1234';
+    const INSTALL_PASSWORD = 'oxsmart2050';
+    const PIN_CODE = '2050';
 
     // ============================================================
     //  LIST OF PROTECTED ROUTES TO CACHE FOR OFFLINE USE
@@ -747,7 +747,6 @@
             if (pinAttempt.length === MAX_PIN_LENGTH) {
                 if (pinAttempt === PIN_CODE) {
                     pinError.textContent = '';
-                    // Store unlock timestamp with 24‑hour expiry
                     localStorage.setItem('pin_unlocked', JSON.stringify({ timestamp: Date.now() }));
                     pinLockScreen.classList.remove('active');
                     pinAttempt = '';
@@ -797,7 +796,7 @@
             try {
                 const { timestamp } = JSON.parse(unlockData);
                 if (Date.now() - timestamp < 24 * 60 * 60 * 1000) {
-                    return true; // unlocked within last 24 hours
+                    return true;
                 } else {
                     localStorage.removeItem('pin_unlocked');
                 }
@@ -805,7 +804,6 @@
                 localStorage.removeItem('pin_unlocked');
             }
         }
-        // Show lock screen
         pinLockScreen.classList.add('active');
         pinAttempt = '';
         updatePinDots();
@@ -814,7 +812,7 @@
     }
 
     // ============================================================
-    //  SESSION MANAGEMENT
+    //  SESSION MANAGEMENT – KEEP SESSION FOR 7 DAYS OFFLINE
     // ============================================================
     const SESSION_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -845,37 +843,20 @@
     }
 
     // ============================================================
-    //  SYNC SESSION WITH SERVER
-    // ============================================================
-    async function syncSessionWithServer() {
-        if (!navigator.onLine) return null;
-        try {
-            const res = await fetch('/api/auth/check');
-            const data = await res.json();
-            if (data.logged_in) {
-                setStoredSession({ username: data.username, role: data.role, id: data.id });
-                return { logged_in: true, user: data };
-            } else {
-                clearSession();
-                return { logged_in: false };
-            }
-        } catch (err) {
-            return null;
-        }
-    }
-
-    // ============================================================
-    //  FULL DATA SYNC FOR OFFLINE USAGE (PWA ONLY)
+    //  FULL DATA SYNC FOR OFFLINE USAGE
+    //  (now called on every online load, not only app mode)
     // ============================================================
     async function fetchAndStoreAllData() {
-        if (!isAppMode() || !db) return;
+        if (!db) {
+            console.warn('❌ Dexie not available – skipping data sync');
+            return;
+        }
         console.log('📥 Fetching all data for offline use...');
         try {
             const res = await fetch('/api/sync/all');
             if (!res.ok) throw new Error('Failed to fetch sync data');
             const data = await res.json();
 
-            // Store each section. Use the cache table as fallback if specific tables don't exist.
             const tables = {
                 products: data.products,
                 batches: data.batches,
@@ -887,7 +868,6 @@
 
             for (const [tableName, items] of Object.entries(tables)) {
                 if (!db[tableName]) {
-                    // If table doesn't exist, store in cache table with key = tableName
                     await db.cache.put({ key: tableName, value: items, timestamp: Date.now() });
                     console.log(`✅ Stored ${items.length} ${tableName} in cache`);
                 } else {
@@ -899,7 +879,6 @@
                 }
             }
 
-            // Also store a last_sync timestamp
             await db.cache.put({ key: 'last_full_sync', value: Date.now(), timestamp: Date.now() });
             console.log('✅ Full data sync completed.');
         } catch (err) {
@@ -918,8 +897,6 @@
             clearInterval(offlinePromptInterval);
             offlinePromptInterval = null;
         }
-
-        // Check every hour
         offlinePromptInterval = setInterval(() => {
             if (!navigator.onLine) {
                 showOfflineReminder();
@@ -1079,7 +1056,7 @@
     });
 
     // ============================================================
-    //  LOGOUT
+    //  LOGOUT – clears both server and local sessions
     // ============================================================
     async function logout() {
         clearSession();
@@ -1236,7 +1213,7 @@
     };
 
     // ============================================================
-    //  INITIALIZATION
+    //  INITIALIZATION – FIXED: no forced server check, always use stored session first
     // ============================================================
     document.addEventListener('DOMContentLoaded', function() {
         const yearSpan = document.getElementById('footerYear');
@@ -1264,88 +1241,81 @@
         async function initializeApp() {
             const currentPath = window.location.pathname;
             const publicPaths = ['/login', '/signup'];
+            if (publicPaths.includes(currentPath)) return;
 
-            if (publicPaths.includes(currentPath)) {
+            // 1. Check stored session first (offline capable)
+            const storedSession = getStoredSession();
+            const sessionValid = isSessionValid(storedSession);
+
+            let isLoggedIn = sessionValid; // default: rely on stored session
+
+            // 2. If online, refresh session from server (but never clear local session)
+            if (navigator.onLine) {
+                try {
+                    const res = await fetch('/api/auth/check');
+                    const data = await res.json();
+                    if (data.logged_in) {
+                        // Update stored session with fresh user info
+                        setStoredSession({ username: data.username, role: data.role, id: data.id });
+                        isLoggedIn = true;
+                    } else {
+                        // Server says not logged in, but we keep our local session if valid
+                        // isLoggedIn remains sessionValid
+                        console.log('🔑 Server says not logged in, but stored session is valid – keeping it');
+                    }
+                } catch (e) {
+                    // Network error – ignore, we'll use stored session if valid
+                    console.log('🌐 Network error during session check – using stored session');
+                }
+            }
+
+            if (!isLoggedIn) {
+                // No valid session – go to login
+                clearSession();
+                window.location.href = '/login';
                 return;
             }
 
-            let serverSession = null;
+            // At this point we have a valid session (stored or fresh)
+            // Pre‑cache all protected pages (service worker) – for both browser and PWA
+            cacheAllPages();
+
+            // ===== DATA SYNC: fetch all data for offline use =====
             if (navigator.onLine) {
-                serverSession = await syncSessionWithServer();
-            }
+                // Download all data for offline use (now always runs, not only in PWA)
+                await fetchAndStoreAllData();
 
-            const session = getStoredSession();
-            const sessionValid = isSessionValid(session);
-
-            let isLoggedIn = false;
-
-            if (serverSession !== null) {
-                if (serverSession.logged_in) {
-                    isLoggedIn = true;
-                } else {
-                    clearSession();
-                    window.location.href = '/login';
-                    return;
+                // Full sync (push pending + pull) – if available
+                if (typeof fullSync === 'function') {
+                    try {
+                        await fullSync();
+                        console.log('✅ Full sync completed.');
+                    } catch (e) {
+                        console.warn('Full sync failed:', e);
+                    }
+                } else if (typeof window.syncAllPending === 'function') {
+                    await window.syncAllPending();
                 }
+
+                // Periodic full sync every 5 minutes while online
+                setInterval(() => {
+                    if (navigator.onLine && typeof fullSync === 'function') {
+                        fullSync();
+                    }
+                }, 5 * 60 * 1000);
+
+                // Start offline prompt timer (if in app mode)
+                if (isAppMode()) startOfflinePrompt();
+
             } else {
-                if (!sessionValid) {
-                    clearSession();
-                    if (!navigator.onLine) {
-                        alert('Your session has expired or you are not logged in. Please connect to the internet and login.');
-                    }
-                    window.location.href = '/login';
-                    return;
-                }
-                isLoggedIn = true;
-            }
-
-            if (isLoggedIn) {
-                // Pre‑cache all protected pages (service worker) – this is done for both browser and PWA
-                cacheAllPages();
-
-                // ===== PWA‑ONLY FEATURES =====
+                // Offline – show sync reminder after 2 seconds (app mode only)
                 if (isAppMode()) {
-                    if (navigator.onLine) {
-                        // Download all data for offline use
-                        await fetchAndStoreAllData();
-                        // Full sync (push pending + pull) – if available
-                        if (typeof fullSync === 'function') {
-                            try {
-                                await fullSync();
-                                console.log('✅ Full sync completed (App mode).');
-                            } catch (e) {
-                                console.warn('Full sync failed:', e);
-                            }
-                        } else {
-                            console.warn('fullSync not defined – using fallback');
-                            await window.syncAllPending();
-                        }
-                        // Periodic full sync every 5 minutes while online
-                        setInterval(() => {
-                            if (navigator.onLine && typeof fullSync === 'function') {
-                                fullSync();
-                            }
-                        }, 5 * 60 * 1000);
-
-                        // Start offline prompt timer
-                        startOfflinePrompt();
-                    } else {
-                        // Offline – show sync reminder after 2 seconds
-                        setTimeout(showSyncReminder, 2000);
-                        // Also start hourly prompt
-                        startOfflinePrompt();
-                    }
-                } else {
-                    // ===== BROWSER MODE – no Dexie sync or offline prompts =====
-                    if (navigator.onLine) {
-                        // Only sync pending operations if needed (light)
-                        if (typeof window.syncAllPending === 'function') {
-                            await window.syncAllPending();
-                        }
-                    }
+                    setTimeout(showSyncReminder, 2000);
+                    startOfflinePrompt();
                 }
             }
 
+            // ===== App‑mode specific post‑install notice =====
             if (isAppMode()) {
                 const urlParams = new URLSearchParams(window.location.search);
                 if (urlParams.get('reinstall') === 'true') {
