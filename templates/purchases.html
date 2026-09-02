@@ -806,6 +806,38 @@
         }
     }
 
+    // ---------- Check for show_history parameter (auto-open history modal) ----------
+    function checkForShowHistory() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const batchId = urlParams.get('show_history');
+        if (batchId) {
+            console.log('📋 show_history requested for batch:', batchId);
+            setTimeout(function() {
+                const purchase = currentPurchases.find(p => p.batch_id === parseInt(batchId));
+                if (purchase) {
+                    console.log('✅ Found purchase, opening history modal');
+                    viewPurchaseHistory(parseInt(batchId));
+                    // Scroll to the batch card in the list and highlight it
+                    const items = document.querySelectorAll('#purchasesList .border');
+                    items.forEach(item => {
+                        if (item.textContent.includes(`Batch #${batchId}`)) {
+                            item.style.border = '3px solid #f59e0b';
+                            item.style.backgroundColor = '#fffbeb';
+                            item.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            setTimeout(() => {
+                                item.style.border = '1px solid #e5e7eb';
+                                item.style.backgroundColor = '';
+                            }, 4000);
+                        }
+                    });
+                } else {
+                    console.warn('⚠️ Batch #' + batchId + ' not found for history view');
+                    alert('Batch #' + batchId + ' not found. It may have been deleted.');
+                }
+            }, 1500);
+        }
+    }
+
     // ============ VIEW PURCHASE HISTORY (with update history) ============
     async function viewPurchaseHistory(batchId) {
         try {
@@ -1045,6 +1077,7 @@
         updateCacheBanner();
         updatePendingBadge();
         checkForBatchEdit();
+        checkForShowHistory(); // <-- NEW: auto-open history modal if parameter present
         isLoading = false;
     }
 

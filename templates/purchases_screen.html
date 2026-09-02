@@ -6,9 +6,9 @@
     ⚠️ You are offline – showing cached screen purchases. New purchases will be saved and synced when you reconnect.
 </div>
 
-<!-- Cache banner -->
+<!-- Cache banner (only for app mode) -->
 <div id="cacheBanner" class="mb-4 bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded hidden">
-    ⚠️ Showing cached data (last updated: <span id="cacheTimestamp"></span>). 
+    ⚠️ Showing cached data (last updated: <span id="cacheTimestamp"></span>).
     <button onclick="refreshData()" class="underline font-bold">Click here to refresh</button>
 </div>
 
@@ -174,7 +174,9 @@
     </div>
 </div>
 
-<!-- ========== COLLAPSIBLE SUMMARY BAR (sticky at bottom) ========== -->
+<!-- ============================================================ -->
+<!-- COLLAPSIBLE SUMMARY – Sticky at bottom with toggle            -->
+<!-- ============================================================ -->
 <div id="summary" class="fixed bottom-0 left-0 right-0 z-50 bg-gray-900 rounded-none md:rounded-t-xl shadow-lg" style="border-top: 2px solid #2d3748;">
 
     <!-- Toggle header – always visible -->
@@ -196,11 +198,13 @@
     </div>
 </div>
 
-<!-- PENDING PURCHASES MODAL -->
+<!-- ============================================================ -->
+<!-- PENDING PURCHASES MODAL                                       -->
+<!-- ============================================================ -->
 <div id="pendingModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
         <div class="flex-shrink-0 p-4 border-b flex justify-between items-center bg-white rounded-t-xl">
-            <h3 class="text-xl font-bold">⏳ Pending Screen Purchases</h3>
+            <h3 class="text-xl font-bold">⏳ Pending Purchases</h3>
             <button onclick="closePendingModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
         </div>
         <div id="pendingList" class="flex-1 overflow-y-auto p-4 space-y-3"><!-- dynamically loaded --></div>
@@ -214,7 +218,9 @@
     </div>
 </div>
 
-<!-- ========== PURCHASE HISTORY MODAL – fixed flex, fully scrollable ========== -->
+<!-- ============================================================ -->
+<!-- PURCHASE HISTORY MODAL – fixed flex layout, fully scrollable -->
+<!-- ============================================================ -->
 <div id="historyModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
         <!-- Header – always visible -->
@@ -233,7 +239,9 @@
     </div>
 </div>
 
-<!-- ========== UPDATE MODE CONFIRM MODAL ========== -->
+<!-- ============================================================ -->
+<!-- UPDATE MODE CONFIRM MODAL                                     -->
+<!-- ============================================================ -->
 <div id="updateModeModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-60 flex items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
         <h3 class="text-xl font-bold mb-2">🔄 Update Mode</h3>
@@ -250,7 +258,9 @@
     </div>
 </div>
 
-<!-- ========== CREATE NEW BATCH OPTIONS MODAL ========== -->
+<!-- ============================================================ -->
+<!-- CREATE NEW BATCH OPTIONS MODAL                                -->
+<!-- ============================================================ -->
 <div id="createBatchModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-70 flex items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
         <h3 class="text-xl font-bold mb-2">📦 Create New Batch</h3>
@@ -621,7 +631,7 @@
     }
     window.refreshData = function() { loadPurchases(true); };
 
-    // ---------- PENDING PURCHASES (legacy localStorage) ----------
+    // ---------- PENDING PURCHASES ----------
     function getPendingPurchases() {
         try { return JSON.parse(localStorage.getItem('pendingPurchases') || '[]'); } catch (e) { return []; }
     }
@@ -646,7 +656,7 @@
         const container = document.getElementById('pendingList');
         const modal = document.getElementById('pendingModal');
         if (pending.length === 0) {
-            container.innerHTML = `<div class="text-center text-gray-400 py-8"><p class="text-2xl mb-2">📭</p><p>No pending screen purchases.</p><p class="text-sm">All purchases have been synced to the server.</p></div>`;
+            container.innerHTML = `<div class="text-center text-gray-400 py-8"><p class="text-2xl mb-2">📭</p><p>No pending purchases.</p><p class="text-sm">All purchases have been synced to the server.</p></div>`;
         } else {
             container.innerHTML = pending.map((p, index) => `
                     <div class="border rounded-lg p-4 hover:shadow transition">
@@ -796,6 +806,38 @@
         }
     }
 
+    // ---------- Check for show_history parameter (auto-open history modal) ----------
+    function checkForShowHistory() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const batchId = urlParams.get('show_history');
+        if (batchId) {
+            console.log('📋 show_history requested for batch:', batchId);
+            setTimeout(function() {
+                const purchase = currentPurchases.find(p => p.batch_id === parseInt(batchId));
+                if (purchase) {
+                    console.log('✅ Found purchase, opening history modal');
+                    viewPurchaseHistory(parseInt(batchId));
+                    // Scroll to the batch card in the list and highlight it
+                    const items = document.querySelectorAll('#purchasesList .border');
+                    items.forEach(item => {
+                        if (item.textContent.includes(`Batch #${batchId}`)) {
+                            item.style.border = '3px solid #f59e0b';
+                            item.style.backgroundColor = '#fffbeb';
+                            item.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            setTimeout(() => {
+                                item.style.border = '1px solid #e5e7eb';
+                                item.style.backgroundColor = '';
+                            }, 4000);
+                        }
+                    });
+                } else {
+                    console.warn('⚠️ Batch #' + batchId + ' not found for history view');
+                    alert('Batch #' + batchId + ' not found. It may have been deleted.');
+                }
+            }, 1500);
+        }
+    }
+
     // ============ VIEW PURCHASE HISTORY (with update history) ============
     async function viewPurchaseHistory(batchId) {
         try {
@@ -930,7 +972,7 @@
         document.body.style.overflow = '';
     }
 
-    // ======================== LOAD PURCHASES (SCREENS) ========================
+    // ======================== LOAD PURCHASES ========================
     async function loadPurchases(forceRefresh = false) {
         if (isLoading) return;
         isLoading = true;
@@ -952,7 +994,7 @@
                 const products = await db.products.where('id').anyOf(productIds).toArray();
                 const productMap = {};
                 products.forEach(p => productMap[p.id] = p);
-                const all = batches.map(b => ({
+                purchases = batches.map(b => ({
                     batch_id: b.id,
                     name: productMap[b.product_id]?.name || 'Unknown',
                     brand: productMap[b.product_id]?.brand || '',
@@ -972,8 +1014,7 @@
                     original_cost_price: b.original_cost_price,
                     original_selling_price: b.original_selling_price
                 }));
-                // Filter only screens (category === 'Screen')
-                purchases = all.filter(p => p.category === 'Screen');
+                purchases = purchases.filter(p => p.category === 'Screen');
                 fromCache = true;
                 isDataFresh = false;
                 console.log('📦 Loaded screen purchases from Dexie (App mode)');
@@ -1036,6 +1077,7 @@
         updateCacheBanner();
         updatePendingBadge();
         checkForBatchEdit();
+        checkForShowHistory(); // <-- NEW: auto-open history modal if parameter present
         isLoading = false;
     }
 
@@ -1095,7 +1137,7 @@
         updateSummary(purchases);
     }
 
-    // ---------- Summary – FIXED CAPITAL = Total Cost – Claimed Cost ----------
+    // ---------- Summary – CORRECTED TOTAL COST & CAPITAL ----------
     function updateSummary(purchases) {
         let totalQty = 0,
             totalRemaining = 0,
@@ -1103,12 +1145,12 @@
             totalDiscount = 0,
             totalSelling = 0,
             totalProfit = 0;
-        let totalClaimed = 0,
+        let totalCapital = 0,
+            totalClaimed = 0,
             totalGood = 0,
             totalClaimedCost = 0,
             totalSold = 0;
         const totalBatches = purchases ? purchases.length : 0;
-
         if (purchases && purchases.length > 0) {
             purchases.forEach(p => {
                 const itemQty = p.quantity || 0;
@@ -1118,7 +1160,6 @@
                 const itemDiscount = p.discount || 0;
                 const claimed = p.claimed_quantity || 0;
                 const sold = itemQty - remainingQty;
-
                 totalQty += itemQty;
                 totalRemaining += remainingQty;
                 totalSold += sold;
@@ -1128,13 +1169,11 @@
                 totalClaimed += claimed;
                 totalGood += remainingQty - claimed;
                 totalClaimedCost += claimed * itemCost;
-
                 const itemProfit = (itemSelling - itemCost) * itemQty - itemDiscount;
                 totalProfit += itemProfit;
             });
         }
-
-        const totalCapital = totalCost - totalClaimedCost;
+        totalCapital = totalCost - totalClaimedCost;
 
         const isOffline = !navigator.onLine;
         const isCached = !isDataFresh && !isOffline;
@@ -1563,7 +1602,8 @@
             totalCost = 0,
             totalDiscount = 0,
             totalSelling = 0,
-            totalProfit = 0;
+            totalProfit = 0,
+            totalCapital = 0;
         let totalClaimed = 0,
             totalClaimedCost = 0,
             totalRemaining = 0,
@@ -1587,7 +1627,6 @@
             const itemProfit = (itemSelling - itemCost) * itemQty - itemDiscount;
             totalProfit += itemProfit;
         });
-
         const adjustedCapital = totalCost - totalClaimedCost;
         const soldPercentage = totalQty > 0 ? ((totalSold / totalQty) * 100) : 0;
 
@@ -1639,7 +1678,7 @@
         }
     }
 
-    // ---------- SUGGESTIONS (filtered to Screen only) ----------
+    // ---------- SUGGESTIONS (with category exclusion) ----------
     let nameTimeout, brandTimeout, catTimeout, sourceTimeout;
 
     async function fetchProductSuggestions(inputId, suggestionsId) {
@@ -1653,7 +1692,6 @@
             return;
         }
         try {
-            // 🔥 Only Screen products
             const res = await fetch(`/api/purchases/suggestions/product?q=${encodeURIComponent(q)}&category=Screen`);
             if (!res.ok) throw new Error();
             const suggestions = await res.json();
@@ -1785,7 +1823,7 @@
             if (e.key === 'Enter') applyAdvancedSearch();
         });
 
-        // Product name & brand suggestions – category=Screen
+        // Product name & brand suggestions with category=Screen
         document.getElementById('name').addEventListener('input', function() {
             clearTimeout(nameTimeout);
             nameTimeout = setTimeout(() => fetchProductSuggestions('name', 'nameSuggestions'), 300);

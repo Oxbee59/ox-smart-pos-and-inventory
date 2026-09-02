@@ -712,10 +712,10 @@
             currentViewItems = [];
         };
 
-        // ---------- Open in Purchases button ----------
+        // ---------- Open in Purchases button (UPDATED: uses show_history) ----------
         window.openInPurchases = function(batchId) {
             if (batchId && batchId !== -1) {
-                window.location.href = `/purchases?edit_batch=${batchId}`;
+                window.location.href = `/purchases?show_history=${batchId}`;
             }
         };
 
