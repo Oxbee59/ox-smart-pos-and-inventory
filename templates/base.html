@@ -28,9 +28,9 @@
     <!-- ===== SERVICE WORKER WITH CACHE-BUSTING ===== -->
     <script>
         if ('serviceWorker' in navigator) {
-            // ✅ Updated to v=8 to force SW update with local assets
-            navigator.serviceWorker.register('/sw.js?v=8')
-                .then(() => console.log('✅ Service Worker registered (v8)'))
+            // ✅ Incremented to v=9 to force SW update with new cache
+            navigator.serviceWorker.register('/sw.js?v=9')
+                .then(() => console.log('✅ Service Worker registered (v9)'))
                 .catch(err => console.log('❌ SW registration failed:', err));
         }
     </script>
@@ -646,7 +646,7 @@
     // ============================================================
     //  VERSION & PASSWORD – CHANGE TO FORCE REINSTALL
     // ============================================================
-    const APP_VERSION = 'v3';
+    const APP_VERSION = 'v4';          // ✅ Incremented to v4
     const INSTALL_PASSWORD = 'oxsmart2050';
     const PIN_CODE = '2050';
 
@@ -697,10 +697,13 @@
     }
 
     // ============================================================
-    //  VERSION CHECK – ONLY FOR STANDALONE
+    //  VERSION CHECK – ONLY FOR STANDALONE, SKIP PUBLIC PAGES
     // ============================================================
     (function checkVersion() {
         if (!isAppMode()) return;
+        // ✅ Skip on public pages (login, signup)
+        const currentPath = window.location.pathname;
+        if (['/login', '/signup'].includes(currentPath)) return;
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('reinstall') === 'true') return;
         const storedVersion = localStorage.getItem('app_version');
@@ -717,7 +720,8 @@
                 font-family: -apple-system, BlinkMacSystemFont, sans-serif;
             `;
             document.body.appendChild(toast);
-            setTimeout(() => { window.location.href = '/?reinstall=true'; }, 2000);
+            // ✅ Redirect to login with reinstall parameter to break loop
+            setTimeout(() => { window.location.href = '/login?reinstall=true'; }, 2000);
         }
     })();
 
