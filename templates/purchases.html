@@ -1,15 +1,9 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
 
 {% block content %}
 <!-- Offline banner -->
 <div id="offlineBanner" class="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded hidden">
     ⚠️ You are offline – showing cached accessory purchases. New purchases will be saved and synced when you reconnect.
-</div>
-
-<!-- Cache banner (only for app mode) -->
-<div id="cacheBanner" class="mb-4 bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded hidden">
-    ⚠️ Showing cached data (last updated: <span id="cacheTimestamp"></span>).
-    <button onclick="refreshData()" class="underline font-bold">Click here to refresh</button>
 </div>
 
 <!-- Force Refresh / Clear Cache Banner -->
@@ -378,16 +372,15 @@
     function forceRefresh() {
         if (!confirm('⚠️ This will clear your local cache and reload all data from the server.\n\nContinue?')) return;
         try {
-            localStorage.removeItem(CACHE_KEY);
-            localStorage.removeItem(CACHE_TIMESTAMP_KEY);
-            const allKeys = Object.keys(localStorage);
-            allKeys.forEach(key => {
-                if (key.startsWith('batches_')) {
-                    localStorage.removeItem(key);
-                    console.log('🗑️ Cleared batch cache:', key);
-                }
-            });
-            console.log('✅ Cache cleared successfully');
+            if (db) {
+                db.products.clear();
+                db.batches.clear();
+                db.sales.clear();
+                db.sales_items.clear();
+                db.claims.clear();
+                db.deleted_products.clear();
+            }
+            console.log('✅ Dexie data cleared');
             loadPurchases(true);
             alert('✅ Cache cleared. Data reloaded from server.');
         } catch (e) {
@@ -401,19 +394,19 @@
                 '- Cached products\n- Cached purchases\n- Pending sales\n- Pending purchases\n- Pending deletions\n\n' +
                 'Are you sure you want to continue?')) return;
         try {
-            const keysToClear = [
-                'cached_products_accessories', 'cached_products_screen',
-                'cached_purchases_accessories', 'cached_purchases_screen',
-                'pending_sales', 'pendingPurchases',
-                'pendingBatchDeletions', 'pendingProductDeletions',
-                'sales_products_cache_accessories', 'sales_products_cache_screens',
-                'sales_license_cache', 'offline_sales'
-            ];
-            keysToClear.forEach(key => { try { localStorage.removeItem(key); } catch (e) {} });
+            // Clear all localStorage (except UI state)
+            const keysToKeep = ['ox_user', 'pin_unlocked', 'app_version', 'summary_collapsed_accessory'];
             const allKeys = Object.keys(localStorage);
             allKeys.forEach(key => {
-                if (key.startsWith('batches_')) localStorage.removeItem(key);
+                if (!keysToKeep.includes(key)) {
+                    localStorage.removeItem(key);
+                }
             });
+            if (db) {
+                db.delete().then(() => {
+                    console.log('🗑️ Dexie database deleted');
+                }).catch(err => console.warn('Error deleting Dexie:', err));
+            }
             alert('✅ All local data cleared. Refreshing page...');
             location.reload();
         } catch (e) {
@@ -430,10 +423,8 @@
     let currentFilteredData = [];
     let editMode = false;
     let editBatchId = null;
-    let isDataFresh = false;
+    let isDataFresh = false; // not used for Dexie reads
     let isLoading = false;
-    const CACHE_KEY = 'cached_purchases_accessories';
-    const CACHE_TIMESTAMP_KEY = 'cached_purchases_accessories_timestamp';
     let searchMode = 'contains';
     let searchField = 'all';
     let caseSensitive = false;
@@ -491,65 +482,46 @@
                 arrow.setAttribute('d', 'M19 9l-7 7-7-7');
                 badge.textContent = '';
             }
-            // Save state
             try { localStorage.setItem(SUMMARY_STATE_KEY, String(collapsed)); } catch (e) {}
             summaryCollapsed = collapsed;
-            // Trigger a resize/refresh of the summary content positioning
             window.dispatchEvent(new Event('resize'));
         }
 
-        // Click handler
         toggle.addEventListener('click', function(e) {
-            // Ignore if click was on the arrow button itself (handled separately)
             if (e.target.closest('#summaryArrowBtn')) return;
             applyState(!summaryCollapsed);
         });
-
-        // Arrow button handler
         document.getElementById('summaryArrowBtn').addEventListener('click', function(e) {
             e.stopPropagation();
             applyState(!summaryCollapsed);
         });
-
-        // Apply initial state
         applyState(summaryCollapsed);
     }
 
     // ---------- Advanced Search ----------
     function matchesSearch(value, searchTerm, mode, caseSensitive) {
         if (!value) return false;
-        let searchValue = value,
-            term = searchTerm;
-        if (!caseSensitive) { searchValue = searchValue.toLowerCase();
-            term = term.toLowerCase(); }
-        switch (mode) {
-            case 'exact':
-                return searchValue === term;
-            case 'starts':
-                return searchValue.startsWith(term);
-            case 'ends':
-                return searchValue.endsWith(term);
+        let searchValue = value, term = searchTerm;
+        if (!caseSensitive) { searchValue = searchValue.toLowerCase(); term = term.toLowerCase(); }
+        switch(mode) {
+            case 'exact': return searchValue === term;
+            case 'starts': return searchValue.startsWith(term);
+            case 'ends': return searchValue.endsWith(term);
             case 'words': {
                 const words = term.split(/\s+/).filter(w => w.length > 0);
                 return words.every(word => searchValue.includes(word));
             }
-            default:
-                return searchValue.includes(term);
+            default: return searchValue.includes(term);
         }
     }
 
     function getSearchableText(purchase, field) {
-        switch (field) {
-            case 'name':
-                return purchase.name || '';
-            case 'brand':
-                return purchase.brand || '';
-            case 'category':
-                return purchase.category || '';
-            case 'source':
-                return purchase.source || '';
-            default:
-                return [purchase.name, purchase.brand, purchase.category, purchase.source].filter(Boolean).join(' ');
+        switch(field) {
+            case 'name': return purchase.name || '';
+            case 'brand': return purchase.brand || '';
+            case 'category': return purchase.category || '';
+            case 'source': return purchase.source || '';
+            default: return [purchase.name, purchase.brand, purchase.category, purchase.source].filter(Boolean).join(' ');
         }
     }
 
@@ -566,7 +538,7 @@
                 filtered = currentPurchases.filter(p => p.batch_id === batchNum);
                 if (filtered.length > 0) {
                     currentFilteredData = filtered;
-                    renderList(filtered, !isDataFresh);
+                    renderList(filtered);
                     setTimeout(() => {
                         const items = document.querySelectorAll('#purchasesList .border');
                         items.forEach(item => {
@@ -591,99 +563,78 @@
             });
         }
         currentFilteredData = filtered;
-        renderList(filtered, !isDataFresh);
+        renderList(filtered);
         const clearBtn = document.getElementById('clearSearchBtn');
         if (keyword) clearBtn.classList.remove('hidden');
         else clearBtn.classList.add('hidden');
     }
 
-    // ---------- Caching ----------
-    function getCacheTimestamp() {
-        try { return localStorage.getItem(CACHE_TIMESTAMP_KEY); } catch (e) { return null; }
-    }
-
-    function cachePurchases(purchases) {
+    // ---------- PENDING PURCHASES (using Dexie pending_ops) ----------
+    async function getPendingPurchases() {
+        if (!db) return [];
         try {
-            localStorage.setItem(CACHE_KEY, JSON.stringify(purchases));
-            localStorage.setItem(CACHE_TIMESTAMP_KEY, new Date().toISOString());
-            isDataFresh = true;
-        } catch (e) {}
-    }
-
-    function loadCachedPurchases() {
-        try { const raw = localStorage.getItem(CACHE_KEY); if (!raw) return null; return JSON.parse(raw); } catch (e) { return null; }
-    }
-
-    function updateCacheBanner() {
-        const cacheBanner = document.getElementById('cacheBanner');
-        const timestampSpan = document.getElementById('cacheTimestamp');
-        if (navigator.onLine && !isDataFresh) {
-            const cached = loadCachedPurchases();
-            if (cached && cached.length > 0) {
-                const ts = getCacheTimestamp();
-                if (ts) {
-                    const date = new Date(ts);
-                    timestampSpan.innerText = date.toLocaleString();
-                } else { timestampSpan.innerText = 'unknown time'; }
-                cacheBanner.classList.remove('hidden');
-            } else { cacheBanner.classList.add('hidden'); }
-        } else { cacheBanner.classList.add('hidden'); }
-    }
-    window.refreshData = function() { loadPurchases(true); };
-
-    // ---------- PENDING PURCHASES ----------
-    function getPendingPurchases() {
-        try { return JSON.parse(localStorage.getItem('pendingPurchases') || '[]'); } catch (e) { return []; }
-    }
-
-    function savePendingPurchases(pending) {
-        try { localStorage.setItem('pendingPurchases', JSON.stringify(pending)); } catch (e) {}
-    }
-
-    function updatePendingBadge() {
-        const pending = getPendingPurchases();
-        const count = pending.length;
-        const badge = document.getElementById('pendingCount');
-        if (badge) {
-            badge.textContent = count;
-            if (count === 0) badge.classList.add('hidden');
-            else badge.classList.remove('hidden');
+            const pending = await db.pending_ops.where('table').equals('batches').and(op => op.synced === 0).toArray();
+            return pending.map(op => ({
+                id: op.id,
+                type: op.operation === 'add' ? 'add' : 'update',
+                batchId: op.record_id,
+                data: op.payload,
+                timestamp: op.timestamp
+            }));
+        } catch (e) {
+            console.warn('Error reading pending ops:', e);
+            return [];
         }
     }
 
-    function viewPendingPurchases() {
-        const pending = getPendingPurchases();
+    async function updatePendingBadge() {
+        if (!db) return;
+        try {
+            const count = await db.pending_ops.where('table').equals('batches').and(op => op.synced === 0).count();
+            const badge = document.getElementById('pendingCount');
+            if (badge) {
+                badge.textContent = count;
+                if (count === 0) badge.classList.add('hidden');
+                else badge.classList.remove('hidden');
+            }
+        } catch (e) {
+            console.warn('Error updating pending badge:', e);
+        }
+    }
+
+    async function viewPendingPurchases() {
+        const pending = await getPendingPurchases();
         const container = document.getElementById('pendingList');
         const modal = document.getElementById('pendingModal');
         if (pending.length === 0) {
             container.innerHTML = `<div class="text-center text-gray-400 py-8"><p class="text-2xl mb-2">📭</p><p>No pending purchases.</p><p class="text-sm">All purchases have been synced to the server.</p></div>`;
         } else {
             container.innerHTML = pending.map((p, index) => `
-                    <div class="border rounded-lg p-4 hover:shadow transition">
-                        <div class="flex justify-between items-start">
-                            <div>
-                                <div class="flex items-center gap-2">
-                                    <span class="text-sm font-semibold ${p.type === 'add' ? 'text-green-600' : 'text-yellow-600'}">
-                                        ${p.type === 'add' ? '➕ Add' : '✏️ Update'}
-                                    </span>
-                                    <span class="text-xs text-gray-400">${new Date(p.timestamp).toLocaleString()}</span>
-                                    ${p.batchId ? `<span class="text-xs bg-gray-100 px-2 py-0.5 rounded">Batch #${p.batchId}</span>` : ''}
-                                </div>
-                                <h3 class="font-bold text-lg mt-1">${escapeHtml(p.data.name)} (${escapeHtml(p.data.brand)})</h3>
-                                <p class="text-sm text-gray-600">
-                                    Qty: ${p.data.quantity} | Cost: ₵${safeToFixed(p.data.cost_price)} | Selling: ₵${safeToFixed(p.data.selling_price)}
-                                    ${p.data.discount ? `| Discount: ₵${safeToFixed(p.data.discount)}` : ''}
-                                </p>
-                                <p class="text-sm text-gray-500">Category: ${p.data.category || 'Accessory'}</p>
-                                <p class="text-sm text-gray-500">Source: ${p.data.source || 'Unknown'}</p>
+                <div class="border rounded-lg p-4 hover:shadow transition">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-sm font-semibold ${p.type === 'add' ? 'text-green-600' : 'text-yellow-600'}">
+                                    ${p.type === 'add' ? '➕ Add' : '✏️ Update'}
+                                </span>
+                                <span class="text-xs text-gray-400">${new Date(p.timestamp).toLocaleString()}</span>
+                                ${p.batchId ? `<span class="text-xs bg-gray-100 px-2 py-0.5 rounded">Batch #${p.batchId}</span>` : ''}
                             </div>
-                            <div class="flex flex-col gap-1">
-                                <button onclick="syncPendingItem(${index})" class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm">🔄 Sync</button>
-                                <button onclick="removePendingItem(${index})" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">🗑️ Remove</button>
-                            </div>
+                            <h3 class="font-bold text-lg mt-1">${escapeHtml(p.data.name)} (${escapeHtml(p.data.brand)})</h3>
+                            <p class="text-sm text-gray-600">
+                                Qty: ${p.data.quantity} | Cost: ₵${safeToFixed(p.data.cost_price)} | Selling: ₵${safeToFixed(p.data.selling_price)}
+                                ${p.data.discount ? `| Discount: ₵${safeToFixed(p.data.discount)}` : ''}
+                            </p>
+                            <p class="text-sm text-gray-500">Category: ${p.data.category || 'Accessory'}</p>
+                            <p class="text-sm text-gray-500">Source: ${p.data.source || 'Unknown'}</p>
+                        </div>
+                        <div class="flex flex-col gap-1">
+                            <button onclick="syncPendingItem(${index})" class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm">🔄 Sync</button>
+                            <button onclick="removePendingItem(${index})" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">🗑️ Remove</button>
                         </div>
                     </div>
-                `).join('');
+                </div>
+            `).join('');
         }
         updatePendingBadge();
         modal.classList.remove('hidden');
@@ -694,7 +645,7 @@
     }
 
     async function syncPendingItem(index) {
-        const pending = getPendingPurchases();
+        const pending = await getPendingPurchases();
         const item = pending[index];
         if (!item) return;
         if (!confirm(`Sync this ${item.type === 'add' ? 'addition' : 'update'} for "${item.data.name}"?`)) return;
@@ -713,12 +664,10 @@
             if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
             const data = await res.json();
             if (data.success) {
-                pending.splice(index, 1);
-                savePendingPurchases(pending);
-                updatePendingBadge();
-                viewPendingPurchases();
-                loadPurchases(true);
+                await db.pending_ops.delete(item.id);
                 alert(`✅ ${item.type === 'add' ? 'Added' : 'Updated'} successfully!`);
+                updatePendingBadge();
+                loadPurchases(true);
             } else {
                 alert('Error: ' + data.error);
             }
@@ -728,13 +677,11 @@
     }
 
     async function syncAllPending() {
-        const pending = getPendingPurchases();
+        const pending = await getPendingPurchases();
         if (pending.length === 0) { alert('No pending items to sync.'); return; }
         if (!confirm(`Sync all ${pending.length} pending purchase(s)?`)) return;
-        let successCount = 0,
-            failCount = 0;
-        for (let i = pending.length - 1; i >= 0; i--) {
-            const item = pending[i];
+        let successCount = 0, failCount = 0;
+        for (const item of pending) {
             try {
                 let url = '/api/purchases';
                 let method = 'POST';
@@ -749,33 +696,35 @@
                 });
                 if (res.ok) {
                     const data = await res.json();
-                    if (data.success) { pending.splice(i, 1);
-                        successCount++; } else { failCount++; }
+                    if (data.success) {
+                        await db.pending_ops.delete(item.id);
+                        successCount++;
+                    } else { failCount++; }
                 } else { failCount++; }
             } catch (error) { failCount++; }
         }
-        savePendingPurchases(pending);
         updatePendingBadge();
         viewPendingPurchases();
         loadPurchases(true);
         alert(`✅ Synced: ${successCount} | ❌ Failed: ${failCount}`);
     }
 
-    function removePendingItem(index) {
-        const pending = getPendingPurchases();
+    async function removePendingItem(index) {
+        const pending = await getPendingPurchases();
         const item = pending[index];
         if (!confirm(`Remove pending ${item.type === 'add' ? 'addition' : 'update'} for "${item.data.name}"?`)) return;
-        pending.splice(index, 1);
-        savePendingPurchases(pending);
+        await db.pending_ops.delete(item.id);
         updatePendingBadge();
         viewPendingPurchases();
     }
 
-    function clearAllPending() {
-        const pending = getPendingPurchases();
+    async function clearAllPending() {
+        const pending = await getPendingPurchases();
         if (pending.length === 0) { alert('No pending items to clear.'); return; }
         if (!confirm(`Delete all ${pending.length} pending purchase(s)? This cannot be undone.`)) return;
-        savePendingPurchases([]);
+        for (const item of pending) {
+            await db.pending_ops.delete(item.id);
+        }
         updatePendingBadge();
         viewPendingPurchases();
     }
@@ -806,7 +755,7 @@
         }
     }
 
-    // ---------- Check for show_history parameter (auto-open history modal) ----------
+    // ---------- Check for show_history parameter ----------
     function checkForShowHistory() {
         const urlParams = new URLSearchParams(window.location.search);
         const batchId = urlParams.get('show_history');
@@ -817,7 +766,6 @@
                 if (purchase) {
                     console.log('✅ Found purchase, opening history modal');
                     viewPurchaseHistory(parseInt(batchId));
-                    // Scroll to the batch card in the list and highlight it
                     const items = document.querySelectorAll('#purchasesList .border');
                     items.forEach(item => {
                         if (item.textContent.includes(`Batch #${batchId}`)) {
@@ -972,24 +920,18 @@
         document.body.style.overflow = '';
     }
 
-    // ======================== LOAD PURCHASES ========================
+    // ======================== LOAD PURCHASES (Dexie-first) ========================
     async function loadPurchases(forceRefresh = false) {
         if (isLoading) return;
         isLoading = true;
         updateOfflineBanner();
-        if (forceRefresh) {
-            isDataFresh = false;
-            try { localStorage.removeItem(CACHE_KEY);
-                localStorage.removeItem(CACHE_TIMESTAMP_KEY); } catch (e) {}
-        }
 
         let purchases = [];
-        let fromCache = false;
 
-        // --- APP MODE: READ FROM DEXIE ---
-        if (isAppMode() && db) {
+        // 1. Always read from Dexie first
+        if (db) {
             try {
-                const batches = await db.batches.where('product_id').above(0).toArray();
+                const batches = await db.batches.toArray();
                 const productIds = [...new Set(batches.map(b => b.product_id))];
                 const products = await db.products.where('id').anyOf(productIds).toArray();
                 const productMap = {};
@@ -1004,7 +946,7 @@
                     cost_price: b.cost_price,
                     discount: b.discount,
                     selling_price: b.selling_price,
-                    total_cost: b.cost_price * b.quantity - b.discount,
+                    total_cost: b.cost_price * b.quantity - (b.discount || 0),
                     date: b.date,
                     action: b.action,
                     source: b.source,
@@ -1014,75 +956,104 @@
                     original_cost_price: b.original_cost_price,
                     original_selling_price: b.original_selling_price
                 }));
+                // Filter out Screens
                 purchases = purchases.filter(p => p.category !== 'Screen');
-                fromCache = true;
-                isDataFresh = false;
-                console.log('📦 Loaded purchases from Dexie (App mode)');
+                console.log('📦 Loaded accessory purchases from Dexie:', purchases.length);
             } catch (err) {
-                console.warn('Failed to load from Dexie, falling back to API:', err);
+                console.warn('Failed to load from Dexie:', err);
             }
         }
 
-        // --- BROWSER MODE or FALLBACK: FETCH FROM SERVER ---
-        if (purchases.length === 0 && navigator.onLine) {
-            try {
-                let url = '/api/purchases?exclude_category=Screen';
-                const fromDate = document.getElementById('fromDate').value;
-                const toDate = document.getElementById('toDate').value;
-                const dateType = document.getElementById('dateType').value;
-                const showUpdatedOnly = document.getElementById('showUpdatedOnly').checked;
-                if (fromDate && toDate) {
-                    url += `&start_date=${fromDate}&end_date=${toDate}&date_type=${dateType}&show_updated_only=${showUpdatedOnly}`;
-                }
-                const res = await fetch(url);
-                if (res.ok) {
-                    purchases = await res.json();
-                    if (Array.isArray(purchases)) {
-                        cachePurchases(purchases);
-                        isDataFresh = true;
-                        fromCache = false;
-                        console.log('✅ Data loaded from API (fresh)');
-                        if (isAppMode() && typeof pullData === 'function') {
-                            pullData().catch(e => console.warn('Background pullData failed:', e));
-                        }
-                    } else {
-                        throw new Error('Invalid data format');
-                    }
-                } else {
-                    throw new Error('API returned error');
-                }
-            } catch (err) {
-                console.warn('⚠️ API failed, using cached data:', err.message);
-                fromCache = true;
-                const cached = loadCachedPurchases();
-                if (cached && Array.isArray(cached)) {
-                    purchases = cached;
-                    isDataFresh = false;
-                } else {
-                    purchases = [];
-                }
-            }
-        } else if (purchases.length === 0 && !navigator.onLine) {
-            const cached = loadCachedPurchases();
-            if (cached && Array.isArray(cached)) {
-                purchases = cached;
-                fromCache = true;
-                isDataFresh = false;
-            }
+        // 2. If we have data, render immediately
+        if (purchases.length > 0) {
+            currentPurchases = purchases;
+            currentFilteredData = purchases;
+            renderList(purchases);
+            updateSummary(purchases);
+            updatePendingBadge();
+            // Check for URL parameters after render
+            setTimeout(() => {
+                checkForBatchEdit();
+                checkForShowHistory();
+            }, 300);
+        } else {
+            // No data in Dexie – show empty state
+            document.getElementById('purchasesList').innerHTML = '<div class="text-center text-gray-400 py-8">No accessory purchases found.</div>';
+            updateSummary([]);
         }
 
-        currentPurchases = purchases;
-        currentFilteredData = purchases;
-        renderList(purchases, fromCache);
-        updateCacheBanner();
-        updatePendingBadge();
-        checkForBatchEdit();
-        checkForShowHistory(); // <-- NEW: auto-open history modal if parameter present
+        // 3. If online, refresh in background (non‑blocking)
+        if (navigator.onLine && !forceRefresh) {
+            refreshPurchasesFromAPI().catch(err => console.warn('Background refresh failed:', err));
+        } else if (forceRefresh && navigator.onLine) {
+            // Force refresh – wait for API then re-render
+            await refreshPurchasesFromAPI();
+        }
+
         isLoading = false;
     }
 
+    // ---------- Background refresh from API ----------
+    async function refreshPurchasesFromAPI() {
+        try {
+            const res = await fetch('/api/purchases?exclude_category=Screen');
+            if (!res.ok) throw new Error('API error');
+            const apiPurchases = await res.json();
+            if (!Array.isArray(apiPurchases)) throw new Error('Invalid data format');
+
+            // Update Dexie: we need to map API purchases to batches and products
+            if (db) {
+                // Extract unique products
+                const productMap = {};
+                const batchMap = {};
+                for (const p of apiPurchases) {
+                    // Upsert product
+                    const productId = p.product_id || p.batch_id; // fallback
+                    if (!productMap[productId]) {
+                        productMap[productId] = {
+                            id: productId,
+                            name: p.name,
+                            brand: p.brand,
+                            category: p.category,
+                            cost_price: p.cost_price,
+                            selling_price: p.selling_price,
+                            stock: p.quantity - (p.remaining_quantity || 0) + (p.remaining_quantity || 0), // not accurate but we'll update from batches
+                            discount: p.discount || 0
+                        };
+                    }
+                    // Upsert batch
+                    batchMap[p.batch_id] = {
+                        id: p.batch_id,
+                        product_id: productId,
+                        quantity: p.quantity,
+                        remaining_quantity: p.remaining_quantity,
+                        cost_price: p.cost_price,
+                        selling_price: p.selling_price,
+                        discount: p.discount || 0,
+                        claimed_quantity: p.claimed_quantity || 0,
+                        date: p.date,
+                        action: p.action || 'added',
+                        source: p.source || '',
+                        original_quantity: p.original_quantity || p.quantity,
+                        original_date: p.original_date || p.date,
+                        original_cost_price: p.original_cost_price || p.cost_price,
+                        original_selling_price: p.original_selling_price || p.selling_price,
+                        original_discount: p.original_discount || p.discount || 0
+                    };
+                }
+                // Bulk put products and batches
+                await db.products.bulkPut(Object.values(productMap));
+                await db.batches.bulkPut(Object.values(batchMap));
+                // Reload from Dexie to show fresh data
+                await loadPurchases(false);
+            }
+        } catch (e) {
+            console.warn('Background refresh failed:', e);
+        }
+    }
+
     // ---------- Render list with enhanced badges ----------
-    function renderList(purchases, fromCache = false) {
+    function renderList(purchases) {
         const container = document.getElementById('purchasesList');
         if (!purchases || purchases.length === 0) {
             container.innerHTML = '<div class="text-center text-gray-400 py-8">No accessory purchase records found.</div>';
@@ -1176,11 +1147,9 @@
         totalCapital = totalCost - totalClaimedCost;
 
         const isOffline = !navigator.onLine;
-        const isCached = !isDataFresh && !isOffline;
         const soldPercentage = totalQty > 0 ? ((totalSold / totalQty) * 100) : 0;
         const soldColor = soldPercentage > 70 ? 'text-green-600' : (soldPercentage > 30 ? 'text-orange-600' : 'text-red-600');
 
-        // Update the summary content (inside the collapsible area)
         document.getElementById('summaryContent').innerHTML = `
                 <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-10 gap-1 text-xs">
                     <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">📦 Batches</span><br><span class="text-lg font-bold text-indigo-400">${totalBatches}</span></div>
@@ -1203,26 +1172,29 @@
                 <div class="text-xs text-gray-500 mt-1">
                     💡 Total: ${totalQty} | Remaining: ${totalRemaining} | Sold: ${totalSold} | Claimed: ${totalClaimed} | Good: ${Math.max(totalGood, 0)} | Capital: ${formatMoney(totalCapital)}
                     ${isOffline ? ' | ⚠️ Offline mode' : ''}
-                    ${isCached ? ' | 📦 Showing cached data' : ''}
-                    ${!isOffline && !isCached ? ' | ✅ Live data' : ''}
                     ${totalQty > 0 ? ` | 📊 ${soldPercentage.toFixed(0)}% sold` : ''}
                 </div>
             `;
     }
 
-    // ---------- Save pending purchase (legacy localStorage) ----------
-    function savePendingPurchase(payload, actionType, batchId) {
-        let pending = getPendingPurchases();
-        pending.push({
-            id: Date.now() + '_' + Math.random().toString(36).substr(2, 5),
-            type: actionType || 'add',
-            batchId: batchId || null,
-            data: payload,
-            timestamp: new Date().toISOString()
-        });
-        savePendingPurchases(pending);
-        updatePendingBadge();
-        console.log('💾 Saved pending purchase:', payload);
+    // ---------- Save pending purchase (Dexie) ----------
+    async function savePendingPurchase(payload, actionType, batchId) {
+        if (!db) return;
+        try {
+            await db.pending_ops.add({
+                table: 'batches',
+                operation: actionType === 'add' ? 'add' : 'update',
+                record_id: batchId || 'temp_' + Date.now(),
+                payload: payload,
+                timestamp: new Date().toISOString(),
+                attempts: 0,
+                synced: 0
+            });
+            updatePendingBadge();
+            console.log('💾 Saved pending purchase:', payload);
+        } catch (e) {
+            console.error('Error saving pending purchase:', e);
+        }
     }
 
     // ---------- Submit / Update with mode selection ----------
@@ -1284,22 +1256,33 @@
         await doSubmitPurchase(payload, editMode ? 'auto' : 'add', editBatchId);
     }
 
-    // ---------- Core submit logic (conditional Dexie vs API) ----------
+    // ---------- Core submit logic (Dexie-first) ----------
     async function doSubmitPurchase(payload, actionType, batchId) {
-        const isApp = isAppMode();
-
-        // =========== APP MODE: WRITE TO DEXIE + QUEUE ===========
-        if (isApp && db) {
+        // Always attempt to save locally via Dexie + queue
+        if (db) {
             try {
                 let localBatchId = batchId;
                 if (actionType === 'add' || actionType === 'create') {
-                    const tempId = Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+                    const tempId = 'temp_' + Date.now();
                     localBatchId = tempId;
-                    const product = await db.products.where({ name: payload.name, brand: payload.brand }).first();
+                    // Try to find existing product
+                    let product = await db.products.where({ name: payload.name, brand: payload.brand }).first();
                     if (!product) {
-                        alert('Product not found locally. Please sync first or create the product online.');
-                        return;
+                        // Create a placeholder product
+                        const newProductId = 'prod_' + Date.now();
+                        await db.products.add({
+                            id: newProductId,
+                            name: payload.name,
+                            brand: payload.brand,
+                            category: payload.category,
+                            cost_price: payload.cost_price,
+                            selling_price: payload.selling_price,
+                            stock: payload.quantity,
+                            discount: payload.discount
+                        });
+                        product = { id: newProductId };
                     }
+                    // Add batch
                     await db.batches.add({
                         id: tempId,
                         product_id: product.id,
@@ -1318,6 +1301,7 @@
                         original_selling_price: payload.selling_price,
                         original_discount: payload.discount
                     });
+                    // Update product stock
                     await db.products.update(product.id, { stock: (product.stock || 0) + payload.quantity });
                 } else if (actionType === 'update' || actionType === 'auto') {
                     const oldBatch = await db.batches.get(batchId);
@@ -1335,9 +1319,10 @@
                     });
                 }
 
+                // Save pending operation
                 await db.pending_ops.add({
-                    operation: actionType === 'add' ? 'add' : 'update',
                     table: 'batches',
+                    operation: actionType === 'add' ? 'add' : 'update',
                     record_id: localBatchId,
                     payload: payload,
                     timestamp: new Date().toISOString(),
@@ -1345,6 +1330,7 @@
                     synced: 0
                 });
 
+                // If online, push immediately
                 if (navigator.onLine) {
                     await pushPending();
                 }
@@ -1352,6 +1338,7 @@
                 alert('Purchase saved locally' + (navigator.onLine ? ' and synced.' : '. Will sync when online.'));
                 resetForm();
                 loadPurchases();
+                updatePendingBadge();
                 return;
             } catch (err) {
                 console.error('Dexie write error:', err);
@@ -1360,7 +1347,7 @@
             }
         }
 
-        // =========== BROWSER MODE: USE API ===========
+        // Fallback: use API (if no Dexie)
         try {
             let url = '/api/purchases';
             let method = 'POST';
@@ -1368,7 +1355,6 @@
                 url = `/api/purchases/${batchId}`;
                 method = 'PUT';
                 payload.update_mode = actionType === 'create' ? 'create' : 'update';
-                if (typeof payload.keep_sold_with_old !== 'undefined') {}
             }
             const res = await fetch(url, {
                 method: method,
@@ -1391,7 +1377,7 @@
             }
         } catch (error) {
             console.warn('Network error, saving purchase offline:', error);
-            savePendingPurchase(payload, actionType === 'create' ? 'update' : actionType, batchId);
+            await savePendingPurchase(payload, actionType === 'create' ? 'update' : actionType, batchId);
             updatePendingBadge();
             alert('⚠️ You are offline. Purchase saved locally and will be synced later.');
             resetForm();
@@ -1521,67 +1507,42 @@
             document.getElementById('showUpdatedOnly').checked = true;
         }
 
+        // Client-side filtering from currentPurchases (Dexie data)
+        let filtered = currentPurchases;
         if (fromDate && toDate) {
-            try {
-                let url =
-                    `/api/purchases/filter?start_date=${fromDate}&end_date=${toDate}&exclude_category=Screen&date_type=${dateType}&show_updated_only=${showUpdatedOnly}`;
-                const res = await fetch(url);
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                const data = await res.json();
-                applyFilterResult(data);
-            } catch (err) {
-                console.error('Filter error:', err);
-                alert('Filter failed. Showing cached data.');
-                loadCachedData();
-            }
-            return;
+            const from = new Date(fromDate);
+            const to = new Date(toDate);
+            // Set to end of day
+            to.setHours(23, 59, 59, 999);
+            filtered = filtered.filter(p => {
+                const d = new Date(p.date);
+                return d >= from && d <= to;
+            });
         }
-
         if (showUpdatedOnly) {
-            try {
-                let url = `/api/purchases?exclude_category=Screen&show_updated_only=true`;
-                const res = await fetch(url);
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                const data = await res.json();
-                applyFilterResult(data);
-            } catch (err) {
-                console.error('Filter error:', err);
-                alert('Filter failed. Showing cached data.');
-                loadCachedData();
+            filtered = filtered.filter(p => p.action !== 'added');
+        }
+        // Apply search/advanced search if any
+        const keyword = document.getElementById('searchInput').value.trim();
+        if (keyword) {
+            const isBatchSearch = /^#?\d+$/.test(keyword);
+            if (isBatchSearch) {
+                const batchNum = parseInt(keyword.replace('#', ''));
+                filtered = filtered.filter(p => p.batch_id === batchNum);
+            } else {
+                const mode = document.getElementById('searchMode').value;
+                const field = document.getElementById('searchField').value;
+                const caseSens = document.getElementById('caseSensitive').value === 'true';
+                filtered = filtered.filter(p => {
+                    const text = getSearchableText(p, field);
+                    return matchesSearch(text, keyword, mode, caseSens);
+                });
             }
-            return;
         }
-
-        alert('Please select a date range or check "Show only updated".');
-        await loadPurchases();
-    }
-
-    function applyFilterResult(data) {
-        if (Array.isArray(data)) {
-            currentPurchases = data;
-            currentFilteredData = data;
-            cachePurchases(currentPurchases);
-            isDataFresh = true;
-            updateCacheBanner();
-            renderList(currentFilteredData, !isDataFresh);
-            updateSummary(currentFilteredData);
-            document.getElementById('searchInput').value = '';
-            document.getElementById('clearSearchBtn').classList.add('hidden');
-        } else {
-            throw new Error('Invalid data format');
-        }
-    }
-
-    function loadCachedData() {
-        const cached = loadCachedPurchases();
-        if (cached && Array.isArray(cached)) {
-            currentPurchases = cached;
-            currentFilteredData = cached;
-            isDataFresh = false;
-            updateCacheBanner();
-            renderList(currentFilteredData, true);
-            updateSummary(currentFilteredData);
-        }
+        currentFilteredData = filtered;
+        renderList(filtered);
+        updateSummary(filtered);
+        document.getElementById('clearSearchBtn').classList.add('hidden');
     }
 
     // ---------- PDF ----------

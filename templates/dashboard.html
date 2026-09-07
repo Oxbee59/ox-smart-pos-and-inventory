@@ -118,73 +118,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        console.log("DOM loaded – initializing Dashboard with Dexie");
-
-        // ========== DEXIE HELPERS (using cache table) ==========
-        const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
-
-        async function getCacheEntry(key) {
-            if (!db) {
-                // Fallback to localStorage
-                try {
-                    const raw = localStorage.getItem(key);
-                    if (!raw) return null;
-                    const parsed = JSON.parse(raw);
-                    if (Date.now() - (parsed.timestamp || 0) > CACHE_MAX_AGE_MS) {
-                        localStorage.removeItem(key);
-                        return null;
-                    }
-                    return parsed.data;
-                } catch(e) { return null; }
-            }
-            try {
-                let cacheTable = db.cache || db.table('cache');
-                const entry = await cacheTable.get(key);
-                if (entry && entry.value) {
-                    const age = Date.now() - (entry.timestamp || 0);
-                    if (age < CACHE_MAX_AGE_MS) {
-                        return entry.value;
-                    } else {
-                        // Stale – remove
-                        await cacheTable.delete(key);
-                        return null;
-                    }
-                }
-                return null;
-            } catch (e) {
-                console.warn('Dexie cache read failed, using localStorage fallback', e);
-                try {
-                    const raw = localStorage.getItem(key);
-                    if (!raw) return null;
-                    const parsed = JSON.parse(raw);
-                    if (Date.now() - (parsed.timestamp || 0) > CACHE_MAX_AGE_MS) {
-                        localStorage.removeItem(key);
-                        return null;
-                    }
-                    return parsed.data;
-                } catch(e2) { return null; }
-            }
-        }
-
-        async function putCacheEntry(key, value) {
-            if (!db) {
-                // localStorage fallback
-                try {
-                    localStorage.setItem(key, JSON.stringify({ data: value, timestamp: Date.now() }));
-                } catch(e) {}
-                return;
-            }
-            try {
-                let cacheTable = db.cache || db.table('cache');
-                await cacheTable.put({ key, value, timestamp: Date.now() });
-                console.log(`✅ Cache entry ${key} stored in Dexie`);
-            } catch (e) {
-                console.warn('Dexie cache write failed, using localStorage fallback', e);
-                try {
-                    localStorage.setItem(key, JSON.stringify({ data: value, timestamp: Date.now() }));
-                } catch(e2) {}
-            }
-        }
+        console.log("DOM loaded – Dashboard with Dexie‑first rendering");
 
         // ---------- Offline banner ----------
         function updateOfflineBanner() {
@@ -198,7 +132,7 @@
         window.addEventListener('online', updateOfflineBanner);
         window.addEventListener('offline', updateOfflineBanner);
 
-        // ---------- Helper functions ----------
+        // ---------- Helpers ----------
         let pieChart = null;
         let lowStockShown = false;
         let startDate = null;
@@ -234,7 +168,6 @@
             window.location.href = page;
         }
 
-        // Clock
         function updateClock() {
             const now = new Date();
             const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -245,29 +178,17 @@
 
         // Get datetime range
         function getDateTimeRange() {
-            let startDateTime = null;
-            let endDateTime = null;
-            
+            let startDateTime = null, endDateTime = null;
             if (startDate) {
-                if (startTime) {
-                    startDateTime = `${startDate} ${startTime}:00`;
-                } else {
-                    startDateTime = `${startDate} 00:00:00`;
-                }
+                startDateTime = startTime ? `${startDate} ${startTime}:00` : `${startDate} 00:00:00`;
             }
-            
             if (endDate) {
-                if (endTime) {
-                    endDateTime = `${endDate} ${endTime}:00`;
-                } else {
-                    endDateTime = `${endDate} 23:59:59`;
-                }
+                endDateTime = endTime ? `${endDate} ${endTime}:00` : `${endDate} 23:59:59`;
             }
-            
             return { start_datetime: startDateTime, end_datetime: endDateTime };
         }
 
-        // Calendar rendering (unchanged)
+        // Calendar rendering
         function renderCalendar(year, month) {
             const monthNames = ['January','February','March','April','May','June',
                                 'July','August','September','October','November','December'];
@@ -304,12 +225,10 @@
                     startTime = '';
                     endTime = '';
                     selectedDate = newDate;
-                    
                     document.getElementById('startDate').value = newDate;
                     document.getElementById('endDate').value = newDate;
                     document.getElementById('startTime').value = '';
                     document.getElementById('endTime').value = '';
-                    
                     loadDashboard();
                     renderCalendar(calendarYear, calendarMonth);
                 });
@@ -317,31 +236,18 @@
         }
 
         document.getElementById('prevMonthBtn').addEventListener('click', function() {
-            if (calendarMonth === 0) {
-                calendarMonth = 11;
-                calendarYear--;
-            } else {
-                calendarMonth--;
-            }
+            if (calendarMonth === 0) { calendarMonth = 11; calendarYear--; }
+            else { calendarMonth--; }
             renderCalendar(calendarYear, calendarMonth);
         });
-
         document.getElementById('nextMonthBtn').addEventListener('click', function() {
-            if (calendarMonth === 11) {
-                calendarMonth = 0;
-                calendarYear++;
-            } else {
-                calendarMonth++;
-            }
+            if (calendarMonth === 11) { calendarMonth = 0; calendarYear++; }
+            else { calendarMonth++; }
             renderCalendar(calendarYear, calendarMonth);
         });
-
         document.getElementById('todayHistoryBtn').addEventListener('click', function() {
             const today = new Date().toISOString().split('T')[0];
-            startDate = today;
-            endDate = today;
-            startTime = '';
-            endTime = '';
+            startDate = today; endDate = today; startTime = ''; endTime = '';
             selectedDate = today;
             document.getElementById('startDate').value = today;
             document.getElementById('endDate').value = today;
@@ -354,51 +260,28 @@
             loadDashboard();
         });
 
-        // ---------- Render low stock list ----------
+        // ---------- Low stock rendering ----------
         function renderLowStockList(products) {
             const container = document.getElementById('lowStockList');
             container.innerHTML = '';
-            
-            if (!Array.isArray(products) || products.length === 0) {
+            if (!products || products.length === 0) {
                 container.innerHTML = '<div class="text-gray-400 text-center py-4 text-sm">✅ No low stock items found.</div>';
                 return;
             }
-
-            let rendered = 0;
             products.forEach(item => {
-                let name, brand, category, stock, batchIds;
-                
-                if (Array.isArray(item)) {
-                    name = (item[0] && typeof item[0] === 'string') ? item[0] : '';
-                    brand = (item[1] && typeof item[1] === 'string') ? item[1] : '';
-                    category = (item[2] && typeof item[2] === 'string') ? item[2] : '';
-                    stock = (typeof item[3] === 'number') ? item[3] : 0;
-                    batchIds = Array.isArray(item[4]) ? item[4] : [];
-                } else if (item && typeof item === 'object') {
-                    name = item.name || '';
-                    brand = item.brand || '';
-                    category = item.category || '';
-                    stock = item.stock || 0;
-                    batchIds = item.batch_ids || item.batchIds || [];
-                } else {
-                    return;
-                }
-
-                if (!name) {
-                    name = 'Unknown Product';
-                    console.warn('Low stock item missing name:', item);
-                }
-
+                const name = item.name || 'Unknown';
+                const brand = item.brand || '';
+                const category = item.category || '';
+                const stock = item.stock || 0;
+                const batchIds = item.batch_ids || [];
                 let batchDisplay = '';
                 let statusClass = '';
                 let categoryBadge = '';
-                
                 if (category && category.toLowerCase() === 'screen') {
                     categoryBadge = `<span class="bg-purple-100 text-purple-800 text-[8px] md:text-xs px-1 md:px-1.5 py-0.5 rounded ml-0.5 md:ml-1">Screen</span>`;
                 } else if (category && category.toLowerCase() === 'accessory') {
                     categoryBadge = `<span class="bg-green-100 text-green-800 text-[8px] md:text-xs px-1 md:px-1.5 py-0.5 rounded ml-0.5 md:ml-1">Accessory</span>`;
                 }
-                
                 if (batchIds && batchIds.length > 0) {
                     const batchList = batchIds.slice(0, 5).join(', #');
                     const more = batchIds.length > 5 ? ` +${batchIds.length - 5} more` : '';
@@ -407,25 +290,18 @@
                 } else if (stock === 0) {
                     batchDisplay = ' | ⚠️ DEPLETED - No active batches';
                     statusClass = 'text-orange-500';
-                } else if (stock > 0) {
+                } else {
                     batchDisplay = ' | ⚠️ WARNING: Stock without batches!';
                     statusClass = 'text-red-500';
-                } else {
-                    batchDisplay = ' | No batches';
-                    statusClass = 'text-gray-400';
                 }
-                
                 const div = document.createElement('div');
-                const stockClass = stock === 0 ? 'text-red-600 font-bold' : 'text-red-600';
-                
                 div.className = 'border-b pb-1 flex justify-between items-center hover:bg-blue-50 p-1 md:p-2 rounded transition-colors cursor-pointer text-xs md:text-sm';
                 div.dataset.productName = name;
                 div.dataset.productCategory = category || 'Accessory';
-                
                 div.addEventListener('click', function(e) {
                     navigateToProduct(this.dataset.productName, this.dataset.productCategory);
                 });
-                
+                const stockClass = stock === 0 ? 'text-red-600 font-bold' : 'text-red-600';
                 div.innerHTML = `
                     <span class="truncate">
                         <strong class="text-indigo-700 text-xs md:text-sm">${escapeHtml(name)}</strong>
@@ -436,253 +312,250 @@
                     <span class="${stockClass} text-xs md:text-sm whitespace-nowrap">${stock} left</span>
                 `;
                 container.appendChild(div);
-                rendered++;
+            });
+        }
+
+        // ---------- Main dashboard load (Dexie‑first) ----------
+        async function loadDashboard() {
+            if (!db) {
+                console.warn('Dexie not available – showing empty');
+                return;
+            }
+
+            updateOfflineBanner();
+
+            // 1. Read all data from Dexie
+            let products = [];
+            let batches = [];
+            let sales = [];
+            let salesItems = [];
+            try {
+                products = await db.products.toArray();
+                batches = await db.batches.toArray();
+                sales = await db.sales.where('reversed').equals(0).toArray();
+                salesItems = await db.sales_items.toArray();
+            } catch (e) {
+                console.warn('Failed to read from Dexie:', e);
+                return;
+            }
+
+            // 2. Compute KPIs
+            const totalProducts = products.length;
+            const totalBatches = batches.length;
+            // Total sales: sum of `total` from sales (non‑reversed)
+            let totalSales = 0;
+            let totalProfit = 0;
+            sales.forEach(s => {
+                totalSales += s.total || 0;
+                totalProfit += s.profit || 0;
             });
 
-            if (rendered === 0) {
-                container.innerHTML = '<div class="text-gray-400 text-center py-4 text-sm">✅ No low stock items found.</div>';
+            // Low stock: from batches where remaining_quantity <= 10
+            const lowStockMap = {};
+            batches.forEach(b => {
+                if (b.remaining_quantity <= 10 && b.remaining_quantity > 0) {
+                    const product = products.find(p => p.id === b.product_id);
+                    if (product) {
+                        const key = product.id;
+                        if (!lowStockMap[key]) {
+                            lowStockMap[key] = {
+                                name: product.name,
+                                brand: product.brand || '',
+                                category: product.category || '',
+                                stock: 0,
+                                batch_ids: []
+                            };
+                        }
+                        lowStockMap[key].stock += b.remaining_quantity;
+                        lowStockMap[key].batch_ids.push(b.id);
+                    }
+                }
+            });
+            const lowStockList = Object.values(lowStockMap);
+            lowStockProducts = lowStockList;
+
+            // 3. Update KPI cards
+            document.getElementById('salesValue').innerText = formatMoney(totalSales);
+            document.getElementById('profitValue').innerText = formatMoney(totalProfit);
+            document.getElementById('productsValue').innerText = totalProducts;
+            document.getElementById('batchesValue').innerText = totalBatches;
+            document.getElementById('lowStockValue').innerText = lowStockList.length;
+
+            // 4. Show low stock alert once (if any)
+            if (!lowStockShown && lowStockList.length > 0) {
+                let productList = lowStockList.slice(0, 10).map(item => {
+                    const batchInfo = item.batch_ids && item.batch_ids.length > 0 ?
+                        ` (Batch: #${item.batch_ids.slice(0,3).join(', #')}${item.batch_ids.length > 3 ? '...' : ''})` :
+                        ' (No batches)';
+                    return `• ${item.name} (${item.brand}) - ${item.stock} left${batchInfo}`;
+                }).join('\n');
+                if (lowStockList.length > 10) {
+                    productList += `\n\n... and ${lowStockList.length - 10} more items`;
+                }
+                alert(`⚠️ LOW STOCK ALERT ⚠️\n\n${lowStockList.length} product(s) are running low:\n\n${productList}\n\nPlease restock soon!`);
+                lowStockShown = true;
+            }
+            renderLowStockList(lowStockList);
+
+            // 5. Top products: aggregate sales_items by product_id
+            const productSales = {};
+            salesItems.forEach(item => {
+                const product = products.find(p => p.id === item.product_id);
+                if (!product) return;
+                const key = product.id;
+                if (!productSales[key]) {
+                    productSales[key] = {
+                        name: product.name,
+                        brand: product.brand || '',
+                        category: product.category || '',
+                        qty: 0
+                    };
+                }
+                productSales[key].qty += item.quantity || 0;
+            });
+            let topProducts = Object.values(productSales).sort((a, b) => b.qty - a.qty).slice(0, 10);
+
+            // 6. Render top products
+            const topContainer = document.getElementById('topProductsList');
+            topContainer.innerHTML = '';
+            if (topProducts.length) {
+                topProducts.forEach((p, index) => {
+                    const div = document.createElement('div');
+                    div.className = 'border-b pb-1 flex justify-between items-center hover:bg-gray-50 p-1 rounded transition-colors text-xs md:text-sm';
+                    let medal = '';
+                    if (index === 0) medal = '🥇 ';
+                    else if (index === 1) medal = '🥈 ';
+                    else if (index === 2) medal = '🥉 ';
+                    div.innerHTML = `
+                        <span>${medal}<strong class="text-indigo-700">${escapeHtml(p.name)}</strong> <span class="text-gray-600 text-[10px] md:text-xs">(${escapeHtml(p.brand)} | ${escapeHtml(p.category)})</span></span>
+                        <span class="font-bold text-indigo-600 text-xs md:text-sm">${p.qty} sold</span>
+                    `;
+                    topContainer.appendChild(div);
+                });
+            } else {
+                topContainer.innerHTML = '<div class="text-gray-400 text-center py-4 text-sm">📊 No sales data for this period.</div>';
+            }
+
+            // 7. Pie chart
+            if (pieChart) pieChart.destroy();
+            const ctx = document.getElementById('pieChart');
+            const container = document.getElementById('pieChartContainer');
+            const offlineMsg = document.getElementById('pieChartOfflineMsg');
+            if (topProducts.length > 0) {
+                container.classList.remove('hidden');
+                offlineMsg.classList.add('hidden');
+                let labels = topProducts.map(p => `${p.name.substring(0, 15)}${p.name.length > 15 ? '...' : ''}`);
+                let values = topProducts.map(p => p.qty);
+                if (values.length > 8) {
+                    const top8Values = values.slice(0,8);
+                    const top8Labels = labels.slice(0,8);
+                    const othersSum = values.slice(8).reduce((a,b) => a+b, 0);
+                    top8Values.push(othersSum);
+                    top8Labels.push('Others');
+                    pieChart = new Chart(ctx, {
+                        type: 'pie',
+                        data: { labels: top8Labels, datasets: [{ data: top8Values, backgroundColor: generateColors(top8Labels.length) }] },
+                        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } } }
+                    });
+                } else {
+                    pieChart = new Chart(ctx, {
+                        type: 'pie',
+                        data: { labels: labels, datasets: [{ data: values, backgroundColor: generateColors(labels.length) }] },
+                        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } } }
+                    });
+                }
+            } else {
+                container.classList.add('hidden');
+                offlineMsg.classList.remove('hidden');
+            }
+
+            // 8. Sales history (aggregated by date)
+            // For the selected period (date range / time), filter sales
+            const range = getDateTimeRange();
+            let filteredSales = sales;
+            if (range.start_datetime && range.end_datetime) {
+                const start = new Date(range.start_datetime);
+                const end = new Date(range.end_datetime);
+                filteredSales = sales.filter(s => {
+                    const d = new Date(s.date);
+                    return d >= start && d <= end;
+                });
+            } else if (selectedDate) {
+                const d = new Date(selectedDate);
+                const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0,0,0);
+                const end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23,59,59);
+                filteredSales = sales.filter(s => {
+                    const sd = new Date(s.date);
+                    return sd >= start && sd <= end;
+                });
+            }
+            // Group by date
+            const historyMap = {};
+            filteredSales.forEach(s => {
+                const dateStr = s.date ? new Date(s.date).toISOString().split('T')[0] : 'unknown';
+                if (!historyMap[dateStr]) {
+                    historyMap[dateStr] = { total_sales: 0, profit: 0, discount: 0 };
+                }
+                historyMap[dateStr].total_sales += s.total || 0;
+                historyMap[dateStr].profit += s.profit || 0;
+                historyMap[dateStr].discount += s.discount || 0;
+            });
+            const historyArray = Object.keys(historyMap).sort().map(date => ({
+                date: date,
+                total_sales: historyMap[date].total_sales,
+                profit: historyMap[date].profit,
+                discount: historyMap[date].discount
+            }));
+
+            const historyContainer = document.getElementById('salesHistoryList');
+            historyContainer.innerHTML = '';
+            if (historyArray.length) {
+                historyArray.forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = 'border-b pb-1 md:pb-2 mb-1 md:mb-2 hover:bg-gray-50 p-1 rounded transition-colors';
+                    div.innerHTML = `
+                        <div class="flex justify-between items-center">
+                            <span class="font-medium text-gray-700 text-xs md:text-sm">${item.date}</span>
+                            <span class="font-bold text-green-600 text-xs md:text-base">${formatMoney(item.total_sales)}</span>
+                        </div>
+                        <div class="text-[10px] md:text-sm text-gray-500 flex justify-between">
+                            <span>Profit: ${formatMoney(item.profit)}</span>
+                            <span>Discount: ${formatMoney(item.discount)}</span>
+                        </div>
+                    `;
+                    historyContainer.appendChild(div);
+                });
+                // If offline, show note
+                if (!navigator.onLine) {
+                    const note = document.createElement('div');
+                    note.className = 'text-[10px] md:text-xs text-amber-500 mt-2 text-center';
+                    note.innerText = '⚠️ Data may be outdated (offline mode)';
+                    historyContainer.appendChild(note);
+                }
+            } else {
+                historyContainer.innerHTML = '<div class="text-gray-400 text-center py-4 text-sm">📅 No sales history found for this period.</div>';
+            }
+
+            // 9. Background refresh if online (without blocking UI)
+            if (navigator.onLine) {
+                refreshDashboardData().catch(err => console.warn('Background refresh failed:', err));
             }
         }
 
-        // ---------- Main dashboard load (with Dexie) ----------
-        async function loadDashboard() {
+        // ---------- Background refresh: pull latest data from API and update Dexie ----------
+        async function refreshDashboardData() {
             try {
-                updateOfflineBanner();
-
-                const range = getDateTimeRange();
-                let summaryUrl = '/api/dashboard/summary';
-                const params = [];
-                if (range.start_datetime) params.push(`start_datetime=${encodeURIComponent(range.start_datetime)}`);
-                if (range.end_datetime) params.push(`end_datetime=${encodeURIComponent(range.end_datetime)}`);
-                if (params.length > 0) {
-                    summaryUrl += '?' + params.join('&');
-                }
-
-                let summary = null;
-                let summaryError = false;
-
-                // Try API if online
-                if (navigator.onLine) {
-                    try {
-                        const summaryRes = await fetch(summaryUrl);
-                        if (!summaryRes.ok) throw new Error('Network error');
-                        summary = await summaryRes.json();
-                        // Validate summary structure
-                        if (!summary || typeof summary !== 'object') throw new Error('Invalid summary');
-                        if (!Array.isArray(summary.low_stock_products)) {
-                            summary.low_stock_products = [];
-                        }
-                        await putCacheEntry('dashboard_summary', summary);
-                    } catch (err) {
-                        console.warn('Offline – using cached summary');
-                        summaryError = true;
-                        summary = await getCacheEntry('dashboard_summary');
-                        if (!summary || typeof summary !== 'object' || !Array.isArray(summary.low_stock_products)) {
-                            summary = { sales: 0, profit: 0, total_products: 0, total_batches: 0, low_stock_count: 0, low_stock_products: [] };
-                        }
-                    }
+                // Use the global pullData to update all tables
+                if (typeof pullData === 'function') {
+                    await pullData();
+                    // Re‑load dashboard to show fresh data
+                    await loadDashboard();
                 } else {
-                    // Offline – read from cache
-                    summaryError = true;
-                    summary = await getCacheEntry('dashboard_summary');
-                    if (!summary || typeof summary !== 'object' || !Array.isArray(summary.low_stock_products)) {
-                        summary = { sales: 0, profit: 0, total_products: 0, total_batches: 0, low_stock_count: 0, low_stock_products: [] };
-                    }
+                    // Fallback: call individual APIs if pullData not available (shouldn't happen)
+                    console.warn('pullData not available, skipping background refresh');
                 }
-
-                document.getElementById('salesValue').innerText = formatMoney(summary.sales);
-                document.getElementById('profitValue').innerText = formatMoney(summary.profit);
-                document.getElementById('productsValue').innerText = summary.total_products || 0;
-                document.getElementById('batchesValue').innerText = summary.total_batches || 0;
-                document.getElementById('lowStockValue').innerText = summary.low_stock_count || 0;
-
-                lowStockProducts = summary.low_stock_products || [];
-                
-                // SHOW LOW STOCK ALERT (only once per page load)
-                if (!summaryError && !lowStockShown && summary.low_stock_count > 0 && lowStockProducts.length > 0) {
-                    let productList = lowStockProducts.slice(0, 10).map(item => {
-                        let name, brand, stock, batchIds;
-                        if (Array.isArray(item)) {
-                            name = (item[0] && typeof item[0] === 'string') ? item[0] : 'Unknown';
-                            brand = (item[1] && typeof item[1] === 'string') ? item[1] : '';
-                            stock = (typeof item[3] === 'number') ? item[3] : 0;
-                            batchIds = Array.isArray(item[4]) ? item[4] : [];
-                        } else {
-                            name = item.name || 'Unknown';
-                            brand = item.brand || '';
-                            stock = item.stock || 0;
-                            batchIds = item.batch_ids || item.batchIds || [];
-                        }
-                        const batchInfo = batchIds && batchIds.length > 0 ? ` (Batch: #${batchIds.slice(0,3).join(', #')}${batchIds.length > 3 ? '...' : ''})` : ' (No batches)';
-                        return `• ${name} (${brand}) - ${stock} left${batchInfo}`;
-                    }).join('\n');
-                    if (lowStockProducts.length > 10) {
-                        productList += `\n\n... and ${lowStockProducts.length - 10} more items`;
-                    }
-                    alert(`⚠️ LOW STOCK ALERT ⚠️\n\n${summary.low_stock_count} product(s) are running low:\n\n${productList}\n\nPlease restock soon!`);
-                    lowStockShown = true;
-                }
-
-                // Render low stock list
-                renderLowStockList(lowStockProducts);
-
-                // ---------- Top products ----------
-                let topUrl = '/api/dashboard/top_products';
-                if (params.length > 0) {
-                    topUrl += '?' + params.join('&');
-                }
-                let topProducts = [];
-                let topError = false;
-
-                if (navigator.onLine) {
-                    try {
-                        const topRes = await fetch(topUrl);
-                        if (!topRes.ok) throw new Error();
-                        topProducts = await topRes.json();
-                        await putCacheEntry('dashboard_top_products', topProducts);
-                    } catch (err) {
-                        console.warn('Offline – using cached top products');
-                        topError = true;
-                        const cached = await getCacheEntry('dashboard_top_products');
-                        if (cached) topProducts = cached;
-                    }
-                } else {
-                    topError = true;
-                    const cached = await getCacheEntry('dashboard_top_products');
-                    if (cached) topProducts = cached;
-                }
-
-                const topContainer = document.getElementById('topProductsList');
-                topContainer.innerHTML = '';
-                if (topProducts.length) {
-                    topProducts.forEach((p, index) => {
-                        const div = document.createElement('div');
-                        div.className = 'border-b pb-1 flex justify-between items-center hover:bg-gray-50 p-1 rounded transition-colors text-xs md:text-sm';
-                        let medal = '';
-                        if (index === 0) medal = '🥇 ';
-                        else if (index === 1) medal = '🥈 ';
-                        else if (index === 2) medal = '🥉 ';
-                        div.innerHTML = `
-                            <span>${medal}<strong class="text-indigo-700">${escapeHtml(p.name)}</strong> <span class="text-gray-600 text-[10px] md:text-xs">(${escapeHtml(p.brand)} | ${escapeHtml(p.category)})</span></span>
-                            <span class="font-bold text-indigo-600 text-xs md:text-sm">${p.qty} sold</span>
-                        `;
-                        topContainer.appendChild(div);
-                    });
-                } else {
-                    topContainer.innerHTML = '<div class="text-gray-400 text-center py-4 text-sm">📊 No sales data for this period.</div>';
-                }
-
-                // ---------- Pie chart ----------
-                if (pieChart) pieChart.destroy();
-                const ctx = document.getElementById('pieChart');
-                const container = document.getElementById('pieChartContainer');
-                const offlineMsg = document.getElementById('pieChartOfflineMsg');
-                if (topProducts.length > 0 && !topError) {
-                    container.classList.remove('hidden');
-                    offlineMsg.classList.add('hidden');
-                    let labels = topProducts.map(p => `${p.name.substring(0, 15)}${p.name.length > 15 ? '...' : ''}`);
-                    let values = topProducts.map(p => p.qty);
-                    if (values.length > 8) {
-                        const top8Values = values.slice(0,8);
-                        const top8Labels = labels.slice(0,8);
-                        const othersSum = values.slice(8).reduce((a,b) => a+b, 0);
-                        top8Values.push(othersSum);
-                        top8Labels.push('Others');
-                        pieChart = new Chart(ctx, {
-                            type: 'pie',
-                            data: { labels: top8Labels, datasets: [{ data: top8Values, backgroundColor: generateColors(top8Labels.length) }] },
-                            options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } } }
-                        });
-                    } else {
-                        pieChart = new Chart(ctx, {
-                            type: 'pie',
-                            data: { labels: labels, datasets: [{ data: values, backgroundColor: generateColors(labels.length) }] },
-                            options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } } }
-                        });
-                    }
-                } else {
-                    container.classList.add('hidden');
-                    offlineMsg.classList.remove('hidden');
-                }
-
-                // ---------- Sales history ----------
-                await loadSalesHistory(range);
-
-            } catch (err) {
-                console.error('Error loading dashboard:', err);
-            }
-        }
-
-        // ---------- Load sales history (with Dexie) ----------
-        async function loadSalesHistory(range) {
-            try {
-                let url = '/api/dashboard/sales_history';
-                const params = [];
-                if (range.start_datetime) {
-                    params.push(`start_datetime=${encodeURIComponent(range.start_datetime)}`);
-                }
-                if (range.end_datetime) {
-                    params.push(`end_datetime=${encodeURIComponent(range.end_datetime)}`);
-                }
-                if (params.length === 0 && selectedDate) {
-                    params.push(`date=${selectedDate}`);
-                }
-                if (params.length > 0) {
-                    url += '?' + params.join('&');
-                }
-
-                let history = [];
-                let historyError = false;
-
-                if (navigator.onLine) {
-                    try {
-                        const historyRes = await fetch(url);
-                        if (!historyRes.ok) throw new Error();
-                        history = await historyRes.json();
-                        await putCacheEntry('dashboard_sales_history', history);
-                    } catch (err) {
-                        console.warn('Offline – using cached sales history');
-                        historyError = true;
-                        const cached = await getCacheEntry('dashboard_sales_history');
-                        if (cached) history = cached;
-                    }
-                } else {
-                    historyError = true;
-                    const cached = await getCacheEntry('dashboard_sales_history');
-                    if (cached) history = cached;
-                }
-
-                const historyContainer = document.getElementById('salesHistoryList');
-                historyContainer.innerHTML = '';
-                
-                if (history && history.length > 0) {
-                    history.forEach(item => {
-                        const div = document.createElement('div');
-                        div.className = 'border-b pb-1 md:pb-2 mb-1 md:mb-2 hover:bg-gray-50 p-1 rounded transition-colors';
-                        div.innerHTML = `
-                            <div class="flex justify-between items-center">
-                                <span class="font-medium text-gray-700 text-xs md:text-sm">${item.date}</span>
-                                <span class="font-bold text-green-600 text-xs md:text-base">${formatMoney(item.total_sales)}</span>
-                            </div>
-                            <div class="text-[10px] md:text-sm text-gray-500 flex justify-between">
-                                <span>Profit: ${formatMoney(item.profit)}</span>
-                                <span>Discount: ${formatMoney(item.discount)}</span>
-                            </div>
-                        `;
-                        historyContainer.appendChild(div);
-                    });
-                    if (historyError) {
-                        const note = document.createElement('div');
-                        note.className = 'text-[10px] md:text-xs text-amber-500 mt-2 text-center';
-                        note.innerText = '⚠️ Data may be outdated (offline mode)';
-                        historyContainer.appendChild(note);
-                    }
-                } else {
-                    historyContainer.innerHTML = '<div class="text-gray-400 text-center py-4 text-sm">📅 No sales history found for this period.</div>';
-                }
-            } catch (err) {
-                console.error('Error loading sales history:', err);
-                document.getElementById('salesHistoryList').innerHTML = '<div class="text-red-400 text-center py-4 text-sm">❌ Error loading sales history.</div>';
+            } catch (e) {
+                console.warn('Background refresh failed:', e);
             }
         }
 
@@ -696,13 +569,12 @@
             return colors;
         }
 
-        // Apply filter
+        // ---------- Apply filter ----------
         function applyFilter() {
             const start = document.getElementById('startDate').value;
             const end = document.getElementById('endDate').value;
             const st = document.getElementById('startTime').value;
             const et = document.getElementById('endTime').value;
-            
             if (!start && !end) {
                 alert('Please select at least a start date or end date');
                 return;
@@ -734,22 +606,11 @@
                 renderLowStockList(lowStockProducts);
                 return;
             }
-            
             const filtered = lowStockProducts.filter(item => {
-                let name, brand, category, batchIds;
-                
-                if (Array.isArray(item)) {
-                    name = (item[0] && typeof item[0] === 'string') ? item[0] : '';
-                    brand = (item[1] && typeof item[1] === 'string') ? item[1] : '';
-                    category = (item[2] && typeof item[2] === 'string') ? item[2] : '';
-                    batchIds = Array.isArray(item[4]) ? item[4] : [];
-                } else {
-                    name = item.name || '';
-                    brand = item.brand || '';
-                    category = item.category || '';
-                    batchIds = item.batch_ids || item.batchIds || [];
-                }
-                
+                const name = item.name || '';
+                const brand = item.brand || '';
+                const category = item.category || '';
+                const batchIds = item.batch_ids || [];
                 return name.toLowerCase().includes(keyword) ||
                        brand.toLowerCase().includes(keyword) ||
                        category.toLowerCase().includes(keyword) ||
@@ -758,6 +619,7 @@
             renderLowStockList(filtered);
         });
 
+        // ---------- Initialisation ----------
         // Set default date range
         const today = new Date().toISOString().split('T')[0];
         document.getElementById('startDate').value = today;
@@ -769,7 +631,7 @@
         startTime = '00:00';
         endTime = '23:59';
         selectedDate = today;
-        
+
         const now = new Date();
         calendarYear = now.getFullYear();
         calendarMonth = now.getMonth();

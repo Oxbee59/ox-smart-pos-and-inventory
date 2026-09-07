@@ -100,62 +100,85 @@
         window.addEventListener('online', updateOfflineBanner);
         window.addEventListener('offline', updateOfflineBanner);
 
-        // Get the logged-in user's ID and username from the hidden input
+        // Get the logged-in user's ID and username from hidden inputs
         const currentUserId = parseInt(document.getElementById('currentUserId').value) || 0;
         const currentUsername = document.getElementById('currentUsername').value || '';
 
-        // ========== DEXIE HELPERS (cache table) ==========
-        async function storeUsersInDexie(users) {
-            if (!db) return;
+        // ========== DEXIE CACHE HELPERS ==========
+        const CACHE_KEY = 'admin_users';
+        const TIMESTAMP_KEY = 'admin_users_timestamp';
+        const CACHE_MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
+
+        async function getCacheTable() {
+            if (!db) return null;
             try {
-                // Use a generic cache table – if not defined, fallback to localStorage
-                let cacheTable = db.cache || db.table('cache');
-                // If the table doesn't exist, we can't use it – fallback to localStorage
-                // We'll check if it exists by trying to put
-                await cacheTable.put({ key: 'admin_users', value: users, timestamp: Date.now() });
-                console.log('✅ Users cached in Dexie');
+                // Try to get the cache table (it might not exist yet)
+                return db.cache || db.table('cache');
             } catch (e) {
-                console.warn('Dexie cache not available, using localStorage fallback', e);
-                // Fallback to localStorage
-                try {
-                    localStorage.setItem('admin_users_cache', JSON.stringify(users));
-                    localStorage.setItem('admin_users_cache_timestamp', Date.now().toString());
-                } catch (e2) {}
+                return null;
             }
         }
 
-        async function loadUsersFromDexie() {
-            if (!db) return null;
-            try {
-                let cacheTable = db.cache || db.table('cache');
-                const entry = await cacheTable.get('admin_users');
-                if (entry && entry.value) {
-                    // Check age (24 hours)
-                    const age = Date.now() - (entry.timestamp || 0);
-                    if (age < 24 * 60 * 60 * 1000) {
-                        return entry.value;
-                    } else {
-                        // Stale – remove
-                        await cacheTable.delete('admin_users');
-                        return null;
-                    }
-                }
-                return null;
-            } catch (e) {
-                console.warn('Dexie read failed, trying localStorage', e);
+        async function storeUsersInCache(users) {
+            if (!db) {
+                // Fallback to localStorage
                 try {
-                    const raw = localStorage.getItem('admin_users_cache');
-                    const timestamp = parseInt(localStorage.getItem('admin_users_cache_timestamp') || '0');
-                    if (!raw) return null;
-                    if (Date.now() - timestamp > 24 * 60 * 60 * 1000) {
-                        localStorage.removeItem('admin_users_cache');
-                        localStorage.removeItem('admin_users_cache_timestamp');
-                        return null;
+                    localStorage.setItem(CACHE_KEY, JSON.stringify(users));
+                    localStorage.setItem(TIMESTAMP_KEY, Date.now().toString());
+                } catch (e) {}
+                return;
+            }
+            try {
+                const table = await getCacheTable();
+                if (table) {
+                    await table.put({ key: CACHE_KEY, value: users, timestamp: Date.now() });
+                } else {
+                    // Fallback to localStorage
+                    localStorage.setItem(CACHE_KEY, JSON.stringify(users));
+                    localStorage.setItem(TIMESTAMP_KEY, Date.now().toString());
+                }
+            } catch (e) {
+                console.warn('Failed to store in Dexie, using localStorage', e);
+                localStorage.setItem(CACHE_KEY, JSON.stringify(users));
+                localStorage.setItem(TIMESTAMP_KEY, Date.now().toString());
+            }
+        }
+
+        async function loadUsersFromCache() {
+            // Try Dexie first
+            if (db) {
+                try {
+                    const table = await getCacheTable();
+                    if (table) {
+                        const entry = await table.get(CACHE_KEY);
+                        if (entry && entry.value) {
+                            const age = Date.now() - (entry.timestamp || 0);
+                            if (age < CACHE_MAX_AGE) {
+                                return entry.value;
+                            } else {
+                                // Stale – remove
+                                await table.delete(CACHE_KEY);
+                                return null;
+                            }
+                        }
                     }
-                    return JSON.parse(raw);
-                } catch (e2) {
+                } catch (e) {
+                    console.warn('Dexie cache read failed', e);
+                }
+            }
+            // Fallback to localStorage
+            try {
+                const raw = localStorage.getItem(CACHE_KEY);
+                const ts = parseInt(localStorage.getItem(TIMESTAMP_KEY) || '0');
+                if (!raw) return null;
+                if (Date.now() - ts > CACHE_MAX_AGE) {
+                    localStorage.removeItem(CACHE_KEY);
+                    localStorage.removeItem(TIMESTAMP_KEY);
                     return null;
                 }
+                return JSON.parse(raw);
+            } catch (e) {
+                return null;
             }
         }
 
@@ -183,34 +206,7 @@
             if (e.target === this) closeErrorModal();
         });
 
-        // ---------- Fetch users (API first, fallback Dexie) ----------
-        async function fetchUsers() {
-            updateOfflineBanner();
-            // Try API if online
-            if (navigator.onLine) {
-                try {
-                    const res = await fetch('/api/admin/users');
-                    if (!res.ok) throw new Error('Failed to fetch users');
-                    const users = await res.json();
-                    // Store in Dexie
-                    await storeUsersInDexie(users);
-                    return users;
-                } catch (err) {
-                    console.warn('⚠️ API failed – using cached users', err.message);
-                    // Fallback to Dexie cache
-                    const cached = await loadUsersFromDexie();
-                    if (cached) return cached;
-                    throw new Error('No cached users available. Please connect to the internet and refresh.');
-                }
-            } else {
-                // Offline – read from Dexie
-                const cached = await loadUsersFromDexie();
-                if (cached) return cached;
-                throw new Error('No cached users available offline. Please connect to the internet and refresh.');
-            }
-        }
-
-        // ---------- Render table ----------
+        // ---------- Render users table ----------
         function getStatusBadge(role, isProtected) {
             if (isProtected) {
                 return '<span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">🔒 Protected</span>';
@@ -276,7 +272,7 @@
                 tbody.appendChild(tr);
             });
 
-            // Attach event listeners for role toggle (online only)
+            // Attach role toggle events
             document.querySelectorAll('.role-toggle').forEach(btn => {
                 btn.addEventListener('click', async function() {
                     if (!navigator.onLine) {
@@ -294,7 +290,7 @@
                         });
                         const data = await res.json();
                         if (data.success) {
-                            loadUsers();
+                            loadUsers(true); // force refresh from API
                         } else {
                             showErrorModal('Failed to update role', data.error || 'Unknown error');
                         }
@@ -304,7 +300,7 @@
                 });
             });
 
-            // Attach event listeners for delete (online only)
+            // Attach delete events
             document.querySelectorAll('.delete-user').forEach(btn => {
                 btn.addEventListener('click', async function() {
                     if (!navigator.onLine) {
@@ -318,7 +314,7 @@
                         const res = await fetch(`/api/admin/users/${userId}`, { method: 'DELETE' });
                         const data = await res.json();
                         if (data.success) {
-                            loadUsers();
+                            loadUsers(true);
                         } else {
                             showErrorModal('Cannot delete user', data.error || 'Unknown error');
                         }
@@ -329,18 +325,45 @@
             });
         }
 
-        async function loadUsers() {
-            try {
-                const users = await fetchUsers();
-                renderUsers(users);
-            } catch (err) {
-                console.error(err);
+        // ---------- Load users: Dexie-first, refresh in background ----------
+        async function loadUsers(forceRefresh = false) {
+            updateOfflineBanner();
+
+            // 1. Always load from cache immediately
+            const cached = await loadUsersFromCache();
+            if (cached) {
+                renderUsers(cached);
+            } else {
+                // No cache yet – show loading state
                 document.getElementById('usersTableBody').innerHTML =
-                    `<tr><td colspan="5" class="text-center py-4 text-red-500">${err.message}</td></tr>`;
+                    `<tr><td colspan="5" class="text-center py-4 text-gray-500">Loading users...</td></tr>`;
+            }
+
+            // 2. If online, fetch fresh data from API and update cache
+            if (navigator.onLine && (forceRefresh || !cached)) {
+                try {
+                    const res = await fetch('/api/admin/users');
+                    if (!res.ok) throw new Error('Failed to fetch users');
+                    const users = await res.json();
+                    // Store in cache and re-render
+                    await storeUsersInCache(users);
+                    renderUsers(users);
+                } catch (err) {
+                    console.warn('⚠️ API fetch failed, using cache', err.message);
+                    // If we had no cache, show error
+                    if (!cached) {
+                        document.getElementById('usersTableBody').innerHTML =
+                            `<tr><td colspan="5" class="text-center py-4 text-red-500">${err.message}</td></tr>`;
+                    }
+                }
+            } else if (!navigator.onLine && !cached) {
+                // Offline and no cache
+                document.getElementById('usersTableBody').innerHTML =
+                    `<tr><td colspan="5" class="text-center py-4 text-red-500">No cached users available offline. Please connect to the internet.</td></tr>`;
             }
         }
 
-        // ---------- Create user form submission ----------
+        // ---------- Create user form ----------
         document.getElementById('createUserForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             if (!navigator.onLine) {
@@ -370,7 +393,7 @@
                     msg.textContent = 'User created successfully!';
                     document.getElementById('newUsername').value = '';
                     document.getElementById('newPassword').value = '';
-                    loadUsers(); // refresh list (will also update Dexie cache)
+                    loadUsers(true); // force refresh from API
                 } else {
                     msg.className = 'text-red-500';
                     msg.textContent = 'Error: ' + (data.error || 'Unknown error');
@@ -385,9 +408,9 @@
         updateOfflineBanner();
         loadUsers();
 
-        // Refresh when coming online
+        // ---------- Refresh when coming online ----------
         window.addEventListener('online', function() {
-            loadUsers(); // reload fresh data when back online
+            loadUsers(true);
         });
     });
 </script>

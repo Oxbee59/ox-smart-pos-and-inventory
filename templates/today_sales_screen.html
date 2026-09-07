@@ -263,11 +263,10 @@
         window.addEventListener('online', updateOfflineBanner);
         window.addEventListener('offline', updateOfflineBanner);
 
-        // ========== DEXIE HELPERS (NEW) ==========
+        // ========== DEXIE HELPERS ==========
         async function storeSalesInDexie(salesData) {
             if (!db) return;
             try {
-                // Group by sale_id
                 const saleMap = new Map();
                 for (const item of salesData) {
                     if (!saleMap.has(item.sale_id)) {
@@ -284,7 +283,6 @@
                             user_id: null,
                         });
                     }
-                    // Get product ID from products table (by name/brand)
                     let product_id = null;
                     if (item.name && db) {
                         const product = await db.products.where({ name: item.name, brand: item.brand || '' }).first();
@@ -302,7 +300,6 @@
                     saleMap.get(item.sale_id).items = saleMap.get(item.sale_id).items || [];
                     saleMap.get(item.sale_id).items.push(saleItem);
                 }
-                // Store sales headers and items
                 for (const [saleId, sale] of saleMap) {
                     await db.sales.put(sale);
                     for (const item of sale.items) {
@@ -346,7 +343,7 @@
                             net_profit: sale.profit || 0,
                             payment_method: sale.payment_method || 'cash',
                             cheque_number: sale.cheque_number || null,
-                            username: 'Unknown' // we don't store username in Dexie
+                            username: 'Unknown'
                         });
                     }
                 }
@@ -354,31 +351,6 @@
             } catch (e) {
                 console.warn('Error loading screen sales from Dexie:', e);
                 return [];
-            }
-        }
-
-        // ---------- Caching helpers (fallback) ----------
-        function cacheData(key, data) {
-            try {
-                localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }));
-            } catch (e) {}
-        }
-        function getCachedData(key, maxAgeMinutes = 60) {
-            try {
-                const raw = localStorage.getItem(key);
-                if (!raw) return null;
-                const parsed = JSON.parse(raw);
-                const ageMinutes = (Date.now() - parsed.timestamp) / (1000 * 60);
-                if (ageMinutes > maxAgeMinutes) return null;
-                return parsed.data;
-            } catch (e) { return null; }
-        }
-
-        function getCacheKey() {
-            if (currentStartDate && currentEndDate) {
-                return `sales_data_screen_custom_${currentStartDate}_${currentEndDate}`;
-            } else {
-                return `sales_data_screen_period_${currentPeriod}`;
             }
         }
 
@@ -458,7 +430,6 @@
             }
         }
 
-        // FIXED: applyAdvancedSearchAndRender now counts distinct sales
         function applyAdvancedSearchAndRender() {
             const searchInput = document.getElementById('searchInput');
             currentSearchTerm = searchInput ? searchInput.value : '';
@@ -496,99 +467,6 @@
                 } else {
                     resultCount.textContent = distinctCount;
                 }
-            }
-        }
-
-        // ---------- Fetch sales data with Dexie integration ----------
-        async function loadSalesData() {
-            updateOfflineBanner();
-            console.log("Loading screen sales data with Dexie...");
-
-            let url = '';
-            if (currentStartDate && currentEndDate) {
-                url = `/api/today_sales?start_date=${currentStartDate}&end_date=${currentEndDate}&category=Screen`;
-            } else {
-                url = `/api/today_sales?period=${currentPeriod}&category=Screen`;
-            }
-
-            console.log("Fetching from URL:", url);
-            let data = [], fromCache = false;
-
-            // Try API first if online
-            if (navigator.onLine) {
-                try {
-                    const res = await fetch(url);
-                    if (!res.ok) {
-                        if (res.status === 401) { window.location.href = '/login'; return; }
-                        throw new Error(`HTTP error! status: ${res.status}`);
-                    }
-                    data = await res.json();
-                    if (data.error) {
-                        console.error("API error:", data.error);
-                        alert("Error loading sales data: " + data.error);
-                        data = [];
-                    } else {
-                        // Store in Dexie
-                        await storeSalesInDexie(data);
-                        console.log("✅ Data fetched from API and stored in Dexie");
-                    }
-                } catch (error) {
-                    console.warn("API failed, falling back to Dexie:", error);
-                    fromCache = true;
-                    data = await loadSalesFromDexie();
-                    if (data.length === 0) {
-                        // fallback to localStorage cache
-                        const cached = getCachedData(getCacheKey());
-                        if (cached) data = cached;
-                    }
-                }
-            } else {
-                // Offline – read from Dexie
-                fromCache = true;
-                data = await loadSalesFromDexie();
-                if (data.length === 0) {
-                    const cached = getCachedData(getCacheKey());
-                    if (cached) data = cached;
-                }
-            }
-
-            // Apply period/date filters to the data
-            if (data.length > 0) {
-                let filteredByDate = data;
-                if (currentPeriod !== 'all' && !(currentStartDate && currentEndDate)) {
-                    const now = new Date();
-                    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                    const startOfWeek = new Date(today);
-                    startOfWeek.setDate(today.getDate() - today.getDay());
-                    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-                    const startOfYear = new Date(today.getFullYear(), 0, 1);
-                    filteredByDate = data.filter(item => {
-                        const d = new Date(item.sale_date || item.date);
-                        if (currentPeriod === 'daily') return d >= today;
-                        if (currentPeriod === 'weekly') return d >= startOfWeek;
-                        if (currentPeriod === 'monthly') return d >= startOfMonth;
-                        if (currentPeriod === 'yearly') return d >= startOfYear;
-                        return true;
-                    });
-                } else if (currentStartDate && currentEndDate) {
-                    const start = new Date(currentStartDate);
-                    start.setHours(0,0,0,0);
-                    const end = new Date(currentEndDate);
-                    end.setHours(23,59,59,999);
-                    filteredByDate = data.filter(item => {
-                        const d = new Date(item.sale_date || item.date);
-                        return d >= start && d <= end;
-                    });
-                }
-                data = filteredByDate;
-            }
-
-            currentSalesData = data;
-            updateFilterInfo();
-            applyAdvancedSearchAndRender();
-            if (fromCache) {
-                const list = document.getElementById('salesList');
-                list.innerHTML += '<div class="text-xs text-gray-500 text-center mt-2">📦 Data may be outdated (offline)</div>';
             }
         }
 
@@ -735,7 +613,7 @@
 
         // ---------- View Details: open modal with items (only if admin) ----------
         window.openViewDetailsModal = function (saleId, saleItems) {
-            if (!isAdmin) return; // extra safety
+            if (!isAdmin) return;
             currentViewSaleId = saleId;
             const container = document.getElementById('viewDetailsItemList');
             container.innerHTML = '';
@@ -801,7 +679,6 @@
         window.showBatchDetails = async function (batchId, productName, productBrand, quantitySold, sellingPrice, costPrice) {
             const openInPurchasesBtn = document.getElementById('openInPurchasesBtn');
             if (batchId === -1) {
-                // Deleted batch – hide button
                 openInPurchasesBtn.classList.add('hidden');
                 document.getElementById('batchDetailsTitle').innerHTML = `Batch #DELETED – ${productName} (${productBrand})`;
                 document.getElementById('batchDetailsContent').innerHTML = `
@@ -821,13 +698,11 @@
                 return;
             }
 
-            // Show the Open in Purchases button for valid batches
             openInPurchasesBtn.classList.remove('hidden');
             openInPurchasesBtn.onclick = function() {
                 window.openInPurchases(batchId);
             };
 
-            // Use the purchase history endpoint (which we know works)
             try {
                 const response = await fetch(`/api/purchases/${batchId}/history`);
                 if (!response.ok) {
@@ -840,9 +715,8 @@
                 if (!data.success) {
                     throw new Error(data.error || 'Unknown error');
                 }
-                const purchase = data.purchase; // contains all batch fields
+                const purchase = data.purchase;
 
-                // Calculate stats
                 const totalQty = purchase.original_quantity || purchase.current_quantity || 0;
                 const remainingQty = purchase.remaining_quantity || 0;
                 const claimedQty = purchase.claimed_quantity || 0;
@@ -875,7 +749,6 @@
                 document.getElementById('batchDetailsModal').classList.remove('hidden');
             } catch (error) {
                 alert('Could not load batch details: ' + error.message);
-                // Still show basic sale info
                 document.getElementById('batchDetailsTitle').innerHTML = `Batch #${batchId} – ${productName} (${productBrand})`;
                 document.getElementById('batchDetailsContent').innerHTML = `
                     <div class="bg-red-50 border-l-4 border-red-400 p-4 mb-4">
@@ -916,14 +789,9 @@
                 return;
             }
 
-            // Group sales by sale_id
             const saleMap = new Map();
             for (const sale of sales) {
-                if (!sale.sale_id) {
-                    console.warn('Sale missing sale_id:', sale);
-                    continue;
-                }
-                
+                if (!sale.sale_id) continue;
                 if (!saleMap.has(sale.sale_id)) {
                     saleMap.set(sale.sale_id, {
                         sale_id: sale.sale_id,
@@ -937,7 +805,6 @@
                         items: []
                     });
                 }
-                
                 saleMap.get(sale.sale_id).items.push(sale);
             }
 
@@ -945,10 +812,7 @@
             let saleCount = 0;
             
             for (const [saleId, saleGroup] of saleMap) {
-                if (!saleGroup.items || saleGroup.items.length === 0) {
-                    continue;
-                }
-
+                if (!saleGroup.items || saleGroup.items.length === 0) continue;
                 saleCount++;
                 const paymentBadge = getPaymentBadge(saleGroup.payment_method, saleGroup.cheque_number);
 
@@ -1014,11 +878,8 @@
             }
             
             container.innerHTML = html;
-            
-            // Update summary with all sales
             updateSummary(sales);
 
-            // Attach reverse event listeners
             document.querySelectorAll('.reverse-sale-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     const saleId = parseInt(btn.getAttribute('data-sale-id'));
@@ -1027,7 +888,6 @@
                 });
             });
 
-            // Attach view details event listeners (only if admin)
             if (isAdmin) {
                 document.querySelectorAll('.view-details-btn').forEach(btn => {
                     btn.addEventListener('click', (e) => {
@@ -1188,6 +1048,122 @@
             }
         }
 
+        // ========== NEW: Dexie-first load with background refresh ==========
+        async function loadSalesData() {
+            updateOfflineBanner();
+            console.log("Loading screen sales data (Dexie-first)...");
+
+            // 1. Read from Dexie immediately
+            let data = await loadSalesFromDexie();
+
+            // 2. Filter to only screen sales (category === 'Screen')
+            data = data.filter(item => item.category === 'Screen');
+
+            if (data.length > 0) {
+                console.log(`📦 Loaded ${data.length} screen sales from Dexie`);
+            } else {
+                console.log('No screen sales data in Dexie, showing empty state.');
+            }
+
+            // 3. Apply period/date filters client-side
+            let filteredByDate = data;
+            if (currentPeriod !== 'all' && !(currentStartDate && currentEndDate)) {
+                const now = new Date();
+                const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                const startOfWeek = new Date(today);
+                startOfWeek.setDate(today.getDate() - today.getDay());
+                const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+                const startOfYear = new Date(today.getFullYear(), 0, 1);
+                filteredByDate = data.filter(item => {
+                    const d = new Date(item.sale_date || item.date);
+                    if (currentPeriod === 'daily') return d >= today;
+                    if (currentPeriod === 'weekly') return d >= startOfWeek;
+                    if (currentPeriod === 'monthly') return d >= startOfMonth;
+                    if (currentPeriod === 'yearly') return d >= startOfYear;
+                    return true;
+                });
+            } else if (currentStartDate && currentEndDate) {
+                const start = new Date(currentStartDate);
+                start.setHours(0,0,0,0);
+                const end = new Date(currentEndDate);
+                end.setHours(23,59,59,999);
+                filteredByDate = data.filter(item => {
+                    const d = new Date(item.sale_date || item.date);
+                    return d >= start && d <= end;
+                });
+            }
+
+            currentSalesData = filteredByDate;
+            updateFilterInfo();
+            applyAdvancedSearchAndRender();
+
+            // 4. If online, refresh in background
+            if (navigator.onLine) {
+                refreshSalesFromAPI().catch(err => console.warn('Background refresh failed:', err));
+            } else {
+                // Offline – show stale note
+                const list = document.getElementById('salesList');
+                list.innerHTML += '<div class="text-xs text-gray-500 text-center mt-2">📦 Data may be outdated (offline)</div>';
+            }
+        }
+
+        // ---------- Background refresh from API ----------
+        async function refreshSalesFromAPI() {
+            try {
+                let url = '';
+                if (currentStartDate && currentEndDate) {
+                    url = `/api/today_sales?start_date=${currentStartDate}&end_date=${currentEndDate}&category=Screen`;
+                } else {
+                    url = `/api/today_sales?period=${currentPeriod}&category=Screen`;
+                }
+                const res = await fetch(url);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                if (data.error) {
+                    console.error("API error:", data.error);
+                    return;
+                }
+                // Store in Dexie
+                await storeSalesInDexie(data);
+                // Reload from Dexie to get updated data with proper relationships
+                let freshData = await loadSalesFromDexie();
+                freshData = freshData.filter(item => item.category === 'Screen');
+
+                // Apply same filters
+                let filtered = freshData;
+                if (currentPeriod !== 'all' && !(currentStartDate && currentEndDate)) {
+                    const now = new Date();
+                    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                    const startOfWeek = new Date(today);
+                    startOfWeek.setDate(today.getDate() - today.getDay());
+                    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+                    const startOfYear = new Date(today.getFullYear(), 0, 1);
+                    filtered = freshData.filter(item => {
+                        const d = new Date(item.sale_date || item.date);
+                        if (currentPeriod === 'daily') return d >= today;
+                        if (currentPeriod === 'weekly') return d >= startOfWeek;
+                        if (currentPeriod === 'monthly') return d >= startOfMonth;
+                        if (currentPeriod === 'yearly') return d >= startOfYear;
+                        return true;
+                    });
+                } else if (currentStartDate && currentEndDate) {
+                    const start = new Date(currentStartDate);
+                    start.setHours(0,0,0,0);
+                    const end = new Date(currentEndDate);
+                    end.setHours(23,59,59,999);
+                    filtered = freshData.filter(item => {
+                        const d = new Date(item.sale_date || item.date);
+                        return d >= start && d <= end;
+                    });
+                }
+                currentSalesData = filtered;
+                applyAdvancedSearchAndRender();
+                console.log('✅ Background refresh completed');
+            } catch (e) {
+                console.warn('Background refresh failed:', e);
+            }
+        }
+
         // ---------- Event listeners ----------
         document.getElementById('refreshBtn').addEventListener('click', () => loadSalesData());
         document.getElementById('pdfBtn').addEventListener('click', exportPDF);
@@ -1243,7 +1219,6 @@
             });
         });
 
-        // Auto-refresh on reconnect
         window.addEventListener('online', function () {
             loadSalesData();
         });

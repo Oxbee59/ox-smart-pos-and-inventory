@@ -29,9 +29,7 @@
             <button id="advancedToggle" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1.5 rounded-lg text-sm">
                 ⚙️ Advanced
             </button>
-            <button id="clearSearchBtn" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-lg text-sm">
-                ✕ Clear
-            </button>
+            <button id="clearSearchBtn" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-lg text-sm">✕ Clear</button>
         </div>
     </div>
     
@@ -217,10 +215,8 @@
     document.addEventListener('DOMContentLoaded', function () {
         console.log("DOM loaded – initializing Today Sales (Accessories & Phones) with Dexie");
 
-        // Get user role from hidden element
         const userRoleEl = document.getElementById('userRole');
         const isAdmin = userRoleEl ? userRoleEl.getAttribute('data-role') === 'admin' : false;
-        console.log("User is admin:", isAdmin);
 
         let currentSalesData = [];
         let currentFilteredData = [];
@@ -235,8 +231,6 @@
 
         let currentReverseSaleId = null;
         let currentReverseItems = [];
-
-        // Variables for View Details
         let currentViewSaleId = null;
         let currentViewItems = [];
 
@@ -256,7 +250,6 @@
         async function storeSalesInDexie(salesData) {
             if (!db) return;
             try {
-                // Group by sale_id
                 const saleMap = new Map();
                 for (const item of salesData) {
                     if (!saleMap.has(item.sale_id)) {
@@ -270,10 +263,9 @@
                             reversed: 0,
                             payment_method: item.payment_method || 'cash',
                             cheque_number: item.cheque_number || null,
-                            user_id: null, // we don't have user_id from this API
+                            user_id: null,
                         });
                     }
-                    // Get product ID from products table (by name/brand)
                     let product_id = null;
                     if (item.name && db) {
                         const product = await db.products.where({ name: item.name, brand: item.brand || '' }).first();
@@ -291,7 +283,6 @@
                     saleMap.get(item.sale_id).items = saleMap.get(item.sale_id).items || [];
                     saleMap.get(item.sale_id).items.push(saleItem);
                 }
-                // Store sales headers and items
                 for (const [saleId, sale] of saleMap) {
                     await db.sales.put(sale);
                     for (const item of sale.items) {
@@ -335,7 +326,7 @@
                             net_profit: sale.profit || 0,
                             payment_method: sale.payment_method || 'cash',
                             cheque_number: sale.cheque_number || null,
-                            username: 'Unknown' // we don't store username in Dexie
+                            username: 'Unknown'
                         });
                     }
                 }
@@ -346,30 +337,7 @@
             }
         }
 
-        // ---------- Caching helpers (fallback) ----------
-        function cacheData(key, data) {
-            try {
-                localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }));
-            } catch (e) {}
-        }
-        function getCachedData(key, maxAgeMinutes = 60) {
-            try {
-                const raw = localStorage.getItem(key);
-                if (!raw) return null;
-                const parsed = JSON.parse(raw);
-                const ageMinutes = (Date.now() - parsed.timestamp) / (1000 * 60);
-                if (ageMinutes > maxAgeMinutes) return null;
-                return parsed.data;
-            } catch (e) { return null; }
-        }
-        function getCacheKey() {
-            if (currentStartDate && currentEndDate) {
-                return `sales_data_nonscreen_custom_${currentStartDate}_${currentEndDate}`;
-            } else {
-                return `sales_data_nonscreen_period_${currentPeriod}`;
-            }
-        }
-
+        // ---------- Formatting helpers ----------
         function formatMoney(amount) {
             return '₵' + (parseFloat(amount) || 0).toFixed(2);
         }
@@ -442,7 +410,6 @@
             updateFilterInfo();
             renderSales(filtered, currentSearchTerm);
             
-            // Count distinct sales (by sale_id) for the result count
             const distinctSales = new Set();
             filtered.forEach(item => distinctSales.add(item.sale_id));
             const distinctCount = distinctSales.size;
@@ -460,61 +427,86 @@
             }
         }
 
-        // ---------- Fetch sales data (with Dexie integration) ----------
+        // ---------- Data loading (Dexie-first) ----------
         async function loadSalesData() {
             updateOfflineBanner();
-            console.log("Loading non‑screen sales data...");
-            let url = '';
-            if (currentStartDate && currentEndDate) {
-                url = `/api/today_sales?start_date=${currentStartDate}&end_date=${currentEndDate}&exclude_category=Screen`;
-            } else {
-                url = `/api/today_sales?period=${currentPeriod}&exclude_category=Screen`;
-            }
-            console.log("Fetching from URL:", url);
-            let data = [], fromCache = false;
+            console.log("Loading non‑screen sales data (Dexie-first)");
 
-            // Try API first if online
-            if (navigator.onLine) {
-                try {
-                    const res = await fetch(url);
-                    if (!res.ok) {
-                        if (res.status === 401) { window.location.href = '/login'; return; }
-                        throw new Error(`HTTP error! status: ${res.status}`);
-                    }
-                    data = await res.json();
-                    if (data.error) {
-                        console.error("API error:", data.error);
-                        alert("Error loading sales data: " + data.error);
-                        data = [];
-                    } else {
-                        // Store in Dexie
-                        await storeSalesInDexie(data);
-                        console.log("✅ Data fetched from API and stored in Dexie");
-                    }
-                } catch (error) {
-                    console.warn("API failed, falling back to Dexie:", error);
-                    fromCache = true;
-                    data = await loadSalesFromDexie();
-                    if (data.length === 0) {
-                        // fallback to localStorage cache
-                        const cached = getCachedData(getCacheKey());
-                        if (cached) data = cached;
-                    }
-                }
-            } else {
-                // Offline – read from Dexie
-                fromCache = true;
-                data = await loadSalesFromDexie();
-                if (data.length === 0) {
-                    const cached = getCachedData(getCacheKey());
-                    if (cached) data = cached;
-                }
-            }
+            let data = [];
 
-            // Apply period/date filters to the data
+            // 1. Read from Dexie immediately
+            data = await loadSalesFromDexie();
             if (data.length > 0) {
-                // Filter by date if not 'all'
-                let filteredByDate = data;
+                console.log('📦 Loaded sales from Dexie:', data.length);
+            } else {
+                console.log('No sales data in Dexie, showing empty state.');
+            }
+
+            // 2. Apply period/date filters client-side
+            let filteredByDate = data;
+            if (currentPeriod !== 'all' && !(currentStartDate && currentEndDate)) {
+                const now = new Date();
+                const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                const startOfWeek = new Date(today);
+                startOfWeek.setDate(today.getDate() - today.getDay());
+                const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+                const startOfYear = new Date(today.getFullYear(), 0, 1);
+                filteredByDate = data.filter(item => {
+                    const d = new Date(item.sale_date || item.date);
+                    if (currentPeriod === 'daily') return d >= today;
+                    if (currentPeriod === 'weekly') return d >= startOfWeek;
+                    if (currentPeriod === 'monthly') return d >= startOfMonth;
+                    if (currentPeriod === 'yearly') return d >= startOfYear;
+                    return true;
+                });
+            } else if (currentStartDate && currentEndDate) {
+                const start = new Date(currentStartDate);
+                start.setHours(0,0,0,0);
+                const end = new Date(currentEndDate);
+                end.setHours(23,59,59,999);
+                filteredByDate = data.filter(item => {
+                    const d = new Date(item.sale_date || item.date);
+                    return d >= start && d <= end;
+                });
+            }
+            // If no filters, use all data
+            currentSalesData = filteredByDate;
+            updateFilterInfo();
+            applyAdvancedSearchAndRender();
+
+            // 3. If online, refresh in background
+            if (navigator.onLine) {
+                refreshSalesFromAPI().catch(err => console.warn('Background refresh failed:', err));
+            } else {
+                // Offline – show stale note
+                const list = document.getElementById('salesList');
+                list.innerHTML += '<div class="text-xs text-gray-500 text-center mt-2">📦 Data may be outdated (offline)</div>';
+            }
+        }
+
+        // ---------- Background refresh from API ----------
+        async function refreshSalesFromAPI() {
+            try {
+                let url = '';
+                if (currentStartDate && currentEndDate) {
+                    url = `/api/today_sales?start_date=${currentStartDate}&end_date=${currentEndDate}&exclude_category=Screen`;
+                } else {
+                    url = `/api/today_sales?period=${currentPeriod}&exclude_category=Screen`;
+                }
+                const res = await fetch(url);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                if (data.error) {
+                    console.error("API error:", data.error);
+                    return;
+                }
+                // Store in Dexie
+                await storeSalesInDexie(data);
+                // Re-load from Dexie to get updated data with proper relationships
+                const freshData = await loadSalesFromDexie();
+                // Apply same filters
+                let filtered = freshData;
+                // Period/date filters (same logic as above)
                 if (currentPeriod !== 'all' && !(currentStartDate && currentEndDate)) {
                     const now = new Date();
                     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -522,7 +514,7 @@
                     startOfWeek.setDate(today.getDate() - today.getDay());
                     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
                     const startOfYear = new Date(today.getFullYear(), 0, 1);
-                    filteredByDate = data.filter(item => {
+                    filtered = freshData.filter(item => {
                         const d = new Date(item.sale_date || item.date);
                         if (currentPeriod === 'daily') return d >= today;
                         if (currentPeriod === 'weekly') return d >= startOfWeek;
@@ -535,23 +527,20 @@
                     start.setHours(0,0,0,0);
                     const end = new Date(currentEndDate);
                     end.setHours(23,59,59,999);
-                    filteredByDate = data.filter(item => {
+                    filtered = freshData.filter(item => {
                         const d = new Date(item.sale_date || item.date);
                         return d >= start && d <= end;
                     });
                 }
-                data = filteredByDate;
-            }
-
-            currentSalesData = data;
-            updateFilterInfo();
-            applyAdvancedSearchAndRender();
-            if (fromCache) {
-                const list = document.getElementById('salesList');
-                list.innerHTML += '<div class="text-xs text-gray-500 text-center mt-2">📦 Data may be outdated (offline)</div>';
+                currentSalesData = filtered;
+                applyAdvancedSearchAndRender();
+                console.log('✅ Background refresh completed');
+            } catch (e) {
+                console.warn('Background refresh failed:', e);
             }
         }
 
+        // ---------- Update filter info ----------
         function updateFilterInfo() {
             const filterInfo = document.getElementById('filterInfo');
             const filterDesc = document.getElementById('filterDescription');
@@ -577,254 +566,6 @@
                 filterInfo.classList.add('hidden');
             }
         }
-
-        // ---------- Reverse modal ----------
-        window.openReverseModal = function (saleId, saleItems) {
-            currentReverseSaleId = saleId;
-            const container = document.getElementById('reverseItemList');
-            container.innerHTML = '';
-            currentReverseItems = [];
-            saleItems.forEach((item, idx) => {
-                const div = document.createElement('div');
-                div.className = 'border rounded-lg p-2 md:p-3 flex items-start space-x-2 md:space-x-3';
-                const cb = document.createElement('input');
-                cb.type = 'checkbox';
-                cb.className = 'mt-1';
-                cb.dataset.item = JSON.stringify({ batch_id: item.batch_id, quantity: item.quantity, product_id: item.product_id });
-                const info = document.createElement('div');
-                info.className = 'flex-1 text-xs md:text-sm';
-                let details = `
-                    <strong>${escapeHtml(item.name)} (${escapeHtml(item.brand)})</strong><br>
-                    Batch #${item.batch_id === -1 ? 'DELETED' : item.batch_id}<br>
-                    Quantity: ${item.quantity}<br>
-                    Selling: ${formatMoney(item.selling_price)}
-                `;
-                if (isAdmin) {
-                    details += `<br>Cost: ${formatMoney(item.cost_price)}<br>Profit: ${formatMoney(item.profit)}`;
-                }
-                info.innerHTML = details;
-                div.appendChild(cb);
-                div.appendChild(info);
-                container.appendChild(div);
-                currentReverseItems.push({ checkbox: cb, itemData: item });
-            });
-            document.getElementById('reverseModalTitle').innerHTML = `Reverse Items from Sale #${saleId}`;
-            document.getElementById('reverseModal').classList.remove('hidden');
-        };
-
-        window.closeReverseModal = function () {
-            document.getElementById('reverseModal').classList.add('hidden');
-            currentReverseSaleId = null;
-            currentReverseItems = [];
-        };
-
-        window.selectAllReverseItems = function () {
-            currentReverseItems.forEach(i => i.checkbox.checked = true);
-        };
-        window.deselectAllReverseItems = function () {
-            currentReverseItems.forEach(i => i.checkbox.checked = false);
-        };
-
-        async function confirmReverseSelected() {
-            if (!navigator.onLine) {
-                alert('Reversing sales requires internet. Please connect and try again.');
-                return;
-            }
-            const selected = currentReverseItems.filter(i => i.checkbox.checked);
-            if (selected.length === 0) {
-                alert('Please select at least one item to reverse.');
-                return;
-            }
-            const itemsToReverse = selected.map(i => JSON.parse(i.checkbox.dataset.item));
-            try {
-                const response = await fetch('/api/sales/reverse_items', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sale_id: currentReverseSaleId, items: itemsToReverse })
-                });
-                const data = await response.json();
-                if (data.success) {
-                    alert(`${selected.length} item(s) reversed successfully. Stock restored.`);
-                    closeReverseModal();
-                    loadSalesData();
-                } else {
-                    alert('Error: ' + data.error);
-                }
-            } catch (error) {
-                alert('Reverse failed. Please check your internet connection.');
-            }
-        }
-
-        // ---------- View Details: open modal with items (only if admin) ----------
-        window.openViewDetailsModal = function (saleId, saleItems) {
-            if (!isAdmin) return; // extra safety
-            currentViewSaleId = saleId;
-            const container = document.getElementById('viewDetailsItemList');
-            container.innerHTML = '';
-            saleItems.forEach((item, idx) => {
-                const div = document.createElement('div');
-                div.className = 'border rounded-lg p-2 md:p-3 flex items-center justify-between';
-                const info = document.createElement('div');
-                info.className = 'flex-1 text-xs md:text-sm';
-                let details = `
-                    <strong>${escapeHtml(item.name)} (${escapeHtml(item.brand)})</strong><br>
-                    Batch #${item.batch_id === -1 ? 'DELETED' : item.batch_id}<br>
-                    Quantity: ${item.quantity}<br>
-                    Selling: ${formatMoney(item.selling_price)}
-                `;
-                if (isAdmin) {
-                    details += `<br>Cost: ${formatMoney(item.cost_price)}<br>Profit: ${formatMoney(item.profit)}`;
-                }
-                info.innerHTML = details;
-
-                const viewBtn = document.createElement('button');
-                viewBtn.className = 'bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 md:px-3 md:py-1 rounded text-xs md:text-sm ml-2 flex-shrink-0';
-                viewBtn.textContent = '📋 View Batch Details';
-                viewBtn.dataset.batchId = item.batch_id;
-                viewBtn.dataset.productName = item.name;
-                viewBtn.dataset.productBrand = item.brand;
-                viewBtn.dataset.quantity = item.quantity;
-                viewBtn.dataset.sellingPrice = item.selling_price;
-                viewBtn.dataset.costPrice = item.cost_price;
-                viewBtn.dataset.saleId = saleId;
-                viewBtn.addEventListener('click', function(e) {
-                    e.stopPropagation();
-                    const batchId = parseInt(this.dataset.batchId);
-                    const productName = this.dataset.productName;
-                    const productBrand = this.dataset.productBrand;
-                    const quantitySold = parseInt(this.dataset.quantity);
-                    const sellingPrice = parseFloat(this.dataset.sellingPrice);
-                    const costPrice = parseFloat(this.dataset.costPrice);
-                    showBatchDetails(batchId, productName, productBrand, quantitySold, sellingPrice, costPrice);
-                });
-
-                div.appendChild(info);
-                div.appendChild(viewBtn);
-                container.appendChild(div);
-            });
-            document.getElementById('viewDetailsTitle').innerHTML = `Sale #${saleId} – Select Item`;
-            document.getElementById('viewDetailsModal').classList.remove('hidden');
-        };
-
-        window.closeViewDetailsModal = function () {
-            document.getElementById('viewDetailsModal').classList.add('hidden');
-            currentViewSaleId = null;
-            currentViewItems = [];
-        };
-
-        // ---------- Open in Purchases button (UPDATED: uses show_history) ----------
-        window.openInPurchases = function(batchId) {
-            if (batchId && batchId !== -1) {
-                window.location.href = `/purchases?show_history=${batchId}`;
-            }
-        };
-
-        // ---------- Show batch details using the purchase history endpoint ----------
-        window.showBatchDetails = async function (batchId, productName, productBrand, quantitySold, sellingPrice, costPrice) {
-            const openInPurchasesBtn = document.getElementById('openInPurchasesBtn');
-            if (batchId === -1) {
-                // Deleted batch – show only sale info, hide the Open in Purchases button
-                openInPurchasesBtn.classList.add('hidden');
-                document.getElementById('batchDetailsTitle').innerHTML = `Batch #DELETED – ${productName} (${productBrand})`;
-                document.getElementById('batchDetailsContent').innerHTML = `
-                    <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
-                        <p class="text-yellow-700">⚠️ This batch has been deleted. Only sale history is available.</p>
-                    </div>
-                    <div class="grid grid-cols-2 gap-2 text-sm">
-                        <div class="bg-gray-50 p-2 rounded">Product: <strong>${escapeHtml(productName)}</strong></div>
-                        <div class="bg-gray-50 p-2 rounded">Brand: <strong>${escapeHtml(productBrand)}</strong></div>
-                        <div class="bg-gray-50 p-2 rounded">Quantity Sold: <strong>${quantitySold}</strong></div>
-                        <div class="bg-gray-50 p-2 rounded">Selling Price: <strong>${formatMoney(sellingPrice)}</strong></div>
-                        ${isAdmin ? `<div class="bg-gray-50 p-2 rounded">Cost Price: <strong>${formatMoney(costPrice)}</strong></div>
-                                     <div class="bg-gray-50 p-2 rounded">Profit: <strong>${formatMoney((sellingPrice - costPrice) * quantitySold)}</strong></div>` : ''}
-                    </div>
-                `;
-                document.getElementById('batchDetailsModal').classList.remove('hidden');
-                return;
-            }
-
-            // Show the Open in Purchases button for valid batches
-            openInPurchasesBtn.classList.remove('hidden');
-            openInPurchasesBtn.onclick = function() {
-                window.openInPurchases(batchId);
-            };
-
-            // Use the purchase history endpoint (which we know works)
-            try {
-                const response = await fetch(`/api/purchases/${batchId}/history`);
-                if (!response.ok) {
-                    if (response.status === 404) {
-                        throw new Error('Batch not found');
-                    }
-                    throw new Error('Failed to fetch batch details');
-                }
-                const data = await response.json();
-                if (!data.success) {
-                    throw new Error(data.error || 'Unknown error');
-                }
-                const purchase = data.purchase; // contains all batch fields
-
-                // Calculate stats
-                const totalQty = purchase.original_quantity || purchase.current_quantity || 0;
-                const remainingQty = purchase.remaining_quantity || 0;
-                const claimedQty = purchase.claimed_quantity || 0;
-                const soldQty = totalQty - remainingQty;
-                const goodQty = remainingQty - claimedQty;
-
-                document.getElementById('batchDetailsTitle').innerHTML = `Batch #${batchId} – ${productName} (${productBrand})`;
-                document.getElementById('batchDetailsContent').innerHTML = `
-                    <div class="grid grid-cols-2 gap-2 text-sm">
-                        <div class="bg-gray-50 p-2 rounded">Product: <strong>${escapeHtml(productName)}</strong></div>
-                        <div class="bg-gray-50 p-2 rounded">Brand: <strong>${escapeHtml(productBrand)}</strong></div>
-                        <div class="bg-gray-50 p-2 rounded">Batch ID: <strong>#${purchase.batch_id}</strong></div>
-                        <div class="bg-gray-50 p-2 rounded">Original Date: <strong>${formatDate(purchase.original_date)}</strong></div>
-                        <div class="bg-blue-50 p-2 rounded">Total Quantity: <strong>${totalQty}</strong></div>
-                        <div class="bg-blue-50 p-2 rounded">Sold: <strong>${soldQty}</strong></div>
-                        <div class="bg-gray-50 p-2 rounded">Remaining: <strong>${remainingQty}</strong></div>
-                        <div class="bg-red-50 p-2 rounded">Claimed: <strong>${claimedQty}</strong></div>
-                        <div class="bg-green-50 p-2 rounded">✅ Good Stock: <strong>${Math.max(goodQty, 0)}</strong></div>
-                    </div>
-                    <div class="grid grid-cols-2 gap-2 mt-3 text-sm border-t pt-3">
-                        <div class="bg-gray-50 p-2 rounded">Cost Price: <strong>${formatMoney(purchase.original_cost_price)}</strong></div>
-                        <div class="bg-gray-50 p-2 rounded">Selling Price: <strong>${formatMoney(purchase.original_selling_price)}</strong></div>
-                        ${purchase.original_discount > 0 ? `<div class="bg-gray-50 p-2 rounded col-span-2">Discount: <strong>${formatMoney(purchase.original_discount)}</strong></div>` : ''}
-                    </div>
-                    <div class="mt-3 text-sm">
-                        <div class="bg-yellow-50 p-2 rounded">📌 This sale sold <strong>${quantitySold}</strong> unit(s) from this batch at <strong>${formatMoney(sellingPrice)}</strong> each.</div>
-                        ${isAdmin ? `<div class="bg-teal-50 p-2 rounded mt-2">📈 Profit on this sale: <strong>${formatMoney((sellingPrice - purchase.original_cost_price) * quantitySold)}</strong></div>` : ''}
-                    </div>
-                `;
-                document.getElementById('batchDetailsModal').classList.remove('hidden');
-            } catch (error) {
-                alert('Could not load batch details: ' + error.message);
-                // Still show basic sale info
-                document.getElementById('batchDetailsTitle').innerHTML = `Batch #${batchId} – ${productName} (${productBrand})`;
-                document.getElementById('batchDetailsContent').innerHTML = `
-                    <div class="bg-red-50 border-l-4 border-red-400 p-4 mb-4">
-                        <p class="text-red-700">⚠️ Could not load batch details. Showing sale info only.</p>
-                    </div>
-                    <div class="grid grid-cols-2 gap-2 text-sm">
-                        <div class="bg-gray-50 p-2 rounded">Product: <strong>${escapeHtml(productName)}</strong></div>
-                        <div class="bg-gray-50 p-2 rounded">Brand: <strong>${escapeHtml(productBrand)}</strong></div>
-                        <div class="bg-gray-50 p-2 rounded">Quantity Sold: <strong>${quantitySold}</strong></div>
-                        <div class="bg-gray-50 p-2 rounded">Selling Price: <strong>${formatMoney(sellingPrice)}</strong></div>
-                        ${isAdmin ? `<div class="bg-gray-50 p-2 rounded">Cost Price: <strong>${formatMoney(costPrice)}</strong></div>
-                                     <div class="bg-gray-50 p-2 rounded">Profit: <strong>${formatMoney((sellingPrice - costPrice) * quantitySold)}</strong></div>` : ''}
-                    </div>
-                `;
-                document.getElementById('batchDetailsModal').classList.remove('hidden');
-            }
-        };
-
-        function formatDate(dateStr) {
-            if (!dateStr) return '';
-            const d = new Date(dateStr);
-            return d.toLocaleString();
-        }
-
-        window.closeBatchDetailsModal = function () {
-            document.getElementById('batchDetailsModal').classList.add('hidden');
-        };
 
         // ---------- Render sales cards ----------
         function renderSales(sales, searchTerm = '') {
@@ -926,7 +667,6 @@
                 });
             });
 
-            // Attach view details event (only if admin)
             if (isAdmin) {
                 document.querySelectorAll('.view-details-btn').forEach(btn => {
                     btn.addEventListener('click', (e) => {
@@ -936,11 +676,10 @@
                     });
                 });
             }
-
             console.log(`✅ Rendered ${saleCount} sales with ${sales.length} total items`);
         }
 
-        // ---------- Update summary (hide profit for non‑admins) ----------
+        // ---------- Update summary ----------
         function updateSummary(sales) {
             const seenSales = new Set();
             let totalSales = 0, totalDiscount = 0, totalProfit = 0, totalItems = 0;
@@ -969,14 +708,8 @@
             if (currentStartDate && currentEndDate) {
                 periodText = `📅 ${currentStartDate} to ${currentEndDate}`;
             } else {
-                switch (currentPeriod) {
-                    case 'daily': periodText = '📅 Today'; break;
-                    case 'weekly': periodText = '📅 This Week'; break;
-                    case 'monthly': periodText = '📅 This Month'; break;
-                    case 'yearly': periodText = '📅 This Year'; break;
-                    case 'all': periodText = '📅 All Time'; break;
-                    default: periodText = '📅 Today';
-                }
+                const periodNames = { 'daily': 'Today', 'weekly': 'This Week', 'monthly': 'This Month', 'yearly': 'This Year', 'all': 'All Time' };
+                periodText = `📅 ${periodNames[currentPeriod] || currentPeriod}`;
             }
             let filterSummary = currentSearchTerm ? ` | 🔍 "${currentSearchTerm}"` : '';
 
@@ -1009,6 +742,248 @@
                 </div>
             `;
         }
+
+        // ---------- Reverse modal ----------
+        window.openReverseModal = function (saleId, saleItems) {
+            currentReverseSaleId = saleId;
+            const container = document.getElementById('reverseItemList');
+            container.innerHTML = '';
+            currentReverseItems = [];
+            saleItems.forEach((item, idx) => {
+                const div = document.createElement('div');
+                div.className = 'border rounded-lg p-2 md:p-3 flex items-start space-x-2 md:space-x-3';
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.className = 'mt-1';
+                cb.dataset.item = JSON.stringify({ batch_id: item.batch_id, quantity: item.quantity, product_id: item.product_id });
+                const info = document.createElement('div');
+                info.className = 'flex-1 text-xs md:text-sm';
+                let details = `
+                    <strong>${escapeHtml(item.name)} (${escapeHtml(item.brand)})</strong><br>
+                    Batch #${item.batch_id === -1 ? 'DELETED' : item.batch_id}<br>
+                    Quantity: ${item.quantity}<br>
+                    Selling: ${formatMoney(item.selling_price)}
+                `;
+                if (isAdmin) {
+                    details += `<br>Cost: ${formatMoney(item.cost_price)}<br>Profit: ${formatMoney(item.profit)}`;
+                }
+                info.innerHTML = details;
+                div.appendChild(cb);
+                div.appendChild(info);
+                container.appendChild(div);
+                currentReverseItems.push({ checkbox: cb, itemData: item });
+            });
+            document.getElementById('reverseModalTitle').innerHTML = `Reverse Items from Sale #${saleId}`;
+            document.getElementById('reverseModal').classList.remove('hidden');
+        };
+
+        window.closeReverseModal = function () {
+            document.getElementById('reverseModal').classList.add('hidden');
+            currentReverseSaleId = null;
+            currentReverseItems = [];
+        };
+
+        window.selectAllReverseItems = function () {
+            currentReverseItems.forEach(i => i.checkbox.checked = true);
+        };
+        window.deselectAllReverseItems = function () {
+            currentReverseItems.forEach(i => i.checkbox.checked = false);
+        };
+
+        async function confirmReverseSelected() {
+            if (!navigator.onLine) {
+                alert('Reversing sales requires internet. Please connect and try again.');
+                return;
+            }
+            const selected = currentReverseItems.filter(i => i.checkbox.checked);
+            if (selected.length === 0) {
+                alert('Please select at least one item to reverse.');
+                return;
+            }
+            const itemsToReverse = selected.map(i => JSON.parse(i.checkbox.dataset.item));
+            try {
+                const response = await fetch('/api/sales/reverse_items', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sale_id: currentReverseSaleId, items: itemsToReverse })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    alert(`${selected.length} item(s) reversed successfully. Stock restored.`);
+                    closeReverseModal();
+                    loadSalesData();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                alert('Reverse failed. Please check your internet connection.');
+            }
+        }
+
+        // ---------- View Details modal (admin) ----------
+        window.openViewDetailsModal = function (saleId, saleItems) {
+            if (!isAdmin) return;
+            currentViewSaleId = saleId;
+            const container = document.getElementById('viewDetailsItemList');
+            container.innerHTML = '';
+            saleItems.forEach((item, idx) => {
+                const div = document.createElement('div');
+                div.className = 'border rounded-lg p-2 md:p-3 flex items-center justify-between';
+                const info = document.createElement('div');
+                info.className = 'flex-1 text-xs md:text-sm';
+                let details = `
+                    <strong>${escapeHtml(item.name)} (${escapeHtml(item.brand)})</strong><br>
+                    Batch #${item.batch_id === -1 ? 'DELETED' : item.batch_id}<br>
+                    Quantity: ${item.quantity}<br>
+                    Selling: ${formatMoney(item.selling_price)}
+                `;
+                if (isAdmin) {
+                    details += `<br>Cost: ${formatMoney(item.cost_price)}<br>Profit: ${formatMoney(item.profit)}`;
+                }
+                info.innerHTML = details;
+
+                const viewBtn = document.createElement('button');
+                viewBtn.className = 'bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 md:px-3 md:py-1 rounded text-xs md:text-sm ml-2 flex-shrink-0';
+                viewBtn.textContent = '📋 View Batch Details';
+                viewBtn.dataset.batchId = item.batch_id;
+                viewBtn.dataset.productName = item.name;
+                viewBtn.dataset.productBrand = item.brand;
+                viewBtn.dataset.quantity = item.quantity;
+                viewBtn.dataset.sellingPrice = item.selling_price;
+                viewBtn.dataset.costPrice = item.cost_price;
+                viewBtn.dataset.saleId = saleId;
+                viewBtn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    const batchId = parseInt(this.dataset.batchId);
+                    const productName = this.dataset.productName;
+                    const productBrand = this.dataset.productBrand;
+                    const quantitySold = parseInt(this.dataset.quantity);
+                    const sellingPrice = parseFloat(this.dataset.sellingPrice);
+                    const costPrice = parseFloat(this.dataset.costPrice);
+                    showBatchDetails(batchId, productName, productBrand, quantitySold, sellingPrice, costPrice);
+                });
+
+                div.appendChild(info);
+                div.appendChild(viewBtn);
+                container.appendChild(div);
+            });
+            document.getElementById('viewDetailsTitle').innerHTML = `Sale #${saleId} – Select Item`;
+            document.getElementById('viewDetailsModal').classList.remove('hidden');
+        };
+
+        window.closeViewDetailsModal = function () {
+            document.getElementById('viewDetailsModal').classList.add('hidden');
+            currentViewSaleId = null;
+            currentViewItems = [];
+        };
+
+        // ---------- Batch details modal ----------
+        window.openInPurchases = function(batchId) {
+            if (batchId && batchId !== -1) {
+                window.location.href = `/purchases?show_history=${batchId}`;
+            }
+        };
+
+        window.showBatchDetails = async function (batchId, productName, productBrand, quantitySold, sellingPrice, costPrice) {
+            const openInPurchasesBtn = document.getElementById('openInPurchasesBtn');
+            if (batchId === -1) {
+                openInPurchasesBtn.classList.add('hidden');
+                document.getElementById('batchDetailsTitle').innerHTML = `Batch #DELETED – ${productName} (${productBrand})`;
+                document.getElementById('batchDetailsContent').innerHTML = `
+                    <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
+                        <p class="text-yellow-700">⚠️ This batch has been deleted. Only sale history is available.</p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 text-sm">
+                        <div class="bg-gray-50 p-2 rounded">Product: <strong>${escapeHtml(productName)}</strong></div>
+                        <div class="bg-gray-50 p-2 rounded">Brand: <strong>${escapeHtml(productBrand)}</strong></div>
+                        <div class="bg-gray-50 p-2 rounded">Quantity Sold: <strong>${quantitySold}</strong></div>
+                        <div class="bg-gray-50 p-2 rounded">Selling Price: <strong>${formatMoney(sellingPrice)}</strong></div>
+                        ${isAdmin ? `<div class="bg-gray-50 p-2 rounded">Cost Price: <strong>${formatMoney(costPrice)}</strong></div>
+                                     <div class="bg-gray-50 p-2 rounded">Profit: <strong>${formatMoney((sellingPrice - costPrice) * quantitySold)}</strong></div>` : ''}
+                    </div>
+                `;
+                document.getElementById('batchDetailsModal').classList.remove('hidden');
+                return;
+            }
+
+            openInPurchasesBtn.classList.remove('hidden');
+            openInPurchasesBtn.onclick = function() {
+                window.openInPurchases(batchId);
+            };
+
+            try {
+                const response = await fetch(`/api/purchases/${batchId}/history`);
+                if (!response.ok) {
+                    if (response.status === 404) {
+                        throw new Error('Batch not found');
+                    }
+                    throw new Error('Failed to fetch batch details');
+                }
+                const data = await response.json();
+                if (!data.success) {
+                    throw new Error(data.error || 'Unknown error');
+                }
+                const purchase = data.purchase;
+
+                const totalQty = purchase.original_quantity || purchase.current_quantity || 0;
+                const remainingQty = purchase.remaining_quantity || 0;
+                const claimedQty = purchase.claimed_quantity || 0;
+                const soldQty = totalQty - remainingQty;
+                const goodQty = remainingQty - claimedQty;
+
+                document.getElementById('batchDetailsTitle').innerHTML = `Batch #${batchId} – ${productName} (${productBrand})`;
+                document.getElementById('batchDetailsContent').innerHTML = `
+                    <div class="grid grid-cols-2 gap-2 text-sm">
+                        <div class="bg-gray-50 p-2 rounded">Product: <strong>${escapeHtml(productName)}</strong></div>
+                        <div class="bg-gray-50 p-2 rounded">Brand: <strong>${escapeHtml(productBrand)}</strong></div>
+                        <div class="bg-gray-50 p-2 rounded">Batch ID: <strong>#${purchase.batch_id}</strong></div>
+                        <div class="bg-gray-50 p-2 rounded">Original Date: <strong>${formatDate(purchase.original_date)}</strong></div>
+                        <div class="bg-blue-50 p-2 rounded">Total Quantity: <strong>${totalQty}</strong></div>
+                        <div class="bg-blue-50 p-2 rounded">Sold: <strong>${soldQty}</strong></div>
+                        <div class="bg-gray-50 p-2 rounded">Remaining: <strong>${remainingQty}</strong></div>
+                        <div class="bg-red-50 p-2 rounded">Claimed: <strong>${claimedQty}</strong></div>
+                        <div class="bg-green-50 p-2 rounded">✅ Good Stock: <strong>${Math.max(goodQty, 0)}</strong></div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 mt-3 text-sm border-t pt-3">
+                        <div class="bg-gray-50 p-2 rounded">Cost Price: <strong>${formatMoney(purchase.original_cost_price)}</strong></div>
+                        <div class="bg-gray-50 p-2 rounded">Selling Price: <strong>${formatMoney(purchase.original_selling_price)}</strong></div>
+                        ${purchase.original_discount > 0 ? `<div class="bg-gray-50 p-2 rounded col-span-2">Discount: <strong>${formatMoney(purchase.original_discount)}</strong></div>` : ''}
+                    </div>
+                    <div class="mt-3 text-sm">
+                        <div class="bg-yellow-50 p-2 rounded">📌 This sale sold <strong>${quantitySold}</strong> unit(s) from this batch at <strong>${formatMoney(sellingPrice)}</strong> each.</div>
+                        ${isAdmin ? `<div class="bg-teal-50 p-2 rounded mt-2">📈 Profit on this sale: <strong>${formatMoney((sellingPrice - purchase.original_cost_price) * quantitySold)}</strong></div>` : ''}
+                    </div>
+                `;
+                document.getElementById('batchDetailsModal').classList.remove('hidden');
+            } catch (error) {
+                alert('Could not load batch details: ' + error.message);
+                document.getElementById('batchDetailsTitle').innerHTML = `Batch #${batchId} – ${productName} (${productBrand})`;
+                document.getElementById('batchDetailsContent').innerHTML = `
+                    <div class="bg-red-50 border-l-4 border-red-400 p-4 mb-4">
+                        <p class="text-red-700">⚠️ Could not load batch details. Showing sale info only.</p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 text-sm">
+                        <div class="bg-gray-50 p-2 rounded">Product: <strong>${escapeHtml(productName)}</strong></div>
+                        <div class="bg-gray-50 p-2 rounded">Brand: <strong>${escapeHtml(productBrand)}</strong></div>
+                        <div class="bg-gray-50 p-2 rounded">Quantity Sold: <strong>${quantitySold}</strong></div>
+                        <div class="bg-gray-50 p-2 rounded">Selling Price: <strong>${formatMoney(sellingPrice)}</strong></div>
+                        ${isAdmin ? `<div class="bg-gray-50 p-2 rounded">Cost Price: <strong>${formatMoney(costPrice)}</strong></div>
+                                     <div class="bg-gray-50 p-2 rounded">Profit: <strong>${formatMoney((sellingPrice - costPrice) * quantitySold)}</strong></div>` : ''}
+                    </div>
+                `;
+                document.getElementById('batchDetailsModal').classList.remove('hidden');
+            }
+        };
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '';
+            const d = new Date(dateStr);
+            return d.toLocaleString();
+        }
+
+        window.closeBatchDetailsModal = function () {
+            document.getElementById('batchDetailsModal').classList.add('hidden');
+        };
 
         // ---------- PDF export ----------
         async function exportPDF() {

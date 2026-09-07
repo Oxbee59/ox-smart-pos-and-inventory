@@ -94,108 +94,86 @@
         window.addEventListener('online', updateOfflineBanner);
         window.addEventListener('offline', updateOfflineBanner);
 
-        // ========== DEXIE HELPERS ==========
-        async function storeArchiveInDexie(data, status, search) {
-            if (!db) return;
+        // ========== DEXIE CACHE HELPERS (Unified) ==========
+        const CACHE_MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
+
+        async function getCacheTable() {
+            if (!db) return null;
             try {
-                // Use the cache table
-                let cacheTable = db.cache || db.table('cache');
-                // Store the data with a key that includes status and search
-                const key = `archive_${status}_${search || 'all'}`;
-                await cacheTable.put({ key, value: data, timestamp: Date.now() });
-                console.log('✅ Archive data stored in Dexie');
+                // Try to get the cache table
+                return db.cache || db.table('cache');
             } catch (e) {
-                console.warn('Dexie cache not available, using localStorage fallback', e);
+                return null;
+            }
+        }
+
+        // Generic cache functions
+        async function putCache(key, value) {
+            if (!db) {
                 // Fallback to localStorage
                 try {
-                    const key = `archive_${status}_${search || 'all'}`;
-                    localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }));
-                } catch (e2) {}
+                    localStorage.setItem(key, JSON.stringify({ data: value, timestamp: Date.now() }));
+                } catch (e) {}
+                return;
+            }
+            try {
+                const table = await getCacheTable();
+                if (table) {
+                    await table.put({ key, value, timestamp: Date.now() });
+                } else {
+                    // Fallback to localStorage
+                    localStorage.setItem(key, JSON.stringify({ data: value, timestamp: Date.now() }));
+                }
+            } catch (e) {
+                console.warn('Cache put failed, using localStorage', e);
+                localStorage.setItem(key, JSON.stringify({ data: value, timestamp: Date.now() }));
             }
         }
 
-        async function loadArchiveFromDexie(status, search) {
-            if (!db) return null;
-            try {
-                let cacheTable = db.cache || db.table('cache');
-                const key = `archive_${status}_${search || 'all'}`;
-                const entry = await cacheTable.get(key);
-                if (entry && entry.value) {
-                    // Check age (24 hours)
-                    const age = Date.now() - (entry.timestamp || 0);
-                    if (age < 24 * 60 * 60 * 1000) {
-                        return entry.value;
-                    } else {
-                        // Stale – remove
-                        await cacheTable.delete(key);
-                        return null;
-                    }
-                }
-                return null;
-            } catch (e) {
-                console.warn('Dexie read failed, trying localStorage', e);
+        async function getCache(key) {
+            // Try Dexie first
+            if (db) {
                 try {
-                    const key = `archive_${status}_${search || 'all'}`;
-                    const raw = localStorage.getItem(key);
-                    if (!raw) return null;
-                    const parsed = JSON.parse(raw);
-                    if (Date.now() - parsed.timestamp > 24 * 60 * 60 * 1000) {
-                        localStorage.removeItem(key);
-                        return null;
+                    const table = await getCacheTable();
+                    if (table) {
+                        const entry = await table.get(key);
+                        if (entry && entry.value) {
+                            const age = Date.now() - (entry.timestamp || 0);
+                            if (age < CACHE_MAX_AGE) {
+                                return entry.value;
+                            } else {
+                                // Stale – remove
+                                await table.delete(key);
+                                return null;
+                            }
+                        }
                     }
-                    return parsed.data;
-                } catch (e2) {
+                } catch (e) {
+                    console.warn('Cache read failed', e);
+                }
+            }
+            // Fallback to localStorage
+            try {
+                const raw = localStorage.getItem(key);
+                if (!raw) return null;
+                const parsed = JSON.parse(raw);
+                if (Date.now() - parsed.timestamp > CACHE_MAX_AGE) {
+                    localStorage.removeItem(key);
                     return null;
                 }
-            }
-        }
-
-        // Store batches in Dexie
-        async function storeBatchesInDexie(name, brand, batches) {
-            if (!db) return;
-            try {
-                // Use cache table for batches too
-                let cacheTable = db.cache || db.table('cache');
-                const key = `batches_${name}_${brand}`;
-                await cacheTable.put({ key, value: batches, timestamp: Date.now() });
-                console.log('✅ Batches stored in Dexie');
+                return parsed.data;
             } catch (e) {
-                console.warn('Could not store batches in Dexie', e);
-            }
-        }
-
-        async function loadBatchesFromDexie(name, brand) {
-            if (!db) return null;
-            try {
-                let cacheTable = db.cache || db.table('cache');
-                const key = `batches_${name}_${brand}`;
-                const entry = await cacheTable.get(key);
-                if (entry && entry.value) {
-                    const age = Date.now() - (entry.timestamp || 0);
-                    if (age < 24 * 60 * 60 * 1000) {
-                        return entry.value;
-                    } else {
-                        await cacheTable.delete(key);
-                        return null;
-                    }
-                }
                 return null;
-            } catch (e) {
-                console.warn('Dexie batch read failed', e);
-                try {
-                    const key = `batches_${name}_${brand}`;
-                    const raw = localStorage.getItem(key);
-                    if (!raw) return null;
-                    const parsed = JSON.parse(raw);
-                    if (Date.now() - parsed.timestamp > 24 * 60 * 60 * 1000) {
-                        localStorage.removeItem(key);
-                        return null;
-                    }
-                    return parsed.data;
-                } catch (e2) {
-                    return null;
-                }
             }
+        }
+
+        // ========== Specific caching functions ==========
+        function getArchiveCacheKey(status, search) {
+            return `archive_${status}_${search || 'all'}`;
+        }
+
+        function getBatchesCacheKey(name, brand) {
+            return `batches_${name}_${brand}`;
         }
 
         // ---------- Main variables ----------
@@ -265,7 +243,7 @@
             loadArchive(true);
         }
 
-        // Load archive data from API with Dexie fallback
+        // Load archive data: Dexie-first, background refresh
         async function loadArchive(reset = true) {
             if (isLoading) return;
             isLoading = true;
@@ -273,6 +251,7 @@
             updateOfflineBanner();
             const status = document.getElementById('statusFilter').value;
             const searchTerm = document.getElementById('searchInput').value.trim();
+            const cacheKey = getArchiveCacheKey(status, searchTerm);
             
             if (reset) {
                 currentPage = 1;
@@ -291,27 +270,56 @@
             let data = null;
             let fromCache = false;
 
-            // Try API if online
+            // 1. Always try cache first
+            data = await getCache(cacheKey);
+            if (data && data.items && data.items.length > 0) {
+                fromCache = true;
+                // Use cached data but don't stop – we'll refresh in background if online
+                applyData(data);
+            }
+
+            // 2. If online, fetch fresh data and update cache
             if (navigator.onLine) {
                 try {
                     const url = `/api/archive?status=${status}&page=${currentPage}&per_page=${PER_PAGE}&search=${encodeURIComponent(searchTerm)}`;
                     const res = await fetch(url);
                     if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
                     data = await res.json();
-                    // Store in Dexie
-                    await storeArchiveInDexie(data, status, searchTerm);
-                    console.log("✅ Archive data fetched from API and stored in Dexie");
+                    // Store in cache
+                    await putCache(cacheKey, data);
+                    fromCache = false;
+                    applyData(data);
                 } catch (error) {
-                    console.warn('API failed, falling back to Dexie:', error);
-                    fromCache = true;
-                    data = await loadArchiveFromDexie(status, searchTerm);
+                    console.warn('API failed, using cached data if available', error);
+                    if (!data) {
+                        // No cache and API failed – show error
+                        const container = document.getElementById('archiveList');
+                        container.innerHTML = `
+                            <div class="text-center text-red-500 py-8">
+                                <i class="fas fa-exclamation-circle text-2xl mb-2"></i>
+                                <p>Failed to load archive data.</p>
+                                <p class="text-xs text-gray-400 mt-1">${error.message}</p>
+                            </div>
+                        `;
+                    }
                 }
-            } else {
-                // Offline – read from Dexie
-                fromCache = true;
-                data = await loadArchiveFromDexie(status, searchTerm);
+            } else if (!data) {
+                // Offline and no cache
+                const container = document.getElementById('archiveList');
+                container.innerHTML = `
+                    <div class="text-center text-gray-400 py-8">
+                        <i class="fas fa-wifi-slash text-2xl mb-2"></i>
+                        <p>No cached archive data available offline.</p>
+                        <p class="text-xs text-gray-400 mt-1">Please connect to the internet to load data.</p>
+                    </div>
+                `;
             }
 
+            isLoading = false;
+        }
+
+        // Apply data to UI (reusable)
+        function applyData(data) {
             if (data && data.items && data.items.length > 0) {
                 // Update pagination info
                 totalItems = data.total || 0;
@@ -319,7 +327,7 @@
                 hasMore = data.has_more || false;
                 
                 // Append items
-                if (reset) {
+                if (currentPage === 1) {
                     allItems = data.items || [];
                 } else {
                     allItems = [...allItems, ...(data.items || [])];
@@ -344,12 +352,9 @@
                         container.appendChild(note);
                     }
                 }
-                if (fromCache) {
-                    const container = document.getElementById('archiveList');
-                    const note = document.createElement('div');
-                    note.className = 'text-xs text-gray-400 text-center mt-2';
-                    note.innerText = '⚠️ Data may be outdated (offline)';
-                    container.appendChild(note);
+                // Show offline note if from cache
+                if (!navigator.onLine || (data._fromCache)) {
+                    // We'll rely on the offline banner instead
                 }
             } else {
                 // No data
@@ -362,7 +367,6 @@
                     </div>
                 `;
             }
-            isLoading = false;
         }
 
         // Load more items
@@ -564,52 +568,68 @@
             modalTitle.innerText = `Batches – ${name} (${brand})`;
             document.getElementById('batchModal').classList.remove('hidden');
 
+            const cacheKey = getBatchesCacheKey(name, brand);
             let batches = [];
             let fromCache = false;
 
-            // Try API if online
+            // 1. Try cache first
+            batches = await getCache(cacheKey);
+            if (batches) {
+                fromCache = true;
+                renderBatches(batches);
+            }
+
+            // 2. If online, fetch fresh
             if (navigator.onLine) {
                 try {
                     const res = await fetch(`/api/archive/batches?name=${encodeURIComponent(name)}&brand=${encodeURIComponent(brand)}`);
                     if (!res.ok) throw new Error('Failed to load batches');
                     batches = await res.json();
                     if (batches && batches.length > 0) {
-                        await storeBatchesInDexie(name, brand, batches);
+                        await putCache(cacheKey, batches);
+                        fromCache = false;
+                        renderBatches(batches);
                     }
                 } catch (error) {
-                    console.warn('Batch API failed, falling back to Dexie:', error);
-                    fromCache = true;
-                    batches = await loadBatchesFromDexie(name, brand) || [];
+                    console.warn('Batch API failed, using cached data if available', error);
+                    if (!batches || batches.length === 0) {
+                        // No cache and API failed
+                        container.innerHTML = '<div class="text-gray-400 text-center py-4">Failed to load batches. Please try again.</div>';
+                    }
                 }
-            } else {
-                fromCache = true;
-                batches = await loadBatchesFromDexie(name, brand) || [];
+            } else if (!batches || batches.length === 0) {
+                // Offline and no cache
+                container.innerHTML = '<div class="text-gray-400 text-center py-4">No cached batch data available offline.</div>';
             }
+        }
 
+        function renderBatches(batches) {
+            const container = document.getElementById('batchList');
             if (!batches || batches.length === 0) {
                 container.innerHTML = '<div class="text-gray-400 text-center py-4">No batches found.</div>';
-            } else {
-                container.innerHTML = '';
-                batches.forEach(b => {
-                    const div = document.createElement('div');
-                    div.className = 'border rounded p-2 mb-2';
-                    const faultyBadge = (b.is_faulty || b.claimed_quantity > 0) 
-                        ? `<span class="text-red-500 text-xs font-bold ml-2">⚠️ FAULTY (${b.claimed_quantity || 0} claimed)</span>` 
-                        : '';
-                    div.innerHTML = `
-                        <strong>Batch #${b.batch_id}</strong> ${faultyBadge}<br>
-                        Qty: ${b.quantity} | Remaining: ${b.remaining_quantity}<br>
-                        Cost: ${formatMoney(b.cost_price)} | Selling: ${formatMoney(b.selling_price)} | Disc: ${formatMoney(b.discount)}<br>
-                        Date: ${formatDate(b.date)}
-                    `;
-                    container.appendChild(div);
-                });
-                if (fromCache) {
-                    const note = document.createElement('div');
-                    note.className = 'text-xs text-gray-400 text-center mt-2';
-                    note.innerText = '⚠️ Data may be outdated (offline)';
-                    container.appendChild(note);
-                }
+                return;
+            }
+            container.innerHTML = '';
+            batches.forEach(b => {
+                const div = document.createElement('div');
+                div.className = 'border rounded p-2 mb-2';
+                const faultyBadge = (b.is_faulty || b.claimed_quantity > 0) 
+                    ? `<span class="text-red-500 text-xs font-bold ml-2">⚠️ FAULTY (${b.claimed_quantity || 0} claimed)</span>` 
+                    : '';
+                div.innerHTML = `
+                    <strong>Batch #${b.batch_id}</strong> ${faultyBadge}<br>
+                    Qty: ${b.quantity} | Remaining: ${b.remaining_quantity}<br>
+                    Cost: ${formatMoney(b.cost_price)} | Selling: ${formatMoney(b.selling_price)} | Disc: ${formatMoney(b.discount)}<br>
+                    Date: ${formatDate(b.date)}
+                `;
+                container.appendChild(div);
+            });
+            // Show offline note if from cache
+            if (!navigator.onLine) {
+                const note = document.createElement('div');
+                note.className = 'text-xs text-gray-400 text-center mt-2';
+                note.innerText = '⚠️ Data may be outdated (offline)';
+                container.appendChild(note);
             }
         }
 

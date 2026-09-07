@@ -1,8 +1,10 @@
 // static/js/sync.js
-// ------------------------------------------------------------
-//  OFFLINE SYNC ENGINE – pulls all data from server,
-//  pushes pending operations, and handles full sync.
-// ------------------------------------------------------------
+// ============================================================
+//  CENTRAL OFFLINE SYNC ENGINE
+//  - Pulls all data from server into Dexie
+//  - Pushes pending operations to server
+//  - Handles full sync, retries, and conflict resolution
+// ============================================================
 
 /**
  * Pull all data from the server and upsert into Dexie.
@@ -118,9 +120,7 @@ async function pullData() {
                 });
             }
 
-            // 6. (Optional) Sync deleted_products – we'll keep them for archive
-            // If you want to keep a local copy of the archive, uncomment:
-            /*
+            // 6. (Optional) Sync deleted_products – keep for archive
             for (const d of deleted_products) {
                 await db.deleted_products.put({
                     id: d.id,
@@ -141,7 +141,6 @@ async function pullData() {
                     last_sync: new Date().toISOString()
                 });
             }
-            */
         });
 
         // Store last sync time
@@ -151,6 +150,38 @@ async function pullData() {
     } catch (err) {
         console.error('❌ Pull sync error:', err);
         // Optionally, alert the user
+    }
+}
+
+/**
+ * Save a pending operation to the queue.
+ * This function is used by all pages to queue operations offline.
+ * @param {string} table - Dexie table name (e.g., 'batches', 'sales', 'claims', 'products', 'batches_delete')
+ * @param {string} operation - 'add', 'update', 'delete'
+ * @param {number|string} record_id - local ID (temporary or actual)
+ * @param {object} payload - the data to send to the API
+ */
+async function savePendingOperation(table, operation, record_id, payload) {
+    if (!db) {
+        console.error('❌ Dexie not available');
+        return;
+    }
+    try {
+        await db.pending_ops.add({
+            table: table,
+            operation: operation,
+            record_id: record_id,
+            payload: payload,
+            timestamp: new Date().toISOString(),
+            attempts: 0,
+            synced: 0
+        });
+        console.log(`💾 Pending operation saved: ${table} ${operation} (${record_id})`);
+        if (typeof updatePendingBadge === 'function') {
+            updatePendingBadge();
+        }
+    } catch (err) {
+        console.error('❌ Failed to save pending operation:', err);
     }
 }
 
@@ -171,12 +202,15 @@ async function pushPending() {
     }
 
     console.log(`📤 Pushing ${pending.length} pending operations...`);
+    let successCount = 0;
+    let failCount = 0;
 
     for (const op of pending) {
         try {
             let url = '';
             let method = '';
             let payload = op.payload;
+            let serverId = null;
 
             // Map operation to the correct API endpoint
             switch (op.table) {
@@ -217,7 +251,6 @@ async function pushPending() {
                     break;
 
                 case 'products':
-                    // For product deletions, you might have a separate endpoint
                     if (op.operation === 'delete') {
                         url = `/api/products/${op.record_id}?type=keep`;
                         method = 'DELETE';
@@ -260,10 +293,26 @@ async function pushPending() {
                 throw new Error(result.error || 'Unknown error from server');
             }
 
-            // If the server returned a new ID (e.g., for batch add), we need to update the local record.
-            // For simplicity, we'll just mark as synced and keep the local ID.
-            // In more advanced scenarios, you'd update the local ID to the server ID.
+            // If the server returned a new ID, update the local record if needed
+            if (result.batch_id && op.table === 'batches' && op.operation === 'add') {
+                // The batch was created on server; we should update the local batch ID.
+                // However, we already have a temporary ID in record_id, so we can update it.
+                // For simplicity, we'll just mark as synced and keep the local ID.
+                // If you need to update the local record with the server ID, you can do it here.
+                // For now, we assume the local ID is fine.
+                serverId = result.batch_id;
+            } else if (result.claim_id && op.table === 'claims' && op.operation === 'add') {
+                serverId = result.claim_id;
+            } else if (result.sale_id && op.table === 'sales' && op.operation === 'add') {
+                serverId = result.sale_id;
+            }
+
+            // Mark as synced
             await db.pending_ops.update(op.id, { synced: 1 });
+            successCount++;
+
+            // Optionally, if we got a server ID, we might want to update the local record
+            // This is advanced; for now we just mark it synced.
 
             console.log(`✅ Synced op ${op.id} (${op.table} ${op.operation})`);
 
@@ -271,6 +320,7 @@ async function pushPending() {
             // Increment attempts and keep for retry
             await db.pending_ops.update(op.id, { attempts: (op.attempts || 0) + 1 });
             console.warn(`❌ Push failed for op ${op.id}:`, err.message);
+            failCount++;
         }
     }
 
@@ -278,6 +328,8 @@ async function pushPending() {
     if (typeof updatePendingBadge === 'function') {
         updatePendingBadge();
     }
+
+    console.log(`📤 Push completed: ${successCount} succeeded, ${failCount} failed.`);
 }
 
 /**
@@ -293,7 +345,33 @@ async function fullSync() {
     console.log('✅ Full sync completed.');
 }
 
-// Expose functions globally so they can be called from inline scripts
+/**
+ * Clear all pending operations (careful – use with caution).
+ * Typically used for debugging or after a full reset.
+ */
+async function clearAllPending() {
+    if (!db) return;
+    if (!confirm('Clear all pending operations?')) return;
+    await db.pending_ops.where('synced').equals(0).delete();
+    console.log('🗑️ All pending operations cleared.');
+    if (typeof updatePendingBadge === 'function') {
+        updatePendingBadge();
+    }
+}
+
+/**
+ * Get the count of pending operations.
+ */
+async function getPendingCount() {
+    if (!db) return 0;
+    const count = await db.pending_ops.where('synced').equals(0).count();
+    return count;
+}
+
+// Expose functions globally
 window.pullData = pullData;
 window.pushPending = pushPending;
 window.fullSync = fullSync;
+window.savePendingOperation = savePendingOperation;
+window.clearAllPending = clearAllPending;
+window.getPendingCount = getPendingCount;

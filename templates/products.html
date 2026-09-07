@@ -122,7 +122,6 @@
             <p id="lowStockCount" class="text-xl md:text-2xl font-bold text-red-600">0</p>
         </div>
     </div>
-    <!-- Cache status - now hidden -->
     <div id="cacheStatus" class="text-xs text-gray-400 mt-2 text-center hidden"></div>
 </div>
 
@@ -245,23 +244,36 @@
         return isNaN(num) ? '0.00' : num.toFixed(decimals);
     }
 
-    // ---------- Offline helpers ----------
-    if (typeof savePendingBatchDeletion === 'undefined') {
-        window.savePendingBatchDeletion = function(batchId, deleteType) {
+    // ---------- Offline helpers (using central pending_ops) ----------
+    // These are wrappers for the global savePendingOperation (from sync.js)
+    function savePendingBatchDeletion(batchId, deleteType) {
+        if (typeof savePendingOperation === 'function') {
+            savePendingOperation('batches_delete', 'delete', batchId, { deleteType: deleteType });
+        } else {
+            console.warn('savePendingOperation not available, falling back to localStorage');
+            // Fallback to legacy localStorage (only if sync.js not loaded)
             let pending = JSON.parse(localStorage.getItem('pendingBatchDeletions') || '[]');
             pending.push({ id: Date.now() + '_' + Math.random().toString(36).substr(2,5), batchId, deleteType, timestamp: new Date().toISOString() });
             localStorage.setItem('pendingBatchDeletions', JSON.stringify(pending));
             if (typeof updatePendingBadge === 'function') updatePendingBadge();
-        };
+        }
     }
-    if (typeof savePendingProductDeletion === 'undefined') {
-        window.savePendingProductDeletion = function(productId, deleteType) {
+
+    function savePendingProductDeletion(productId, deleteType) {
+        if (typeof savePendingOperation === 'function') {
+            savePendingOperation('products', 'delete', productId, { deleteType: deleteType });
+        } else {
+            console.warn('savePendingOperation not available, falling back to localStorage');
             let pending = JSON.parse(localStorage.getItem('pendingProductDeletions') || '[]');
             pending.push({ id: Date.now() + '_' + Math.random().toString(36).substr(2,5), productId, deleteType, timestamp: new Date().toISOString() });
             localStorage.setItem('pendingProductDeletions', JSON.stringify(pending));
             if (typeof updatePendingBadge === 'function') updatePendingBadge();
-        };
+        }
     }
+
+    // Expose for inline use
+    window.savePendingBatchDeletion = savePendingBatchDeletion;
+    window.savePendingProductDeletion = savePendingProductDeletion;
 
     // ---------- Force refresh & clear cache ----------
     function forceRefresh() {
@@ -289,18 +301,13 @@
             return;
         }
         try {
-            const keysToClear = [
-                'cached_products_accessories', 'cached_products_screen',
-                'cached_purchases_accessories', 'cached_purchases_screen',
-                'pending_sales', 'pendingPurchases',
-                'pendingBatchDeletions', 'pendingProductDeletions',
-                'sales_products_cache_accessories', 'sales_products_cache_screens',
-                'sales_license_cache', 'offline_sales'
-            ];
-            keysToClear.forEach(key => { try { localStorage.removeItem(key); } catch(e) {} });
+            // Clear only localStorage keys that are data caches (keep UI state)
+            const keysToKeep = ['ox_user', 'pin_unlocked', 'app_version', 'accessory_summary_collapsed'];
             const allKeys = Object.keys(localStorage);
             allKeys.forEach(key => {
-                if (key.startsWith('batches_')) localStorage.removeItem(key);
+                if (!keysToKeep.includes(key)) {
+                    localStorage.removeItem(key);
+                }
             });
             if (db) {
                 db.delete().then(() => {
@@ -682,6 +689,7 @@
         currentBatchSelections.forEach(item => item.cb.checked = false);
     }
 
+    // ---------- Delete selected batches (with offline queuing) ----------
     async function deleteSelectedBatches() {
         const selected = currentBatchSelections.filter(item => item.cb.checked);
         if (selected.length === 0) {
@@ -701,17 +709,23 @@
                 }
             } catch (err) {
                 console.warn(`Batch deletion failed (offline): ${item.batchId}`, err);
+                // Queue via central pending_ops
                 savePendingBatchDeletion(item.batchId, deleteType);
             }
         }
         if (successCount > 0) alert(`${successCount} batch(es) deleted online.`);
-        const pending = JSON.parse(localStorage.getItem('pendingBatchDeletions') || '[]');
-        if (pending.length > 0) alert(`⚠️ ${pending.length} batch deletion(s) saved offline. They will be applied when you reconnect.`);
+        // Check pending count and inform user
+        if (typeof getPendingCount === 'function') {
+            const pendingCount = await getPendingCount();
+            if (pendingCount > 0) {
+                alert(`⚠️ ${pendingCount} operation(s) saved offline. They will be applied when you reconnect.`);
+            }
+        }
         closeBatchModal();
         loadProducts(true);
     }
 
-    // ---------- Delete product ----------
+    // ---------- Delete product (with offline queuing) ----------
     function confirmDeleteProduct(productId, productName) {
         currentProductIdForDelete = productId;
         document.getElementById('deleteProductName').innerHTML = `Accessory Product: ${productName}`;
@@ -948,8 +962,6 @@
         document.getElementById('totalQuantityCount').textContent = summaryData.total_quantity || 0;
         document.getElementById('totalClaimedCount').textContent = summaryData.total_claimed || 0;
         document.getElementById('totalGoodCount').textContent = summaryData.total_good || 0;
-
-        // cacheStatus is now hidden – no need to update text
 
         await loadLowStock();
         applyAdvancedSearch();

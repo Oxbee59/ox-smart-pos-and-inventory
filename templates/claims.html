@@ -227,7 +227,7 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        console.log("DOM loaded – initializing Claims with Dexie");
+        console.log("DOM loaded – initializing Claims with Dexie (db.claims)");
 
         // ---------- Offline banner ----------
         function updateOfflineBanner() {
@@ -241,233 +241,157 @@
         window.addEventListener('online', updateOfflineBanner);
         window.addEventListener('offline', updateOfflineBanner);
 
-        // ========== DEXIE HELPERS (using cache table) ==========
-        const CACHE_MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
+        // ========== DEXIE HELPERS (using db.claims directly) ==========
+        // We'll store claims in db.claims table – each claim as a separate record.
+        // We'll also use db.pending_ops from sync.js for pending operations.
 
-        async function getCacheEntry(key) {
-            if (!db) return null;
+        // Helper to ensure pending_ops table exists (it should be defined in sync.js)
+        // If sync.js hasn't defined it, we'll create it here as fallback.
+        async function ensurePendingOps() {
+            if (!db) return false;
             try {
-                let cacheTable = db.cache || db.table('cache');
-                const entry = await cacheTable.get(key);
-                if (entry && entry.value) {
-                    const age = Date.now() - (entry.timestamp || 0);
-                    if (age < CACHE_MAX_AGE) {
-                        return entry.value;
-                    } else {
-                        // Stale – remove
-                        await cacheTable.delete(key);
-                        return null;
-                    }
+                // Check if pending_ops table exists by trying to count
+                await db.pending_ops.count();
+                return true;
+            } catch (e) {
+                // Table doesn't exist – create it
+                try {
+                    db.version(db.verno).stores({ pending_ops: '++id, table, operation, record_id, payload, timestamp, attempts, synced' });
+                    console.log('✅ pending_ops table created (fallback)');
+                    return true;
+                } catch (e2) {
+                    console.warn('Failed to create pending_ops table', e2);
+                    return false;
                 }
-                return null;
-            } catch (e) {
-                console.warn('Dexie cache read failed', e);
-                // Fallback to localStorage
-                try {
-                    const raw = localStorage.getItem(key);
-                    if (!raw) return null;
-                    const parsed = JSON.parse(raw);
-                    if (Date.now() - parsed.timestamp > CACHE_MAX_AGE) {
-                        localStorage.removeItem(key);
-                        return null;
-                    }
-                    return parsed.data;
-                } catch (e2) { return null; }
             }
         }
 
-        async function putCacheEntry(key, value) {
-            if (!db) {
-                // localStorage fallback
-                try {
-                    localStorage.setItem(key, JSON.stringify({ data: value, timestamp: Date.now() }));
-                } catch(e) {}
-                return;
-            }
+        // ---------- Pending operations using db.pending_ops ----------
+        async function savePendingClaimOperation(table, operation, recordId, payload) {
+            if (!db) return;
+            await ensurePendingOps();
             try {
-                let cacheTable = db.cache || db.table('cache');
-                await cacheTable.put({ key, value, timestamp: Date.now() });
-                console.log(`✅ Cache entry ${key} stored in Dexie`);
+                await db.pending_ops.add({
+                    table: table,           // 'claims'
+                    operation: operation,   // 'add', 'update', 'delete', 'resolve'
+                    record_id: recordId,
+                    payload: payload,
+                    timestamp: new Date().toISOString(),
+                    attempts: 0,
+                    synced: 0
+                });
+                console.log(`💾 Pending claim ${operation} saved for record ${recordId}`);
+                updatePendingBadge();
             } catch (e) {
-                console.warn('Dexie cache write failed', e);
-                // fallback to localStorage
-                try {
-                    localStorage.setItem(key, JSON.stringify({ data: value, timestamp: Date.now() }));
-                } catch(e2) {}
+                console.error('Failed to save pending operation', e);
             }
         }
 
-        async function removeCacheEntry(key) {
-            if (!db) {
-                try { localStorage.removeItem(key); } catch(e) {}
-                return;
-            }
+        async function getPendingClaimOps() {
+            if (!db) return [];
+            await ensurePendingOps();
             try {
-                let cacheTable = db.cache || db.table('cache');
-                await cacheTable.delete(key);
+                return await db.pending_ops.where('table').equals('claims').and(op => op.synced === 0).toArray();
             } catch (e) {
-                try { localStorage.removeItem(key); } catch(e2) {}
+                console.warn('Failed to get pending ops', e);
+                return [];
             }
         }
 
-        // ---------- Pending operations with Dexie ----------
-        const PENDING_CLAIMS_KEY = 'pending_claims';
-        const PENDING_ACTIONS_KEY = 'pending_actions';
-
-        async function getPendingClaims() {
-            const data = await getCacheEntry(PENDING_CLAIMS_KEY);
-            return data || [];
+        async function markPendingSynced(opId) {
+            if (!db) return;
+            try {
+                await db.pending_ops.update(opId, { synced: 1 });
+            } catch (e) {}
         }
 
-        async function setPendingClaims(pending) {
-            await putCacheEntry(PENDING_CLAIMS_KEY, pending);
-            updatePendingBadge();
-        }
-
-        async function getPendingActions() {
-            const data = await getCacheEntry(PENDING_ACTIONS_KEY);
-            return data || [];
-        }
-
-        async function setPendingActions(actions) {
-            await putCacheEntry(PENDING_ACTIONS_KEY, actions);
-            updatePendingBadge();
-        }
-
-        async function addPendingClaim(claimData, operation = 'create') {
-            const pending = await getPendingClaims();
-            const id = 'claim_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-            pending.push({ id, operation, data: claimData, timestamp: Date.now() });
-            await setPendingClaims(pending);
-            return id;
-        }
-
-        async function removePendingClaim(pendingId) {
-            let pending = await getPendingClaims();
-            pending = pending.filter(p => p.id !== pendingId);
-            await setPendingClaims(pending);
-        }
-
-        async function addPendingAction(actionType, claimId, data) {
-            const actions = await getPendingActions();
-            const id = 'action_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-            actions.push({ id, actionType, claimId, data, timestamp: Date.now() });
-            await setPendingActions(actions);
-            return id;
-        }
-
-        async function removePendingAction(actionId) {
-            let actions = await getPendingActions();
-            actions = actions.filter(a => a.id !== actionId);
-            await setPendingActions(actions);
+        async function deletePendingOp(opId) {
+            if (!db) return;
+            try {
+                await db.pending_ops.delete(opId);
+            } catch (e) {}
         }
 
         async function updatePendingBadge() {
-            const pendingClaims = await getPendingClaims();
-            const pendingActions = await getPendingActions();
-            const total = pendingClaims.length + pendingActions.length;
-            const badge = document.getElementById('pending-badge');
-            if (badge) {
-                if (total > 0) {
-                    badge.textContent = `${total} pending`;
-                    badge.style.display = 'inline';
-                } else {
-                    badge.textContent = '';
-                    badge.style.display = 'none';
-                }
-            }
-        }
-
-        // ---------- Helper functions ----------
-        function escapeHtml(str) {
-            if (!str) return '';
-            return str.replace(/[&<>]/g, function(m) {
-                if (m === '&') return '&amp;';
-                if (m === '<') return '&lt;';
-                if (m === '>') return '&gt;';
-                return m;
-            });
-        }
-
-        function formatDate(dateStr) {
-            if (!dateStr) return 'N/A';
+            if (!db) return;
             try {
-                const d = new Date(dateStr);
-                return d.toLocaleString();
-            } catch(e) { return dateStr; }
+                const count = await db.pending_ops.where('table').equals('claims').and(op => op.synced === 0).count();
+                const badge = document.getElementById('pending-badge');
+                if (badge) {
+                    if (count > 0) {
+                        badge.textContent = `${count} pending`;
+                        badge.style.display = 'inline';
+                    } else {
+                        badge.textContent = '';
+                        badge.style.display = 'none';
+                    }
+                }
+            } catch (e) {}
         }
 
-        function getStatusBadge(status) {
-            if (status === 'resolved') {
-                return '<span class="inline-flex items-center bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs font-medium">✅ Resolved</span>';
-            }
-            return '<span class="inline-flex items-center bg-red-100 text-red-800 px-2 py-0.5 rounded text-xs font-medium">⚠️ Active</span>';
-        }
-
-        function getIssueBadge(issueType) {
-            const colors = {
-                'Damaged': 'bg-orange-100 text-orange-800',
-                'Faulty': 'bg-red-100 text-red-800',
-                'Expired': 'bg-yellow-100 text-yellow-800',
-                'Wrong Item': 'bg-blue-100 text-blue-800',
-                'Quality Issue': 'bg-purple-100 text-purple-800',
-                'Other': 'bg-gray-100 text-gray-800'
-            };
-            const color = colors[issueType] || 'bg-gray-100 text-gray-800';
-            return `<span class="inline-flex items-center ${color} px-2 py-0.5 rounded text-xs font-medium">${escapeHtml(issueType)}</span>`;
-        }
-
-        // ---------- Main variables ----------
-        let currentClaims = [];
-        let editClaimId = null;
-        let selectedProduct = null;
-        let selectedBatch = null;
-        let claimProductSearchTimeout = null;
-        let searchResultsCache = [];
-
-        // ---------- Load claims (with Dexie cache) ----------
+        // ---------- Load claims (Dexie-first) ----------
         async function loadClaims() {
             updateOfflineBanner();
             const container = document.getElementById('claimsList');
             container.innerHTML = '<div class="text-center text-gray-400 py-8">Loading claims...</div>';
 
-            // Try network first
-            if (navigator.onLine) {
+            let claims = [];
+
+            // 1. Read from Dexie first
+            if (db) {
                 try {
-                    const res = await fetch('/api/claims');
-                    if (res.ok) {
-                        const data = await res.json();
-                        if (data.success) {
-                            currentClaims = data.claims;
-                            await putCacheEntry('claims_cache', currentClaims);
-                            applyFilters();
-                            updateSummary();
-                            return;
-                        }
-                    }
-                    throw new Error('Network or server error');
-                } catch (error) {
-                    console.warn('Offline – using cached claims', error);
-                    // fallthrough to cache
+                    claims = await db.claims.toArray();
+                    console.log(`📦 Loaded ${claims.length} claims from Dexie`);
+                } catch (e) {
+                    console.warn('Failed to read claims from Dexie', e);
                 }
             }
 
-            // Offline or API failed: read from Dexie cache
-            const cached = await getCacheEntry('claims_cache');
-            if (cached && cached.length > 0) {
-                currentClaims = cached;
+            // 2. Render immediately with cached data
+            if (claims.length > 0) {
+                currentClaims = claims;
                 applyFilters();
                 updateSummary();
-                // Add offline note
-                const note = document.createElement('div');
-                note.className = 'text-xs text-gray-400 text-center mt-2';
-                note.innerText = '⚠️ Data may be outdated (offline)';
-                container.appendChild(note);
-                return;
+            } else {
+                // No claims in Dexie – show empty state
+                container.innerHTML = '<div class="text-center text-gray-400 py-8">No claims available offline. Please connect to the internet.</div>';
+                currentClaims = [];
+                updateSummary();
             }
 
-            // No cache
-            container.innerHTML = '<div class="text-center text-gray-400 py-8">No claims available offline. Please connect to the internet.</div>';
+            // 3. If online, refresh from API
+            if (navigator.onLine) {
+                refreshClaimsFromAPI().catch(err => console.warn('Background refresh failed:', err));
+            }
+        }
+
+        // ---------- Refresh from API ----------
+        async function refreshClaimsFromAPI() {
+            try {
+                const res = await fetch('/api/claims');
+                if (!res.ok) throw new Error('Network error');
+                const data = await res.json();
+                if (data.success) {
+                    const freshClaims = data.claims;
+                    // Store in Dexie (upsert)
+                    if (db) {
+                        for (const claim of freshClaims) {
+                            await db.claims.put(claim);
+                        }
+                        console.log(`✅ ${freshClaims.length} claims stored in Dexie`);
+                    }
+                    // Update currentClaims and re-render
+                    currentClaims = freshClaims;
+                    applyFilters();
+                    updateSummary();
+                }
+            } catch (e) {
+                console.warn('Failed to refresh claims from API', e);
+                // If we had no cached data before, show error
+                if (currentClaims.length === 0) {
+                    document.getElementById('claimsList').innerHTML = '<div class="text-center text-red-500 py-8">Failed to load claims. Please try again.</div>';
+                }
+            }
         }
 
         // ---------- Update summary ----------
@@ -575,100 +499,140 @@
             `}).join('');
         }
 
+        // ---------- Helper functions ----------
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
+            });
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return 'N/A';
+            try {
+                const d = new Date(dateStr);
+                return d.toLocaleString();
+            } catch(e) { return dateStr; }
+        }
+
+        function getStatusBadge(status) {
+            if (status === 'resolved') {
+                return '<span class="inline-flex items-center bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs font-medium">✅ Resolved</span>';
+            }
+            return '<span class="inline-flex items-center bg-red-100 text-red-800 px-2 py-0.5 rounded text-xs font-medium">⚠️ Active</span>';
+        }
+
+        function getIssueBadge(issueType) {
+            const colors = {
+                'Damaged': 'bg-orange-100 text-orange-800',
+                'Faulty': 'bg-red-100 text-red-800',
+                'Expired': 'bg-yellow-100 text-yellow-800',
+                'Wrong Item': 'bg-blue-100 text-blue-800',
+                'Quality Issue': 'bg-purple-100 text-purple-800',
+                'Other': 'bg-gray-100 text-gray-800'
+            };
+            const color = colors[issueType] || 'bg-gray-100 text-gray-800';
+            return `<span class="inline-flex items-center ${color} px-2 py-0.5 rounded text-xs font-medium">${escapeHtml(issueType)}</span>`;
+        }
+
+        // ---------- Main variables ----------
+        let currentClaims = [];
+        let editClaimId = null;
+        let selectedProduct = null;
+        let selectedBatch = null;
+        let claimProductSearchTimeout = null;
+        let searchResultsCache = [];
+
         // ---------- View claim ----------
         async function viewClaim(claimId) {
-            try {
-                const res = await fetch('/api/claims');
-                const data = await res.json();
-                if (data.success) {
-                    const claim = data.claims.find(c => c.id === claimId);
-                    if (!claim) {
-                        alert('Claim not found');
-                        return;
-                    }
+            // Find claim from currentClaims (which is already from Dexie)
+            const claim = currentClaims.find(c => c.id === claimId);
+            if (!claim) {
+                alert('Claim not found');
+                return;
+            }
 
-                    const originalStock = claim.batch_original || (claim.batch_stock + claim.quantity);
-                    const physicalStock = claim.batch_stock || 0;
-                    const goodStock = claim.remaining_good || 0;
-                    const sold = originalStock - physicalStock;
+            const originalStock = claim.batch_original || (claim.batch_stock + claim.quantity);
+            const physicalStock = claim.batch_stock || 0;
+            const goodStock = claim.remaining_good || 0;
+            const sold = originalStock - physicalStock;
 
-                    document.getElementById('viewClaimTitle').textContent = `Claim #${claim.id} - ${claim.product_name}`;
-                    document.getElementById('viewClaimContent').innerHTML = `
-                        <div class="space-y-3">
-                            <div class="grid grid-cols-2 gap-3">
-                                <div class="bg-gray-50 p-3 rounded">
-                                    <p class="text-xs text-gray-500">Product</p>
-                                    <p class="font-bold text-indigo-700">${escapeHtml(claim.product_name)}</p>
-                                    <p class="text-sm text-gray-600">${escapeHtml(claim.brand)} | ${escapeHtml(claim.category)}</p>
-                                </div>
-                                <div class="bg-gray-50 p-3 rounded">
-                                    <p class="text-xs text-gray-500">Batch</p>
-                                    <p class="font-bold">#${claim.batch_id}</p>
-                                    <p class="text-sm text-gray-600">Status: ${claim.is_faulty ? '⚠️ Faulty' : '✅ Good'}</p>
-                                </div>
+            document.getElementById('viewClaimTitle').textContent = `Claim #${claim.id} - ${claim.product_name}`;
+            document.getElementById('viewClaimContent').innerHTML = `
+                <div class="space-y-3">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="bg-gray-50 p-3 rounded">
+                            <p class="text-xs text-gray-500">Product</p>
+                            <p class="font-bold text-indigo-700">${escapeHtml(claim.product_name)}</p>
+                            <p class="text-sm text-gray-600">${escapeHtml(claim.brand)} | ${escapeHtml(claim.category)}</p>
+                        </div>
+                        <div class="bg-gray-50 p-3 rounded">
+                            <p class="text-xs text-gray-500">Batch</p>
+                            <p class="font-bold">#${claim.batch_id}</p>
+                            <p class="text-sm text-gray-600">Status: ${claim.is_faulty ? '⚠️ Faulty' : '✅ Good'}</p>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 p-3 rounded">
+                        <p class="text-xs text-gray-500 font-medium mb-2">📊 Stock Breakdown</p>
+                        <div class="stock-breakdown">
+                            <div class="stock-item stock-total">
+                                <span class="text-xs text-gray-500">Total</span>
+                                <p class="font-bold text-gray-700">${originalStock}</p>
                             </div>
-                            <div class="bg-gray-50 p-3 rounded">
-                                <p class="text-xs text-gray-500 font-medium mb-2">📊 Stock Breakdown</p>
-                                <div class="stock-breakdown">
-                                    <div class="stock-item stock-total">
-                                        <span class="text-xs text-gray-500">Total</span>
-                                        <p class="font-bold text-gray-700">${originalStock}</p>
-                                    </div>
-                                    <div class="stock-item stock-sold">
-                                        <span class="text-xs text-gray-500">Sold</span>
-                                        <p class="font-bold text-blue-600">${sold}</p>
-                                    </div>
-                                    <div class="stock-item stock-physical">
-                                        <span class="text-xs text-gray-500">Physical</span>
-                                        <p class="font-bold text-indigo-600">${physicalStock}</p>
-                                    </div>
-                                    <div class="stock-item stock-good">
-                                        <span class="text-xs text-gray-500">✅ Good</span>
-                                        <p class="font-bold text-green-600">${goodStock}</p>
-                                    </div>
-                                </div>
-                                <p class="text-xs text-gray-400 mt-1">${originalStock} total → ${sold} sold → ${physicalStock} physical → ${claim.quantity} claimed → ${goodStock} good</p>
+                            <div class="stock-item stock-sold">
+                                <span class="text-xs text-gray-500">Sold</span>
+                                <p class="font-bold text-blue-600">${sold}</p>
                             </div>
-                            <div class="grid grid-cols-2 gap-3">
-                                <div class="bg-gray-50 p-3 rounded">
-                                    <p class="text-xs text-gray-500">Quantity Claimed</p>
-                                    <p class="font-bold text-red-600">${claim.quantity}</p>
-                                </div>
-                                <div class="bg-gray-50 p-3 rounded">
-                                    <p class="text-xs text-gray-500">Status</p>
-                                    ${getStatusBadge(claim.status)}
-                                </div>
+                            <div class="stock-item stock-physical">
+                                <span class="text-xs text-gray-500">Physical</span>
+                                <p class="font-bold text-indigo-600">${physicalStock}</p>
                             </div>
-                            <div class="bg-gray-50 p-3 rounded">
-                                <p class="text-xs text-gray-500">Issue Type</p>
-                                ${getIssueBadge(claim.issue_type)}
-                            </div>
-                            ${claim.description ? `
-                                <div class="bg-gray-50 p-3 rounded">
-                                    <p class="text-xs text-gray-500">Description</p>
-                                    <p class="text-sm">${escapeHtml(claim.description)}</p>
-                                </div>
-                            ` : ''}
-                            <div class="bg-gray-50 p-3 rounded">
-                                <p class="text-xs text-gray-500">Created</p>
-                                <p class="text-sm">${formatDate(claim.created_at)}</p>
-                            </div>
-                            ${claim.updated_at ? `
-                                <div class="bg-gray-50 p-3 rounded">
-                                    <p class="text-xs text-gray-500">Last Updated</p>
-                                    <p class="text-sm">${formatDate(claim.updated_at)}</p>
-                                </div>
-                            ` : ''}
-                            <div class="bg-blue-50 p-3 rounded border border-blue-200">
-                                <p class="text-xs text-blue-700">💡 Claimed items are removed from good stock. Resolving marks the claim as complete without restoring stock. Deleting restores stock.</p>
+                            <div class="stock-item stock-good">
+                                <span class="text-xs text-gray-500">✅ Good</span>
+                                <p class="font-bold text-green-600">${goodStock}</p>
                             </div>
                         </div>
-                    `;
-                    document.getElementById('viewClaimModal').classList.remove('hidden');
-                }
-            } catch (error) {
-                alert('Error loading claim details: ' + error.message);
-            }
+                        <p class="text-xs text-gray-400 mt-1">${originalStock} total → ${sold} sold → ${physicalStock} physical → ${claim.quantity} claimed → ${goodStock} good</p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="bg-gray-50 p-3 rounded">
+                            <p class="text-xs text-gray-500">Quantity Claimed</p>
+                            <p class="font-bold text-red-600">${claim.quantity}</p>
+                        </div>
+                        <div class="bg-gray-50 p-3 rounded">
+                            <p class="text-xs text-gray-500">Status</p>
+                            ${getStatusBadge(claim.status)}
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 p-3 rounded">
+                        <p class="text-xs text-gray-500">Issue Type</p>
+                        ${getIssueBadge(claim.issue_type)}
+                    </div>
+                    ${claim.description ? `
+                        <div class="bg-gray-50 p-3 rounded">
+                            <p class="text-xs text-gray-500">Description</p>
+                            <p class="text-sm">${escapeHtml(claim.description)}</p>
+                        </div>
+                    ` : ''}
+                    <div class="bg-gray-50 p-3 rounded">
+                        <p class="text-xs text-gray-500">Created</p>
+                        <p class="text-sm">${formatDate(claim.created_at)}</p>
+                    </div>
+                    ${claim.updated_at ? `
+                        <div class="bg-gray-50 p-3 rounded">
+                            <p class="text-xs text-gray-500">Last Updated</p>
+                            <p class="text-sm">${formatDate(claim.updated_at)}</p>
+                        </div>
+                    ` : ''}
+                    <div class="bg-blue-50 p-3 rounded border border-blue-200">
+                        <p class="text-xs text-blue-700">💡 Claimed items are removed from good stock. Resolving marks the claim as complete without restoring stock. Deleting restores stock.</p>
+                    </div>
+                </div>
+            `;
+            document.getElementById('viewClaimModal').classList.remove('hidden');
         }
 
         function closeViewClaimModal() {
@@ -678,17 +642,21 @@
         // ---------- Resolve claim (offline-aware) ----------
         async function resolveClaim(claimId) {
             if (!confirm('Mark this claim as resolved? The claimed items will remain deducted from stock.')) return;
-            
+
             if (!navigator.onLine) {
-                await addPendingAction('resolve', claimId, null);
+                // Save pending resolve operation
+                await savePendingClaimOperation('claims', 'resolve', claimId, { claimId });
                 alert('📶 You are offline. The resolution will be synced when you reconnect.');
-                // Also update local claim status optimistically
+                // Update local claim status optimistically
                 const claim = currentClaims.find(c => c.id === claimId);
                 if (claim) {
                     claim.status = 'resolved';
+                    // Update in Dexie
+                    if (db) await db.claims.put(claim);
                     applyFilters();
                     updateSummary();
                 }
+                updatePendingBadge();
                 return;
             }
 
@@ -697,7 +665,15 @@
                 const data = await res.json();
                 if (data.success) {
                     alert('✅ Claim resolved successfully!');
-                    loadClaims();
+                    // Remove any pending ops for this claim (if any)
+                    const pending = await getPendingClaimOps();
+                    for (const op of pending) {
+                        if (op.operation === 'resolve' && op.record_id === claimId) {
+                            await deletePendingOp(op.id);
+                        }
+                    }
+                    // Refresh from server (will also update Dexie)
+                    await refreshClaimsFromAPI();
                 } else {
                     alert('Error: ' + data.error);
                 }
@@ -710,20 +686,25 @@
         async function deleteClaim(claimId) {
             const claim = currentClaims.find(c => c.id === claimId);
             if (!claim) return;
-            
+
             const message = claim.status === 'resolved' 
                 ? `⚠️ This claim is resolved. Deleting it will restore ${claim.quantity} units to inventory.\n\nContinue?`
                 : `⚠️ Are you sure you want to delete this claim? This will restore ${claim.quantity} units to inventory.\n\nContinue?`;
-            
             if (!confirm(message)) return;
 
             if (!navigator.onLine) {
-                await addPendingAction('delete', claimId, null);
+                // Save pending delete operation
+                await savePendingClaimOperation('claims', 'delete', claimId, { claimId });
                 alert('📶 You are offline. The deletion will be synced when you reconnect.');
                 // Remove from local list optimistically
                 currentClaims = currentClaims.filter(c => c.id !== claimId);
+                if (db) {
+                    // Delete from Dexie (locally)
+                    await db.claims.delete(claimId);
+                }
                 applyFilters();
                 updateSummary();
+                updatePendingBadge();
                 return;
             }
 
@@ -732,7 +713,14 @@
                 const data = await res.json();
                 if (data.success) {
                     alert(`✅ Claim deleted successfully. ${claim.quantity} units restored to inventory.`);
-                    loadClaims();
+                    // Remove pending ops if any
+                    const pending = await getPendingClaimOps();
+                    for (const op of pending) {
+                        if (op.operation === 'delete' && op.record_id === claimId) {
+                            await deletePendingOp(op.id);
+                        }
+                    }
+                    await refreshClaimsFromAPI();
                 } else {
                     alert('Error: ' + data.error);
                 }
@@ -748,15 +736,15 @@
                 alert('Claim not found');
                 return;
             }
-            
+
             editClaimId = claimId;
             document.getElementById('claimModalTitle').textContent = '✏️ Edit Claim';
             document.getElementById('saveClaimBtn').textContent = 'Update Claim';
-            
+
             document.getElementById('claimIssueType').value = claim.issue_type;
             document.getElementById('claimQuantity').value = claim.quantity;
             document.getElementById('claimDescription').value = claim.description || '';
-            
+
             selectedProduct = {
                 id: claim.product_id,
                 name: claim.product_name,
@@ -765,10 +753,10 @@
                 stock: claim.remaining_good + claim.quantity
             };
             displaySelectedProduct(selectedProduct);
-            
+
             document.getElementById('batchSelectionContainer').classList.remove('hidden');
             loadBatchesForProduct(claim.product_id, claim.batch_id);
-            
+
             document.getElementById('claimModal').classList.remove('hidden');
         }
 
@@ -834,9 +822,9 @@
             try {
                 const res = await fetch(`/api/claims/search?q=${encodeURIComponent(keyword)}`);
                 const data = await res.json();
-                
+
                 searchResultsCache = data.success ? (data.products || []) : [];
-                
+
                 if (data.success && searchResultsCache.length > 0) {
                     const results = document.getElementById('claimSearchResults');
                     results.innerHTML = searchResultsCache.map(p => `
@@ -860,7 +848,7 @@
         // ---------- Select product ----------
         function selectProduct(productId) {
             const product = searchResultsCache.find(p => p.id === productId);
-            
+
             if (product) {
                 selectedProduct = product;
                 displaySelectedProduct(product);
@@ -890,7 +878,7 @@
                         select.appendChild(option);
                     });
                     document.getElementById('batchSelectionContainer').classList.remove('hidden');
-                    
+
                     if (selectedBatchId) {
                         const batch = data.batches.find(b => b.batch_id === selectedBatchId);
                         if (batch) {
@@ -898,7 +886,7 @@
                             updateStockImpact(batch);
                         }
                     }
-                    
+
                     select.onchange = function() {
                         if (this.value) {
                             const batchData = JSON.parse(this.options[this.selectedIndex].dataset.batchData);
@@ -941,10 +929,10 @@
             const container = document.getElementById('stockImpact');
             const currentStock = document.getElementById('currentStockDisplay');
             const afterStock = document.getElementById('afterStockDisplay');
-            
+
             const goodStock = batch.remaining_quantity - (batch.claimed_quantity || 0);
             currentStock.textContent = goodStock;
-            
+
             const quantityInput = document.getElementById('claimQuantity');
             quantityInput.oninput = function() {
                 const qty = parseInt(this.value) || 0;
@@ -952,12 +940,12 @@
                 afterStock.textContent = newStock >= 0 ? newStock : 0;
                 afterStock.className = `font-bold ${newStock >= 0 ? 'text-green-600' : 'text-red-600'}`;
             };
-            
+
             const qty = parseInt(quantityInput.value) || 0;
             const newStock = goodStock - qty;
             afterStock.textContent = newStock >= 0 ? newStock : 0;
             afterStock.className = `font-bold ${newStock >= 0 ? 'text-green-600' : 'text-red-600'}`;
-            
+
             container.classList.remove('hidden');
         }
 
@@ -1004,12 +992,13 @@
 
             // Offline handling
             if (!navigator.onLine) {
-                const pendingId = await addPendingClaim(payload, editClaimId ? 'update' : 'create');
-                alert('📶 You are offline. The claim will be saved and synced when you reconnect.');
-                closeClaimModal();
-                // Add to local list optimistically (for UI)
+                // Generate a temporary ID for the claim
+                const tempId = 'temp_' + Date.now();
+                // Save the pending operation with the full payload
+                await savePendingClaimOperation('claims', 'add', tempId, payload);
+                // Also create a local claim object to display immediately
                 const newClaim = {
-                    id: pendingId,
+                    id: tempId,
                     product_name: selectedProduct.name,
                     brand: selectedProduct.brand,
                     category: selectedProduct.category,
@@ -1024,16 +1013,17 @@
                     remaining_good: selectedBatch.remaining_quantity - quantity,
                     batch_original: selectedBatch.quantity || selectedBatch.remaining_quantity + (selectedBatch.claimed_quantity || 0)
                 };
-                if (editClaimId) {
-                    const idx = currentClaims.findIndex(c => c.id === editClaimId);
-                    if (idx !== -1) {
-                        currentClaims[idx] = { ...currentClaims[idx], ...newClaim };
-                    }
-                } else {
-                    currentClaims.push(newClaim);
+                // Store in Dexie locally
+                if (db) {
+                    await db.claims.put(newClaim);
                 }
+                // Add to currentClaims
+                currentClaims.push(newClaim);
                 applyFilters();
                 updateSummary();
+                updatePendingBadge();
+                alert('📶 You are offline. The claim will be saved and synced when you reconnect.');
+                closeClaimModal();
                 return;
             }
 
@@ -1050,12 +1040,21 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
-                
+
                 const data = await res.json();
                 if (data.success) {
                     alert(editClaimId ? '✅ Claim updated successfully!' : '✅ Claim created successfully!');
+                    // Remove any pending ops for this claim if it was pending
+                    if (editClaimId) {
+                        const pending = await getPendingClaimOps();
+                        for (const op of pending) {
+                            if (op.operation === 'update' && op.record_id === editClaimId) {
+                                await deletePendingOp(op.id);
+                            }
+                        }
+                    }
                     closeClaimModal();
-                    loadClaims();
+                    await refreshClaimsFromAPI();
                 } else {
                     alert('Error: ' + data.error);
                 }
@@ -1066,60 +1065,59 @@
 
         // ---------- Sync pending claims ----------
         async function syncPendingClaims() {
-            const pendingClaims = await getPendingClaims();
-            const pendingActions = await getPendingActions();
+            const pending = await getPendingClaimOps();
+            if (pending.length === 0) return;
+
             let synced = 0;
-
-            // Sync pending actions (resolve, delete)
-            for (const action of pendingActions) {
+            for (const op of pending) {
                 try {
-                    if (action.actionType === 'resolve') {
-                        const res = await fetch(`/api/claims/${action.claimId}/resolve`, { method: 'POST' });
-                        if (res.ok) {
-                            await removePendingAction(action.id);
-                            synced++;
-                        }
-                    } else if (action.actionType === 'delete') {
-                        const res = await fetch(`/api/claims/${action.claimId}`, { method: 'DELETE' });
-                        if (res.ok) {
-                            await removePendingAction(action.id);
-                            synced++;
-                        }
-                    }
-                } catch (e) {
-                    console.warn('Failed to sync action:', e);
-                }
-            }
+                    let url = '';
+                    let method = '';
+                    let body = null;
 
-            // Sync pending claims (create/update)
-            for (const pending of pendingClaims) {
-                try {
-                    let url = '/api/claims';
-                    let method = 'POST';
-                    if (pending.operation === 'update') {
-                        // We need the claim ID – we stored it in the data? We didn't, so we'll skip update for simplicity.
-                        // For now, we'll treat all pending claims as creates.
+                    if (op.operation === 'add') {
+                        url = '/api/claims';
+                        method = 'POST';
+                        body = op.payload;
+                    } else if (op.operation === 'update') {
+                        url = `/api/claims/${op.record_id}`;
+                        method = 'PUT';
+                        body = op.payload;
+                    } else if (op.operation === 'delete') {
+                        url = `/api/claims/${op.record_id}`;
+                        method = 'DELETE';
+                    } else if (op.operation === 'resolve') {
+                        url = `/api/claims/${op.record_id}/resolve`;
+                        method = 'POST';
+                    } else {
                         continue;
                     }
+
                     const res = await fetch(url, {
                         method: method,
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(pending.data)
+                        body: body ? JSON.stringify(body) : undefined
                     });
                     if (res.ok) {
-                        await removePendingClaim(pending.id);
+                        // Mark as synced
+                        await markPendingSynced(op.id);
                         synced++;
+                    } else {
+                        // Increment attempts
+                        await db.pending_ops.update(op.id, { attempts: (op.attempts || 0) + 1 });
                     }
                 } catch (e) {
-                    console.warn('Failed to sync pending claim:', e);
+                    console.warn('Failed to sync pending claim operation', e);
+                    await db.pending_ops.update(op.id, { attempts: (op.attempts || 0) + 1 });
                 }
             }
 
             if (synced > 0) {
-                console.log(`✅ ${synced} pending claims/actions synced.`);
-                loadClaims();
+                console.log(`✅ ${synced} pending claim operations synced.`);
+                // Refresh after sync to get server updates
+                await refreshClaimsFromAPI();
+                updatePendingBadge();
             }
-            updatePendingBadge();
         }
 
         // ---------- Event listeners ----------

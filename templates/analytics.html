@@ -218,46 +218,8 @@
             return '₵' + (parseFloat(amount) || 0).toFixed(2);
         }
 
-        // ---------- Load summary & trend from Dexie or API ----------
-        async function loadAnalyticsData() {
-            updateOfflineBanner();
-            console.log("Loading analytics data...");
-            let salesData = [];
-            let fromCache = false;
-
-            // Try API first if online
-            if (navigator.onLine) {
-                try {
-                    let url = '';
-                    if (customStartDate && customEndDate) {
-                        url = `/api/today_sales?start_date=${customStartDate}&end_date=${customEndDate}`;
-                    } else {
-                        url = `/api/today_sales?period=${currentPeriod}`;
-                    }
-                    const res = await fetch(url);
-                    if (!res.ok) {
-                        if (res.status === 401) { window.location.href = '/login'; return; }
-                        throw new Error(`HTTP error! status: ${res.status}`);
-                    }
-                    salesData = await res.json();
-                    // Store in Dexie
-                    await storeSalesInDexie(salesData);
-                    console.log("✅ Data fetched from API and stored in Dexie");
-                } catch (error) {
-                    console.warn("API failed, falling back to Dexie:", error);
-                    fromCache = true;
-                    salesData = await loadSalesFromDexie();
-                    // Apply period/date filter in memory
-                    salesData = filterSalesByDate(salesData, currentPeriod, customStartDate, customEndDate);
-                }
-            } else {
-                // Offline – read from Dexie
-                fromCache = true;
-                salesData = await loadSalesFromDexie();
-                salesData = filterSalesByDate(salesData, currentPeriod, customStartDate, customEndDate);
-            }
-
-            // Update summary cards
+        // ---------- Compute summary from filtered sales ----------
+        function renderSummary(salesData) {
             const seenSales = new Set();
             let totalSales = 0, totalProfit = 0, totalDiscount = 0, totalItems = 0;
             for (const sale of salesData) {
@@ -269,25 +231,14 @@
                 }
                 totalItems += sale.quantity || 0;
             }
-
             document.getElementById('itemsSold').innerText = totalItems;
             document.getElementById('revenue').innerText = formatMoney(totalSales);
             document.getElementById('profit').innerText = formatMoney(totalProfit);
             document.getElementById('discount').innerText = formatMoney(totalDiscount);
-
-            // Update trend chart
-            await renderTrend(salesData, fromCache);
-
-            // Update top products (try API first, fallback to computed from salesData)
-            await loadTopProducts(salesData, fromCache);
-
-            if (fromCache) {
-                // Show a small note somewhere (already handled by offline banner)
-            }
         }
 
         // ---------- Render trend chart ----------
-        async function renderTrend(salesData, fromCache) {
+        function renderTrend(salesData) {
             if (!salesData || salesData.length === 0) {
                 document.getElementById('trendOfflineMsg').classList.remove('hidden');
                 if (trendChart) trendChart.destroy();
@@ -356,62 +307,30 @@
             document.getElementById('trendOfflineMsg').classList.add('hidden');
         }
 
-        // ---------- Load top products (API first, fallback to Dexie computation) ----------
-        async function loadTopProducts(salesData, fromCache) {
-            const container = document.getElementById('topProductsList');
-            let products = [];
-
-            // If online, try API first
-            if (navigator.onLine && !fromCache) {
-                try {
-                    let url = '/api/dashboard/top_products?limit=10';
-                    if (customStartDate && customEndDate) {
-                        url = `/api/dashboard/top_products?start_date=${customStartDate}&end_date=${customEndDate}&limit=10`;
-                    } else if (currentPeriod !== 'custom') {
-                        url = `/api/dashboard/top_products?period=${currentPeriod}&limit=10`;
-                    }
-                    const res = await fetch(url);
-                    if (res.ok) {
-                        products = await res.json();
-                        // Cache the result in Dexie? We'll store it in a separate table or just rely on sales data.
-                        // For simplicity, we'll just use it.
-                        renderTopProducts(products, false);
-                        return;
-                    }
-                } catch (e) {
-                    console.warn('Top products API failed, computing from cached data', e);
-                }
-            }
-
-            // Fallback: compute from salesData (which is already filtered by date)
-            if (salesData && salesData.length > 0) {
-                // Group by product name+brand
-                const productMap = new Map();
-                for (const sale of salesData) {
-                    const key = `${sale.name}|${sale.brand}`;
-                    if (!productMap.has(key)) {
-                        productMap.set(key, { name: sale.name, brand: sale.brand, category: sale.category || '', qty: 0 });
-                    }
-                    productMap.get(key).qty += sale.quantity || 0;
-                }
-                // Sort by qty descending and take top 10
-                products = Array.from(productMap.values())
-                    .sort((a, b) => b.qty - a.qty)
-                    .slice(0, 10);
-                renderTopProducts(products, true);
-            } else {
-                container.innerHTML = '<div class="text-gray-400 text-center py-4">No product data available.</div>';
-            }
-        }
-
-        function renderTopProducts(products, fromCache) {
+        // ---------- Render top products from filtered sales ----------
+        function renderTopProducts(salesData) {
             const container = document.getElementById('topProductsList');
             container.innerHTML = '';
-            if (!products || products.length === 0) {
+
+            if (!salesData || salesData.length === 0) {
                 container.innerHTML = '<div class="text-gray-400 text-center py-4">No product data available.</div>';
                 return;
             }
-            products.forEach((p, index) => {
+
+            const productMap = new Map();
+            for (const sale of salesData) {
+                const key = `${sale.name}|${sale.brand}`;
+                if (!productMap.has(key)) {
+                    productMap.set(key, { name: sale.name, brand: sale.brand, category: sale.category || '', qty: 0 });
+                }
+                productMap.get(key).qty += sale.quantity || 0;
+            }
+
+            const sorted = Array.from(productMap.values())
+                .sort((a, b) => b.qty - a.qty)
+                .slice(0, 10);
+
+            sorted.forEach((p, index) => {
                 const div = document.createElement('div');
                 div.className = 'border-b pb-2 flex justify-between items-center';
                 let medal = '';
@@ -429,7 +348,51 @@
                 `;
                 container.appendChild(div);
             });
-            if (fromCache) {
+        }
+
+        // ---------- Background refresh from API ----------
+        async function refreshDataFromAPI() {
+            try {
+                // Fetch all sales (no filter) to update Dexie
+                const res = await fetch('/api/today_sales?period=all');
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                if (data.error) {
+                    console.error("API error:", data.error);
+                    return;
+                }
+                await storeSalesInDexie(data);
+                // Re-render with current filters
+                await loadAnalyticsData();
+                console.log('✅ Analytics background refresh completed');
+            } catch (e) {
+                console.warn('Background refresh failed:', e);
+            }
+        }
+
+        // ---------- Main load function: Dexie-first ----------
+        async function loadAnalyticsData() {
+            updateOfflineBanner();
+            console.log("Loading analytics data (Dexie-first)");
+
+            // 1. Always read from Dexie
+            let salesData = await loadSalesFromDexie();
+
+            // 2. Apply date filters
+            let filtered = filterSalesByDate(salesData, currentPeriod, customStartDate, customEndDate);
+
+            // 3. Render summary, trend, top products
+            renderSummary(filtered);
+            renderTrend(filtered);
+            renderTopProducts(filtered);
+
+            // 4. If online, refresh in background
+            if (navigator.onLine) {
+                refreshDataFromAPI().catch(err => console.warn('Background refresh failed:', err));
+            } else {
+                // Offline – show note (already handled by offline banner)
+                // Optionally add a small note in top products
+                const container = document.getElementById('topProductsList');
                 const note = document.createElement('div');
                 note.className = 'text-xs text-gray-400 mt-2 text-center';
                 note.innerText = '⚠️ Data may be outdated (offline)';
@@ -437,7 +400,7 @@
             }
         }
 
-        // ---------- Reload all ----------
+        // ---------- Reload with current filters ----------
         async function reloadAnalytics() {
             console.log("📊 Reloading analytics for period:", currentPeriod, customStartDate, customEndDate);
             await loadAnalyticsData();
@@ -468,7 +431,6 @@
             }
         });
 
-        // ---------- Auto-refresh on reconnect ----------
         window.addEventListener('online', function() {
             reloadAnalytics();
         });

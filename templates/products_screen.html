@@ -245,23 +245,32 @@
         return isNaN(num) ? '0.00' : num.toFixed(decimals);
     }
 
-    // ---------- Offline helpers ----------
-    if (typeof savePendingBatchDeletion === 'undefined') {
-        window.savePendingBatchDeletion = function(batchId, deleteType) {
+    // ---------- Offline helpers using central pending_ops ----------
+    function savePendingBatchDeletion(batchId, deleteType) {
+        if (typeof savePendingOperation === 'function') {
+            savePendingOperation('batches_delete', 'delete', batchId, { deleteType: deleteType });
+        } else {
+            // Fallback to legacy localStorage (rare, but safety)
             let pending = JSON.parse(localStorage.getItem('pendingBatchDeletions') || '[]');
             pending.push({ id: Date.now() + '_' + Math.random().toString(36).substr(2,5), batchId, deleteType, timestamp: new Date().toISOString() });
             localStorage.setItem('pendingBatchDeletions', JSON.stringify(pending));
             if (typeof updatePendingBadge === 'function') updatePendingBadge();
-        };
+        }
     }
-    if (typeof savePendingProductDeletion === 'undefined') {
-        window.savePendingProductDeletion = function(productId, deleteType) {
+
+    function savePendingProductDeletion(productId, deleteType) {
+        if (typeof savePendingOperation === 'function') {
+            savePendingOperation('products', 'delete', productId, { deleteType: deleteType });
+        } else {
             let pending = JSON.parse(localStorage.getItem('pendingProductDeletions') || '[]');
             pending.push({ id: Date.now() + '_' + Math.random().toString(36).substr(2,5), productId, deleteType, timestamp: new Date().toISOString() });
             localStorage.setItem('pendingProductDeletions', JSON.stringify(pending));
             if (typeof updatePendingBadge === 'function') updatePendingBadge();
-        };
+        }
     }
+
+    window.savePendingBatchDeletion = savePendingBatchDeletion;
+    window.savePendingProductDeletion = savePendingProductDeletion;
 
     // ---------- Force refresh & clear cache ----------
     function forceRefresh() {
@@ -289,18 +298,13 @@
             return;
         }
         try {
-            const keysToClear = [
-                'cached_products_accessories', 'cached_products_screen',
-                'cached_purchases_accessories', 'cached_purchases_screen',
-                'pending_sales', 'pendingPurchases',
-                'pendingBatchDeletions', 'pendingProductDeletions',
-                'sales_products_cache_accessories', 'sales_products_cache_screens',
-                'sales_license_cache', 'offline_sales'
-            ];
-            keysToClear.forEach(key => { try { localStorage.removeItem(key); } catch(e) {} });
+            // Keep only essential UI state keys
+            const keysToKeep = ['ox_user', 'pin_unlocked', 'app_version', 'screen_summary_collapsed'];
             const allKeys = Object.keys(localStorage);
             allKeys.forEach(key => {
-                if (key.startsWith('batches_')) localStorage.removeItem(key);
+                if (!keysToKeep.includes(key)) {
+                    localStorage.removeItem(key);
+                }
             });
             if (db) {
                 db.delete().then(() => {
@@ -679,6 +683,7 @@
         currentBatchSelections.forEach(item => item.cb.checked = false);
     }
 
+    // ---------- Delete selected batches (offline queued) ----------
     async function deleteSelectedBatches() {
         const selected = currentBatchSelections.filter(item => item.cb.checked);
         if (selected.length === 0) {
@@ -702,8 +707,13 @@
             }
         }
         if (successCount > 0) alert(`${successCount} batch(es) deleted online.`);
-        const pending = JSON.parse(localStorage.getItem('pendingBatchDeletions') || '[]');
-        if (pending.length > 0) alert(`⚠️ ${pending.length} batch deletion(s) saved offline. They will be applied when you reconnect.`);
+        // Check pending count via sync engine
+        if (typeof getPendingCount === 'function') {
+            const pendingCount = await getPendingCount();
+            if (pendingCount > 0) {
+                alert(`⚠️ ${pendingCount} operation(s) saved offline. They will be applied when you reconnect.`);
+            }
+        }
         closeBatchModal();
         loadProducts(true);
     }
@@ -853,7 +863,7 @@
     window.addEventListener('offline', updateOfflineBanner);
 
     // =============================================================
-    //  FIXED: Load screen products with Dexie – ALWAYS compute summary from actual data
+    //  DEXIE-FIRST LOAD: Screen products
     // =============================================================
     async function loadProducts(forceRefresh = false) {
         if (isLoading) return;
@@ -861,97 +871,105 @@
         updateOfflineBanner();
 
         let productsData = [];
-        let fromCache = false;
 
-        // Try to fetch from API if online
-        if (navigator.onLine && !forceRefresh) {
+        // 1. Read from Dexie first
+        if (db) {
             try {
-                const res = await fetch('/api/products?category=Screen');
-                if (!res.ok) throw new Error('Network error');
-                const data = await res.json();
-                if (data && data.products && Array.isArray(data.products)) {
-                    productsData = data.products;
-                    if (db) {
-                        await db.products.bulkPut(productsData);
-                        console.log('✅ Screen products stored in Dexie');
-                    }
-                    fromCache = false;
-                } else {
-                    throw new Error('Invalid data format');
+                let cached;
+                try {
+                    cached = await db.products.where('category').equals('Screen').toArray();
+                } catch (e) {
+                    // fallback to manual filter if index missing
+                    const all = await db.products.toArray();
+                    cached = all.filter(p => p.category === 'Screen');
                 }
-            } catch (err) {
-                console.warn('⚠️ API failed, using Dexie cache:', err.message);
-                fromCache = true;
-                // Fall through to Dexie
-            }
-        }
-
-        // If no data yet (or offline / API failed), read from Dexie
-        if (productsData.length === 0) {
-            try {
-                if (db) {
-                    let cached;
-                    try {
-                        cached = await db.products.where('category').equals('Screen').toArray();
-                    } catch (e) {
-                        console.warn('Category index not available, filtering manually', e);
-                        cached = await db.products.toArray();
-                        cached = cached.filter(p => p.category === 'Screen');
-                    }
-                    if (cached && cached.length > 0) {
-                        productsData = cached;
-                        fromCache = true;
-                        console.log('📦 Loaded screen products from Dexie');
-                    }
+                if (cached.length > 0) {
+                    productsData = cached;
+                    console.log('📦 Loaded screen products from Dexie');
                 }
             } catch (e) {
                 console.warn('Failed to read from Dexie:', e);
             }
         }
 
-        // Compute summary from productsData
-        let totalProducts = productsData.length;
-        let totalBatches = 0;
-        let totalQty = 0;
-        let totalClaimed = 0;
-
-        productsData.forEach(p => {
-            totalQty += p.stock || 0;
-            if (p.batches && p.batches.length > 0) {
-                totalBatches += p.batches.length;
-                p.batches.forEach(b => {
-                    totalClaimed += b.claimed_quantity || 0;
-                });
-            } else {
-                if (p.stock > 0) {
+        // 2. Render immediately if we have data
+        if (productsData.length > 0) {
+            currentProducts = productsData;
+            // Compute summary
+            let totalProducts = productsData.length;
+            let totalBatches = 0;
+            let totalQty = 0;
+            let totalClaimed = 0;
+            productsData.forEach(p => {
+                totalQty += p.stock || 0;
+                if (p.batches && p.batches.length > 0) {
+                    totalBatches += p.batches.length;
+                    p.batches.forEach(b => { totalClaimed += b.claimed_quantity || 0; });
+                } else if (p.stock > 0) {
                     totalBatches += 1;
                 }
+            });
+            const totalGood = Math.max(totalQty - totalClaimed, 0);
+            document.getElementById('totalProductsCount').textContent = totalProducts || 0;
+            document.getElementById('totalBatchesCount').textContent = totalBatches || 0;
+            document.getElementById('totalQuantityCount').textContent = totalQty || 0;
+            document.getElementById('totalClaimedCount').textContent = totalClaimed || 0;
+            document.getElementById('totalGoodCount').textContent = totalGood || 0;
+            applyAdvancedSearch();
+            await loadLowStock();
+            autoOpenBatches();
+            isLoading = false;
+        } else {
+            // No data in Dexie – show empty
+            document.getElementById('productsList').innerHTML = '<div class="text-center text-gray-400 py-8">No screen products found.</div>';
+            document.getElementById('totalProductsCount').textContent = '0';
+            document.getElementById('totalBatchesCount').textContent = '0';
+            document.getElementById('totalQuantityCount').textContent = '0';
+            document.getElementById('totalClaimedCount').textContent = '0';
+            document.getElementById('totalGoodCount').textContent = '0';
+            document.getElementById('lowStockCount').textContent = '0';
+            renderLowStockList([]);
+            isLoading = false;
+        }
+
+        // 3. If online, refresh in background (non‑blocking)
+        if (navigator.onLine && !forceRefresh) {
+            refreshProductsFromAPI().catch(err => console.warn('Background refresh failed:', err));
+        } else if (forceRefresh && navigator.onLine) {
+            await refreshProductsFromAPI();
+        }
+    }
+
+    // ---------- Background refresh from API ----------
+    async function refreshProductsFromAPI() {
+        try {
+            const res = await fetch('/api/products?category=Screen');
+            if (!res.ok) throw new Error('API error');
+            const data = await res.json();
+            if (data && data.products && Array.isArray(data.products)) {
+                // Store in Dexie
+                if (db) {
+                    await db.products.bulkPut(data.products);
+                    // Also batches if available
+                    const allBatches = [];
+                    for (const p of data.products) {
+                        if (p.batches && p.batches.length) {
+                            for (const b of p.batches) {
+                                b.product_id = p.product_id;
+                                allBatches.push(b);
+                            }
+                        }
+                    }
+                    if (allBatches.length) {
+                        await db.batches.bulkPut(allBatches);
+                    }
+                }
+                // Reload from Dexie to reflect fresh data
+                await loadProducts(false);
             }
-        });
-        const totalGood = Math.max(totalQty - totalClaimed, 0);
-
-        const summaryData = {
-            total_products: totalProducts,
-            total_batches: totalBatches,
-            total_quantity: totalQty,
-            total_claimed: totalClaimed,
-            total_good: totalGood
-        };
-
-        currentProducts = productsData;
-
-        document.getElementById('totalProductsCount').textContent = summaryData.total_products || 0;
-        document.getElementById('totalBatchesCount').textContent = summaryData.total_batches || 0;
-        document.getElementById('totalQuantityCount').textContent = summaryData.total_quantity || 0;
-        document.getElementById('totalClaimedCount').textContent = summaryData.total_claimed || 0;
-        document.getElementById('totalGoodCount').textContent = summaryData.total_good || 0;
-
-        // cacheStatus is now hidden – no need to update text
-
-        await loadLowStock();
-        applyAdvancedSearch();
-        autoOpenBatches();
-        isLoading = false;
+        } catch (e) {
+            console.warn('Background refresh failed:', e);
+        }
     }
 
     // ---------- Low stock loading ----------
@@ -986,8 +1004,7 @@
             try {
                 products = await db.products.where('category').equals('Screen').toArray();
             } catch (e) {
-                products = await db.products.toArray();
-                products = products.filter(p => p.category === 'Screen');
+                products = (await db.products.toArray()).filter(p => p.category === 'Screen');
             }
             const batches = await db.batches.toArray();
             const result = [];

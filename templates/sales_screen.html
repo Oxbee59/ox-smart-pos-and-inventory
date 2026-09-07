@@ -129,20 +129,6 @@
     </div>
 </div>
 
-<!-- License Modal -->
-<div id="licenseModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
-    <div class="bg-white rounded-xl shadow-xl w-96 p-6">
-        <h3 class="text-xl font-bold mb-2" id="licenseModalTitle">Trial Version</h3>
-        <div id="licenseModalMessage" class="text-gray-700 text-sm mb-4"></div>
-        <input type="text" id="licenseKeyInput" placeholder="Enter license key" class="w-full border rounded-lg px-3 py-2 mb-4">
-        <div class="flex justify-end gap-3">
-            <button id="licenseCancelBtn" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded">Cancel</button>
-            <button id="licenseOkBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">Activate</button>
-        </div>
-        <div id="licenseTimer" class="text-xs text-center text-gray-500 mt-3"></div>
-    </div>
-</div>
-
 <style>
     .stock-breakdown {
         display: grid;
@@ -179,11 +165,6 @@
     let selectedChequeNumber = null;
     let pendingSaleCallback = null;
 
-    let licenseRemainingSeconds = 0;
-    let licenseLicensed = false;
-    let licenseTrialActive = false;
-    let licenseTimerInterval = null;
-
     function formatMoney(amount) {
         return '₵' + amount.toFixed(2);
     }
@@ -214,6 +195,7 @@
                 console.log('🗑️ Cleared:', key);
             } catch(e) {}
         });
+        // Remove any leftover batch caches (legacy)
         const allKeys = Object.keys(localStorage);
         allKeys.forEach(key => {
             if (key.startsWith('batches_')) {
@@ -234,262 +216,125 @@
     }
     window.clearOfflineData = clearOfflineData;
 
-    // ---------- Load License Status ----------
-    async function loadLicenseStatus() {
-        try {
-            const res = await fetch('/api/license/status');
-            if (!res.ok) throw new Error();
-            const data = await res.json();
-            licenseLicensed = data.licensed;
-            licenseTrialActive = data.trial_active;
-            licenseRemainingSeconds = data.remaining_seconds;
-            // cache in localStorage for offline fallback
-            try { localStorage.setItem('sales_license_cache', JSON.stringify(data)); } catch(e) {}
-            console.log("License status:", data);
-            return data;
-        } catch (err) {
-            console.warn('Offline – using cached license');
-            let cached = null;
-            try { cached = JSON.parse(localStorage.getItem('sales_license_cache')); } catch(e) {}
-            if (cached) {
-                licenseLicensed = cached.licensed;
-                licenseTrialActive = cached.trial_active;
-                licenseRemainingSeconds = cached.remaining_seconds;
-                return cached;
-            }
-            licenseLicensed = false;
-            licenseTrialActive = true;
-            licenseRemainingSeconds = 7 * 24 * 3600;
-            return { licensed: false, trial_active: true, remaining_seconds: licenseRemainingSeconds };
-        }
-    }
-
-    // ---------- License Modal ----------
-    function showLicenseModal(allowCancel = true) {
-        return new Promise(async (resolve) => {
-            const modal = document.getElementById('licenseModal');
-            const messageDiv = document.getElementById('licenseModalMessage');
-            const timerDiv = document.getElementById('licenseTimer');
-            const keyInput = document.getElementById('licenseKeyInput');
-            const cancelBtn = document.getElementById('licenseCancelBtn');
-            const okBtn = document.getElementById('licenseOkBtn');
-
-            if (licenseTimerInterval) clearInterval(licenseTimerInterval);
-            await loadLicenseStatus();
-
-            let message = '';
-            let showTimer = false;
-            let remaining = licenseRemainingSeconds;
-            let isTrialActive = licenseTrialActive;
-
-            if (licenseLicensed) {
-                resolve(true);
-                return;
-            }
-
-            if (isTrialActive && remaining > 0) {
-                const days = Math.floor(remaining / 86400);
-                const hours = Math.floor((remaining % 86400) / 3600);
-                const minutes = Math.floor((remaining % 3600) / 60);
-                const seconds = remaining % 60;
-                let timeStr = '';
-                if (days > 0) timeStr = `${days}d ${hours.toString().padStart(2,'0')}h ${minutes.toString().padStart(2,'0')}m ${seconds.toString().padStart(2,'0')}s`;
-                else if (hours > 0) timeStr = `${hours.toString().padStart(2,'0')}h ${minutes.toString().padStart(2,'0')}m ${seconds.toString().padStart(2,'0')}s`;
-                else timeStr = `${minutes.toString().padStart(2,'0')}:${seconds.toString().padStart(2,'0')}`;
-                message = `Trial version – ${timeStr} remaining.\n\nEnter license key to unlock permanently.\n\nIf you do not have a key, you can still use the trial until it expires.`;
-                showTimer = true;
-                allowCancel = true;
-            } else {
-                message = `Trial period has expired.\n\nYou must enter a valid license key to continue using the software.`;
-                showTimer = false;
-                allowCancel = false;
-            }
-
-            messageDiv.innerText = message;
-            keyInput.value = '';
-            timerDiv.innerText = showTimer ? `Time left: ${formatTime(remaining)}` : '';
-            if (!allowCancel) cancelBtn.style.display = 'none';
-            else cancelBtn.style.display = 'inline-block';
-
-            if (showTimer && remaining > 0) {
-                let currentRemaining = remaining;
-                licenseTimerInterval = setInterval(async () => {
-                    if (currentRemaining <= 0) {
-                        clearInterval(licenseTimerInterval);
-                        await loadLicenseStatus();
-                        timerDiv.innerText = 'Expired';
-                        messageDiv.innerText = `Trial period has expired.\n\nYou must enter a valid license key to continue.`;
-                        cancelBtn.style.display = 'none';
-                        return;
-                    }
-                    currentRemaining--;
-                    timerDiv.innerText = `Time left: ${formatTime(currentRemaining)}`;
-                }, 1000);
-            }
-
-            modal.classList.remove('hidden');
-
-            const handleOk = async () => {
-                const key = keyInput.value.trim();
-                const actRes = await fetch('/api/license/activate', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ key: key })
-                });
-                const actData = await actRes.json();
-                if (actData.success) {
-                    licenseLicensed = true;
-                    modal.classList.add('hidden');
-                    cleanup();
-                    resolve(true);
-                } else {
-                    alert('Invalid license key. Please try again.');
-                }
-            };
-
-            const handleCancel = () => {
-                modal.classList.add('hidden');
-                cleanup();
-                if (isTrialActive && remaining > 0) {
-                    resolve(true);
-                } else {
-                    resolve(false);
-                }
-            };
-
-            const cleanup = () => {
-                if (licenseTimerInterval) clearInterval(licenseTimerInterval);
-                okBtn.removeEventListener('click', handleOk);
-                cancelBtn.removeEventListener('click', handleCancel);
-            };
-
-            okBtn.addEventListener('click', handleOk);
-            cancelBtn.addEventListener('click', handleCancel);
-        });
-    }
-
-    function formatTime(seconds) {
-        const days = Math.floor(seconds / 86400);
-        const hours = Math.floor((seconds % 86400) / 3600);
-        const minutes = Math.floor((seconds % 3600) / 60);
-        const secs = seconds % 60;
-        if (days > 0) return `${days}d ${hours.toString().padStart(2,'0')}h ${minutes.toString().padStart(2,'0')}m ${secs.toString().padStart(2,'0')}s`;
-        if (hours > 0) return `${hours.toString().padStart(2,'0')}h ${minutes.toString().padStart(2,'0')}m ${secs.toString().padStart(2,'0')}s`;
-        return `${minutes.toString().padStart(2,'0')}:${secs.toString().padStart(2,'0')}`;
-    }
-
     // =============================================================
-    //  NEW: Load Products with Dexie integration (Screen version)
+    //  DEXIE-FIRST PRODUCT LOADING (Screens)
     // =============================================================
     async function loadProducts() {
         updateOfflineBanner();
         const noProductsBanner = document.getElementById('noProductsBanner');
         noProductsBanner.classList.add('hidden');
 
+        if (!db) {
+            console.warn('Dexie not available');
+            return;
+        }
+
         let prods = [];
-        let fromCache = false;
 
-        // Try to fetch from API if online
-        if (navigator.onLine) {
-            try {
-                const res = await fetch('/api/sales/products?category=Screen');
-                if (!res.ok) throw new Error();
-                prods = await res.json();
-                // Store in Dexie
-                if (db) {
-                    // Ensure each product has product_id
-                    for (const p of prods) {
-                        if (!p.product_id) {
-                            p.product_id = Date.now() + '_' + Math.random().toString(36).substr(2,6);
-                        }
-                    }
-                    await db.products.bulkPut(prods);
-                    // Store batches
-                    const batchMap = {};
-                    for (const p of prods) {
-                        if (p.batches && p.batches.length) {
-                            for (const b of p.batches) {
-                                if (!b.product_id) b.product_id = p.product_id;
-                                batchMap[b.batch_id] = b;
-                            }
-                        }
-                    }
-                    const batchList = Object.values(batchMap);
-                    if (batchList.length) {
-                        await db.batches.bulkPut(batchList);
-                    }
-                    console.log('✅ Screen products and batches stored in Dexie');
-                }
-            } catch (err) {
-                console.warn('Offline – using Dexie cached screens');
-                fromCache = true;
-                // fall through to Dexie
+        // 1. Always read from Dexie first
+        try {
+            const cached = await db.products.where('category').equals('Screen').toArray();
+            // Attach batches from db.batches
+            for (const p of cached) {
+                const batches = await db.batches.where('product_id').equals(p.id).toArray();
+                p.batches = batches;
+                p.stock = batches.reduce((sum, b) => sum + (b.remaining_quantity || 0), 0);
             }
+            prods = cached;
+            console.log('📦 Loaded screen products from Dexie:', prods.length);
+        } catch (e) {
+            console.warn('Failed to read from Dexie:', e);
         }
 
-        // If no data from API (or offline), read from Dexie
-        if (prods.length === 0) {
-            try {
-                if (db) {
-                    const cached = await db.products.where('category').equals('Screen').toArray();
-                    if (cached.length > 0) {
-                        prods = cached;
-                        // Ensure batches are attached
-                        for (const p of prods) {
-                            if (p.batches && p.batches.length) continue;
-                            const batches = await db.batches.where('product_id').equals(p.product_id).toArray();
-                            if (batches.length) {
-                                p.batches = batches;
-                            }
-                        }
-                        fromCache = true;
-                        console.log('📦 Loaded screen products from Dexie');
-                    }
+        if (prods.length > 0) {
+            // Group products by name+brand
+            const grouped = {};
+            prods.forEach(p => {
+                const key = `${p.name}|${p.brand}`;
+                if (!grouped[key]) {
+                    grouped[key] = {
+                        ...p,
+                        stock: 0,
+                        batches: []
+                    };
                 }
-            } catch (e) {
-                console.warn('Failed to read from Dexie:', e);
-            }
-        }
-
-        if (!prods || prods.length === 0) {
+                grouped[key].stock += p.stock || 0;
+                if (p.batches && p.batches.length > 0) {
+                    grouped[key].batches = grouped[key].batches.concat(p.batches);
+                }
+            });
+            products = Object.values(grouped);
+            renderProductList(products);
+        } else {
+            // No data in Dexie – show empty state
             document.getElementById('productList').innerHTML = '';
             noProductsBanner.classList.remove('hidden');
-            if (fromCache) {
+            if (!navigator.onLine) {
                 document.getElementById('productList').innerHTML = 
                     '<div class="text-gray-500 p-2">No cached screens – connect to refresh</div>';
             }
             products = [];
-            return;
         }
 
-        // Group products by name+brand
-        const grouped = {};
-        prods.forEach(p => {
-            const key = `${p.name}|${p.brand}`;
-            if (!grouped[key]) {
-                grouped[key] = {
-                    ...p,
-                    stock: 0,
-                    batches: p.batches || []
-                };
-            }
-            grouped[key].stock += p.stock || 0;
-            if (p.batches && p.batches.length > 0) {
-                grouped[key].batches = grouped[key].batches.concat(p.batches);
-            }
-        });
-
-        products = Object.values(grouped);
-
-        if (products.length === 0) {
-            document.getElementById('productList').innerHTML = '';
-            noProductsBanner.classList.remove('hidden');
-        } else {
-            renderProductList(products);
+        // 2. If online, refresh in background (non‑blocking)
+        if (navigator.onLine) {
+            refreshProductsFromAPI().catch(err => console.warn('Background refresh failed:', err));
         }
     }
 
-    // ✅ Renders grouped products with batch count and status
+    // ---------- Background refresh from API ----------
+    async function refreshProductsFromAPI() {
+        try {
+            const res = await fetch('/api/sales/products?category=Screen');
+            if (!res.ok) throw new Error();
+            const apiProds = await res.json();
+            if (!apiProds.length) return;
+
+            // Store in Dexie
+            if (db) {
+                for (const p of apiProds) {
+                    if (!p.product_id) {
+                        p.product_id = Date.now() + '_' + Math.random().toString(36).substr(2,6);
+                    }
+                    await db.products.put({
+                        id: p.product_id,
+                        name: p.name,
+                        brand: p.brand,
+                        category: 'Screen',
+                        cost_price: p.cost_price,
+                        selling_price: p.selling_price,
+                        stock: p.stock,
+                        discount: p.discount || 0
+                    });
+                    // Store batches
+                    if (p.batches && p.batches.length) {
+                        for (const b of p.batches) {
+                            await db.batches.put({
+                                id: b.batch_id,
+                                product_id: p.product_id,
+                                quantity: b.batch_quantity || b.remaining_quantity,
+                                remaining_quantity: b.remaining_quantity,
+                                cost_price: b.cost_price,
+                                selling_price: b.selling_price,
+                                discount: b.discount || 0,
+                                claimed_quantity: b.claimed_quantity || 0,
+                                date: b.date,
+                                action: b.action || '',
+                                source: b.source || '',
+                                is_faulty: b.is_faulty || false
+                            });
+                        }
+                    }
+                }
+                // Reload from Dexie to reflect fresh data
+                await loadProducts();
+            }
+        } catch (e) {
+            console.warn('Background refresh failed:', e);
+        }
+    }
+
+    // ---------- Render product list ----------
     function renderProductList(prods) {
         const container = document.getElementById('productList');
         if (!prods.length) {
@@ -550,12 +395,11 @@
     }
     window.refreshProducts = refreshProducts;
 
-    // ✅ Shows batch count and status in selection info
+    // ---------- Select product ----------
     function selectProduct(product) {
         currentProduct = product;
         const batchCount = product.batches ? product.batches.length : 0;
         
-        // Check for faulty batches
         let hasFaulty = false;
         let faultyCount = 0;
         let faultyBatches = [];
@@ -570,7 +414,7 @@
                 if (claimed > 0 || batch.is_faulty) {
                     hasFaulty = true;
                     faultyCount += claimed;
-                    faultyBatches.push(batch.batch_id);
+                    faultyBatches.push(batch.id);
                 }
                 goodStock += remaining - claimed;
             });
@@ -596,7 +440,7 @@
         renderProductList(filtered);
     });
 
-    // ========== UPDATED BATCH SELECTOR WITH STOCK BREAKDOWN ==========
+    // ========== BATCH SELECTOR – Dexie‑first ==========
     async function openBatchSelector(product, qty) {
         currentProductForBatch = product;
         neededQty = qty;
@@ -604,48 +448,16 @@
 
         console.log('🔍 Opening batch selector for screen:', product.name);
         console.log('📦 Product stock:', product.stock);
-        console.log('📦 Product has batches?', product.batches ? product.batches.length : 0);
 
-        const cacheKey = `batches_${product.name}_${product.brand}`;
-
+        // 1. Attempt to get batches from the product object (already attached from Dexie)
         if (product.batches && product.batches.length > 0) {
-            console.log('📦 Using batches from product object:', product.batches.length);
             batches = product.batches;
+            console.log('📦 Using batches from product object:', batches.length);
         } else {
-            // Try API first
-            try {
-                const url = `/api/sales/batches/by_name?name=${encodeURIComponent(product.name)}&brand=${encodeURIComponent(product.brand)}`;
-                console.log('🔍 Fetching from:', url);
-                const res = await fetch(url);
-                if (res.ok) {
-                    batches = await res.json();
-                    console.log('📦 Fetched batches:', batches.length);
-                    if (batches.length > 0) {
-                        try { localStorage.setItem(cacheKey, JSON.stringify(batches)); } catch(e) {}
-                    }
-                } else {
-                    console.warn('⚠️ API returned error:', res.status);
-                }
-            } catch (err) {
-                console.warn('⚠️ Error fetching batches:', err);
-            }
-            
-            if (batches.length === 0 && product.id) {
+            // 2. If not attached, read from Dexie directly
+            if (db) {
                 try {
-                    const res = await fetch(`/api/sales/batches/${product.id}`);
-                    if (res.ok) {
-                        batches = await res.json();
-                        console.log('📦 Fetched by product ID:', batches.length);
-                    }
-                } catch (err) {
-                    console.warn('⚠️ Error fetching by ID:', err);
-                }
-            }
-            
-            // If still no batches, try Dexie
-            if (batches.length === 0 && db) {
-                try {
-                    const cachedBatches = await db.batches.where('product_id').equals(product.product_id).toArray();
+                    const cachedBatches = await db.batches.where('product_id').equals(product.id).toArray();
                     if (cachedBatches && cachedBatches.length > 0) {
                         batches = cachedBatches;
                         console.log('📦 Loaded batches from Dexie:', batches.length);
@@ -654,48 +466,36 @@
                     console.warn('Failed to read batches from Dexie:', e);
                 }
             }
-            
-            // Fallback to localStorage cache
-            if (batches.length === 0) {
-                try {
-                    const cached = localStorage.getItem(cacheKey);
-                    if (cached) {
-                        const parsed = JSON.parse(cached);
-                        if (parsed && parsed.length > 0) {
-                            batches = parsed;
-                            console.log('📦 Using cached batches from localStorage:', batches.length);
-                        }
-                    }
-                } catch(e) {}
-            }
         }
 
-        // Filter only batches with remaining stock
-        let filteredBatches = batches.filter(b => b.remaining_quantity > 0);
-        console.log(`📊 ${filteredBatches.length} batches with stock available`);
-
-        if (filteredBatches.length === 0 && product.stock > 0) {
+        // 3. If still no batches and we have stock, create a fallback batch
+        if (batches.length === 0 && product.stock > 0) {
             console.warn('⚠️ No batches found, creating fallback batch from product stock');
-            filteredBatches = [{
-                batch_id: product.id || 'fallback',
+            batches = [{
+                id: 'fallback_' + product.id,
+                product_id: product.id,
                 remaining_quantity: product.stock,
                 selling_price: product.selling_price,
                 cost_price: product.cost_price || 0,
-                batch_quantity: product.stock,
+                quantity: product.stock,
                 is_fallback: true,
                 is_faulty: false,
                 claimed_quantity: 0
             }];
         }
 
-        currentBatches = filteredBatches;
+        // Filter only batches with remaining stock
+        let filteredBatches = batches.filter(b => b.remaining_quantity > 0);
+        console.log(`📊 ${filteredBatches.length} batches with stock available`);
 
-        if (currentBatches.length === 0) {
+        if (filteredBatches.length === 0) {
             alert(`❌ No available stock for ${product.name}. Please check inventory.`);
             return false;
         }
 
-        // Build the batch selection UI with stock breakdown
+        currentBatches = filteredBatches;
+
+        // Build the batch selection UI with stock breakdown (unchanged UI)
         const container = document.getElementById('batchList');
         container.innerHTML = '';
         batchSelection = [];
@@ -722,7 +522,7 @@
         for (const batch of currentBatches) {
             const remaining = batch.remaining_quantity || 0;
             const claimed = batch.claimed_quantity || 0;
-            const totalQty = batch.batch_quantity || batch.quantity || remaining + claimed;
+            const totalQty = batch.quantity || batch.batch_quantity || remaining + claimed;
             const sold = totalQty - remaining;
             const good = remaining - claimed;
             
@@ -739,7 +539,7 @@
             cb.className = 'w-5 h-5 cursor-pointer';
             
             const batchIdSpan = document.createElement('span');
-            batchIdSpan.innerText = batch.is_fallback ? '⚠️ FALLBACK' : batch.batch_id;
+            batchIdSpan.innerText = batch.is_fallback ? '⚠️ FALLBACK' : batch.id;
             batchIdSpan.className = 'text-sm';
             if (batch.is_fallback) {
                 batchIdSpan.classList.add('text-orange-600', 'font-bold');
@@ -787,7 +587,7 @@
                 batch, 
                 checkbox: cb, 
                 qtyInput, 
-                batchId: batch.batch_id,
+                batchId: batch.id,
                 isFaulty: isFaulty,
                 goodStock: good
             });
@@ -1252,9 +1052,23 @@
             console.warn('Network error, saving sale offline:', error);
             
             if (!navigator.onLine) {
-                if (typeof savePendingSale === 'function') {
-                    savePendingSale(payload);
+                // Use central pending operation
+                if (typeof savePendingOperation === 'function') {
+                    try {
+                        await savePendingOperation('sales', 'add', 'temp_' + Date.now(), payload);
+                        alert('Sale saved locally. It will be synced when you reconnect.');
+                    } catch (e) {
+                        console.error('Failed to save pending sale:', e);
+                        alert('Could not save sale offline. Please try again.');
+                    }
+                } else {
+                    // Fallback to legacy localStorage (if sync.js not loaded)
+                    console.warn('savePendingOperation not available, using localStorage fallback');
+                    if (typeof savePendingSale === 'function') {
+                        savePendingSale(payload);
+                    }
                 }
+                
                 if (typeof updatePendingBadge === 'function') {
                     updatePendingBadge();
                 }
@@ -1324,7 +1138,7 @@
         document.getElementById('paymentModal').classList.remove('hidden');
     });
 
-    // ---------- Confirm Payment Button ----------
+    // ---------- Confirm Payment Button (License REMOVED) ----------
     document.getElementById('confirmPaymentBtn').addEventListener('click', async () => {
         console.log("🔘 Confirm button clicked. Current payment method:", selectedPaymentMethod);
         
@@ -1350,25 +1164,8 @@
         
         closePaymentModal();
         
-        const licenseData = await loadLicenseStatus();
-        let canProceed = false;
-
-        if (licenseData.licensed) {
-            canProceed = true;
-        } else if (licenseData.trial_active && licenseData.remaining_seconds > 0) {
-            const userChoice = await showLicenseModal(true);
-            canProceed = true;
-        } else {
-            const activated = await showLicenseModal(false);
-            canProceed = activated;
-        }
-
-        if (canProceed) {
-            await executeSaleWithPayment(paymentMethodToUse, chequeNumberToUse);
-        } else {
-            pendingSaleCallback = null;
-            alert('Sale cancelled. License required to complete sale.');
-        }
+        // ✅ License check removed – proceed directly to sale
+        await executeSaleWithPayment(paymentMethodToUse, chequeNumberToUse);
     });
 
     document.getElementById('cancelPaymentBtn').addEventListener('click', () => {
@@ -1408,29 +1205,34 @@
     // ---------- Online/Offline refresh ----------
     window.addEventListener('online', function() {
         loadProducts();
-        loadLicenseStatus();
-        const pendingSales = localStorage.getItem('pending_sales');
-        if (pendingSales) {
-            console.log('📤 Found pending sales to sync');
-            document.getElementById('receiptPreview').innerHTML = `
-                <div class="bg-blue-100 border border-blue-400 text-blue-700 p-3 rounded">
-                    <strong>🔄 Syncing pending sales...</strong><br>
-                    You have pending offline sales. They will be synced automatically.
-                </div>
-            `;
+        // Check for pending sales and prompt sync
+        if (typeof getPendingCount === 'function') {
+            getPendingCount().then(count => {
+                if (count > 0) {
+                    document.getElementById('receiptPreview').innerHTML = `
+                        <div class="bg-blue-100 border border-blue-400 text-blue-700 p-3 rounded">
+                            <strong>🔄 Syncing pending sales...</strong><br>
+                            You have ${count} pending sales. They will be synced automatically.
+                        </div>
+                    `;
+                }
+            });
         }
     });
 
     // ---------- Initialization ----------
     document.addEventListener('DOMContentLoaded', function() {
         loadProducts();
-        loadLicenseStatus();
         if (typeof updatePendingBadge === 'function') updatePendingBadge();
         setDefaultDateTime();
         
-        const pendingSales = localStorage.getItem('pending_sales');
-        if (pendingSales) {
-            console.log('📤 Found pending sales on load');
+        // Check for pending sales
+        if (typeof getPendingCount === 'function') {
+            getPendingCount().then(count => {
+                if (count > 0) {
+                    console.log(`📤 Found ${count} pending sales on load`);
+                }
+            });
         }
     });
 </script>

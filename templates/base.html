@@ -39,8 +39,8 @@
         /* === RESET & BASE === */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body { height: 100%; }
-        body { 
-            background: #f3f4f6; 
+        body {
+            background: #f3f4f6;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             overflow: hidden;
         }
@@ -374,6 +374,37 @@
             background: transparent;
             pointer-events: none;
         }
+
+        /* ===== SYNC OVERLAY ===== */
+        #syncOverlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 9999;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.2rem;
+            flex-direction: column;
+        }
+        #syncOverlay.active {
+            display: flex;
+        }
+        #syncOverlay .sync-progress-bar {
+            width: 200px;
+            height: 4px;
+            background: #555;
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: 1rem;
+        }
+        #syncOverlay .sync-progress-bar .fill {
+            width: 0%;
+            height: 100%;
+            background: #00CFCF;
+            transition: width 0.3s ease;
+        }
     </style>
 </head>
 <body>
@@ -406,6 +437,16 @@
             <button class="pin-key" data-value="0">0</button>
             <button class="pin-key" data-value="enter">↵</button>
         </div>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SYNC OVERLAY (initially hidden)                              -->
+<!-- ============================================================ -->
+<div id="syncOverlay">
+    <div id="syncMessage">⏳ Syncing data…</div>
+    <div class="sync-progress-bar">
+        <div id="syncProgressFill" class="fill" style="width:0%;"></div>
     </div>
 </div>
 
@@ -701,7 +742,6 @@
     // ============================================================
     (function checkVersion() {
         if (!isAppMode()) return;
-        // ✅ Skip on public pages (login, signup)
         const currentPath = window.location.pathname;
         if (['/login', '/signup'].includes(currentPath)) return;
         const urlParams = new URLSearchParams(window.location.search);
@@ -720,7 +760,6 @@
                 font-family: -apple-system, BlinkMacSystemFont, sans-serif;
             `;
             document.body.appendChild(toast);
-            // ✅ Redirect to login with reinstall parameter to break loop
             setTimeout(() => { window.location.href = '/login?reinstall=true'; }, 2000);
         }
     })();
@@ -847,97 +886,84 @@
     }
 
     // ============================================================
-    //  FULL DATA SYNC FOR OFFLINE USAGE
-    //  (now called on every online load, not only app mode)
+    //  SYNC OVERLAY CONTROLS
     // ============================================================
-    async function fetchAndStoreAllData() {
-        if (!db) {
-            console.warn('❌ Dexie not available – skipping data sync');
+    function showSyncOverlay(message = '⏳ Syncing data…', progress = 0) {
+        const overlay = document.getElementById('syncOverlay');
+        document.getElementById('syncMessage').textContent = message;
+        document.getElementById('syncProgressFill').style.width = Math.min(progress, 100) + '%';
+        overlay.classList.add('active');
+    }
+
+    function updateSyncProgress(message, progress) {
+        document.getElementById('syncMessage').textContent = message;
+        document.getElementById('syncProgressFill').style.width = Math.min(progress, 100) + '%';
+    }
+
+    function hideSyncOverlay() {
+        document.getElementById('syncOverlay').classList.remove('active');
+        // Reset progress for next time
+        document.getElementById('syncProgressFill').style.width = '0%';
+    }
+
+    // ============================================================
+    //  FULL DATA SYNC (wrapper using new sync.js functions)
+    // ============================================================
+    async function performFullSync(showProgress = true) {
+        if (!navigator.onLine) {
+            console.warn('⚠️ Offline – sync skipped');
             return;
         }
-        console.log('📥 Fetching all data for offline use...');
+        if (!db) {
+            console.warn('⚠️ Dexie not available');
+            return;
+        }
+
+        if (showProgress) {
+            showSyncOverlay('📥 Pulling latest data…', 10);
+        }
         try {
-            const res = await fetch('/api/sync/all');
-            if (!res.ok) throw new Error('Failed to fetch sync data');
-            const data = await res.json();
+            // Pull data from server
+            await pullData();
+            if (showProgress) updateSyncProgress('📤 Pushing pending changes…', 60);
 
-            const tables = {
-                products: data.products,
-                batches: data.batches,
-                sales: data.sales,
-                sales_items: data.sales_items,
-                claims: data.claims,
-                deleted_products: data.deleted_products
-            };
+            // Push pending operations
+            await pushPending();
+            if (showProgress) updateSyncProgress('✅ Sync completed!', 100);
 
-            for (const [tableName, items] of Object.entries(tables)) {
-                if (!db[tableName]) {
-                    await db.cache.put({ key: tableName, value: items, timestamp: Date.now() });
-                    console.log(`✅ Stored ${items.length} ${tableName} in cache`);
-                } else {
-                    await db[tableName].clear();
-                    if (items.length > 0) {
-                        await db[tableName].bulkAdd(items);
-                    }
-                    console.log(`✅ Stored ${items.length} ${tableName}`);
-                }
+            // Update pending badge
+            if (typeof updatePendingBadge === 'function') updatePendingBadge();
+
+            // Hide overlay after a short delay
+            if (showProgress) {
+                setTimeout(() => {
+                    hideSyncOverlay();
+                }, 800);
             }
-
-            await db.cache.put({ key: 'last_full_sync', value: Date.now(), timestamp: Date.now() });
-            console.log('✅ Full data sync completed.');
+            console.log('✅ Full sync completed.');
         } catch (err) {
-            console.warn('❌ Full data sync failed:', err);
-        }
-    }
-
-    // ============================================================
-    //  HOURLY OFFLINE PROMPT (PWA ONLY)
-    // ============================================================
-    let offlinePromptInterval = null;
-
-    function startOfflinePrompt() {
-        if (!isAppMode()) return;
-        if (offlinePromptInterval) {
-            clearInterval(offlinePromptInterval);
-            offlinePromptInterval = null;
-        }
-        offlinePromptInterval = setInterval(() => {
-            if (!navigator.onLine) {
-                showOfflineReminder();
+            console.error('❌ Full sync error:', err);
+            if (showProgress) {
+                updateSyncProgress('❌ Sync failed – some data may be outdated.', 100);
+                setTimeout(() => hideSyncOverlay(), 2000);
             }
-        }, 60 * 60 * 1000);
+        }
     }
 
-    function showOfflineReminder() {
-        if (document.getElementById('offlineReminderToast')) return;
-        const toast = document.createElement('div');
-        toast.id = 'offlineReminderToast';
-        toast.innerHTML = `
-            <span>⚠️ You have been offline for over an hour. Please connect to the internet to sync your data.</span>
-            <button id="offlineReminderBtn" class="ml-2 bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm font-semibold">
-                Go Online
-            </button>
-            <button id="offlineReminderDismiss" class="ml-2 text-gray-400 hover:text-gray-600 text-sm">✕</button>
-        `;
-        toast.style.cssText = `
-            position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
-            background: #FEF3C7; color: #92400E; padding: 12px 20px;
-            border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-            z-index: 9999; font-size: 14px; max-width: 90vw;
-            display: flex; align-items: center; gap: 12px;
-            border: 1px solid #F59E0B;
-            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-        `;
-        document.body.appendChild(toast);
-
-        document.getElementById('offlineReminderBtn').addEventListener('click', function() {
-            alert('Please connect to the internet and refresh the page.');
-            toast.remove();
-        });
-        document.getElementById('offlineReminderDismiss').addEventListener('click', function() {
-            toast.remove();
-        });
-    }
+    // ============================================================
+    //  UNIFIED SYNC (called from the sidebar button)
+    // ============================================================
+    window.syncAllPending = async function() {
+        if (!isAppMode()) {
+            console.log('🌐 Browser mode – sync is not needed.');
+            return;
+        }
+        if (!navigator.onLine) {
+            alert('You are offline. Please connect to the internet to sync.');
+            return;
+        }
+        await performFullSync(true);
+    };
 
     // ============================================================
     //  INSTALL PASSWORD LOGIC (only if the button exists)
@@ -1145,9 +1171,7 @@
             document.getElementById('reminderActionBtn').addEventListener('click', function() {
                 if (navigator.onLine) {
                     toast.remove();
-                    if (typeof window.syncAllPending === 'function') {
-                        window.syncAllPending();
-                    }
+                    window.syncAllPending();
                 } else {
                     alert('You are offline. Please connect to the internet and try again.');
                 }
@@ -1160,64 +1184,7 @@
     }
 
     // ============================================================
-    //  UNIFIED SYNC (only in app mode)
-    // ============================================================
-    window.syncAllPending = async function() {
-        if (!isAppMode()) {
-            console.log('🌐 Browser mode – sync is not needed.');
-            return;
-        }
-        if (!navigator.onLine) {
-            alert('You are offline. Please connect to the internet to sync.');
-            return;
-        }
-        console.log('🔄 Syncing all pending data...');
-        try {
-            if (typeof pushPending === 'function' && typeof pullData === 'function') {
-                await pushPending();
-                await pullData();
-                console.log('✅ Dexie sync completed.');
-            } else {
-                if (typeof syncPendingSales === 'function') await syncPendingSales();
-                if (typeof syncPendingPurchases === 'function') await syncPendingPurchases();
-                if (typeof syncPendingProductDeletions === 'function') await syncPendingProductDeletions();
-                if (typeof syncPendingBatchDeletions === 'function') await syncPendingBatchDeletions();
-                console.log('✅ Legacy sync completed.');
-            }
-            updatePendingBadge();
-            setLastSync();
-            const badge = document.getElementById('pending-badge');
-            let message = '✅ All pending items synced successfully!';
-            if (badge && badge.style.display !== 'none') {
-                message = '⚠️ Some items could not be synced.';
-            }
-            const toast = document.createElement('div');
-            toast.textContent = message;
-            toast.style.cssText = `
-                position: fixed; bottom: 20px; right: 20px;
-                background: ${message.includes('⚠️') ? '#EF4444' : '#10B981'};
-                color: white; padding: 12px 24px;
-                border-radius: 8px; z-index: 9999;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-                transition: opacity 0.5s;
-                font-size: 14px;
-                max-width: 90vw;
-            `;
-            document.body.appendChild(toast);
-            setTimeout(() => {
-                toast.style.opacity = '0';
-                setTimeout(() => toast.remove(), 500);
-            }, 3000);
-            const reminder = document.getElementById('syncReminderToast');
-            if (reminder) reminder.remove();
-        } catch (err) {
-            console.error('Sync error:', err);
-            alert('Sync failed. Please try again.');
-        }
-    };
-
-    // ============================================================
-    //  INITIALIZATION – FIXED: no forced server check, always use stored session first
+    //  INITIALIZATION
     // ============================================================
     document.addEventListener('DOMContentLoaded', function() {
         const yearSpan = document.getElementById('footerYear');
@@ -1251,60 +1218,42 @@
             const storedSession = getStoredSession();
             const sessionValid = isSessionValid(storedSession);
 
-            let isLoggedIn = sessionValid; // default: rely on stored session
+            let isLoggedIn = sessionValid;
 
-            // 2. If online, refresh session from server (but never clear local session)
+            // 2. If online, refresh session from server
             if (navigator.onLine) {
                 try {
                     const res = await fetch('/api/auth/check');
                     const data = await res.json();
                     if (data.logged_in) {
-                        // Update stored session with fresh user info
                         setStoredSession({ username: data.username, role: data.role, id: data.id });
                         isLoggedIn = true;
                     } else {
-                        // Server says not logged in, but we keep our local session if valid
-                        // isLoggedIn remains sessionValid
                         console.log('🔑 Server says not logged in, but stored session is valid – keeping it');
                     }
                 } catch (e) {
-                    // Network error – ignore, we'll use stored session if valid
                     console.log('🌐 Network error during session check – using stored session');
                 }
             }
 
             if (!isLoggedIn) {
-                // No valid session – go to login
                 clearSession();
                 window.location.href = '/login';
                 return;
             }
 
-            // At this point we have a valid session (stored or fresh)
-            // Pre‑cache all protected pages (service worker) – for both browser and PWA
+            // Pre‑cache all protected pages (service worker)
             cacheAllPages();
 
-            // ===== DATA SYNC: fetch all data for offline use =====
+            // ===== DATA SYNC: pull latest + push pending =====
             if (navigator.onLine) {
-                // Download all data for offline use (now always runs, not only in PWA)
-                await fetchAndStoreAllData();
-
-                // Full sync (push pending + pull) – if available
-                if (typeof fullSync === 'function') {
-                    try {
-                        await fullSync();
-                        console.log('✅ Full sync completed.');
-                    } catch (e) {
-                        console.warn('Full sync failed:', e);
-                    }
-                } else if (typeof window.syncAllPending === 'function') {
-                    await window.syncAllPending();
-                }
+                // Perform full sync with progress overlay
+                await performFullSync(true);
 
                 // Periodic full sync every 5 minutes while online
                 setInterval(() => {
-                    if (navigator.onLine && typeof fullSync === 'function') {
-                        fullSync();
+                    if (navigator.onLine) {
+                        performFullSync(false); // silent background sync
                     }
                 }, 5 * 60 * 1000);
 
@@ -1344,13 +1293,7 @@
     window.addEventListener('online', function() {
         if (!isAppMode()) return;
         console.log('🌐 Connection restored – syncing all pending items...');
-        // Re-fetch all data
-        fetchAndStoreAllData();
-        if (typeof fullSync === 'function') {
-            fullSync().catch(err => console.warn('fullSync error:', err));
-        } else {
-            window.syncAllPending();
-        }
+        performFullSync(true);
         const reminder = document.getElementById('syncReminderToast');
         if (reminder) reminder.remove();
         cacheAllPages();
@@ -1360,6 +1303,9 @@
         if (window.innerWidth >= 768) closeSidebar();
     });
 
+    // ============================================================
+    //  UPDATE PENDING BADGE (using db.pending_ops)
+    // ============================================================
     async function updatePendingBadge() {
         if (!isAppMode()) {
             const badge = document.getElementById('pending-badge');
@@ -1383,6 +1329,20 @@
             console.warn('Error updating pending badge:', e);
         }
     }
+
+    // Expose updatePendingBadge globally
+    window.updatePendingBadge = updatePendingBadge;
+
+    // ============================================================
+    //  Legacy fetchAndStoreAllData (kept for compatibility)
+    // ============================================================
+    window.fetchAndStoreAllData = async function() {
+        console.warn('⚠️ fetchAndStoreAllData is deprecated – use fullSync() instead.');
+        // Forward to pullData (which does the same)
+        if (typeof pullData === 'function') {
+            await pullData();
+        }
+    };
 </script>
 </body>
 </html>
