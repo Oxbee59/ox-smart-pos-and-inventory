@@ -225,7 +225,7 @@
     window.clearOfflineData = clearOfflineData;
 
     // =============================================================
-    //  DEXIE-FIRST PRODUCT LOADING
+    //  API-FIRST PRODUCT LOADING
     // =============================================================
     async function loadProducts() {
         updateOfflineBanner();
@@ -238,27 +238,51 @@
         }
 
         let prods = [];
+        let apiSuccess = false;
 
-        // 1. Always read from Dexie first
-        try {
-            // Get products with category != 'Screen' (or empty category treated as Accessory)
-            let cached = await db.products.where('category').notEqual('Screen').toArray();
-            const uncategorized = await db.products.where('category').equals('').toArray();
-            cached = cached.concat(uncategorized);
-
-            // Attach batches from db.batches
-            for (const p of cached) {
-                const batches = await db.batches.where('product_id').equals(p.id).toArray();
-                p.batches = batches;
-                p.stock = batches.reduce((sum, b) => sum + (b.remaining_quantity || 0), 0);
+        // 1. Try API first (if online)
+        if (navigator.onLine) {
+            try {
+                const res = await fetch('/api/sales/products?exclude_category=Screen');
+                if (res.ok) {
+                    const apiProds = await res.json();
+                    if (apiProds.length > 0) {
+                        // Store in Dexie
+                        await storeProductsInDexie(apiProds);
+                        // Build product list from API data directly
+                        prods = apiProds.map(p => ({
+                            ...p,
+                            stock: p.batches ? p.batches.reduce((s, b) => s + b.remaining_quantity, 0) : 0,
+                            batches: p.batches || []
+                        }));
+                        apiSuccess = true;
+                        console.log('📦 Loaded products from API:', prods.length);
+                    }
+                }
+            } catch (e) {
+                console.warn('API failed, using Dexie fallback');
             }
-            prods = cached;
-            console.log('📦 Loaded products from Dexie:', prods.length);
-        } catch (e) {
-            console.warn('Failed to read from Dexie:', e);
         }
 
-        // If we have data, render immediately
+        // 2. If API failed or offline, read from Dexie
+        if (!apiSuccess || !navigator.onLine) {
+            try {
+                let cached = await db.products.where('category').notEqual('Screen').toArray();
+                const uncategorized = await db.products.where('category').equals('').toArray();
+                cached = cached.concat(uncategorized);
+                for (const p of cached) {
+                    const batches = await db.batches.where('product_id').equals(p.id).toArray();
+                    p.batches = batches;
+                    p.stock = batches.reduce((sum, b) => sum + (b.remaining_quantity || 0), 0);
+                }
+                prods = cached;
+                console.log('📦 Loaded products from Dexie:', prods.length);
+            } catch (e) {
+                console.warn('Failed to read from Dexie:', e);
+            }
+        }
+
+        // 3. Render
         if (prods.length > 0) {
             // Group products by name+brand
             const grouped = {};
@@ -271,7 +295,6 @@
                         batches: []
                     };
                 }
-                // Merge batches and stock
                 grouped[key].stock += p.stock || 0;
                 if (p.batches && p.batches.length > 0) {
                     grouped[key].batches = grouped[key].batches.concat(p.batches);
@@ -280,7 +303,6 @@
             products = Object.values(grouped);
             renderProductList(products);
         } else {
-            // No data in Dexie – show empty state
             document.getElementById('productList').innerHTML = '';
             noProductsBanner.classList.remove('hidden');
             if (!navigator.onLine) {
@@ -289,62 +311,48 @@
             }
             products = [];
         }
-
-        // 2. If online, refresh in background (non‑blocking)
-        if (navigator.onLine) {
-            refreshProductsFromAPI().catch(err => console.warn('Background refresh failed:', err));
-        }
     }
 
-    // ---------- Background refresh from API ----------
-    async function refreshProductsFromAPI() {
+    // ---------- Store products in Dexie ----------
+    async function storeProductsInDexie(apiProds) {
+        if (!db) return;
         try {
-            const res = await fetch('/api/sales/products?exclude_category=Screen');
-            if (!res.ok) throw new Error();
-            const apiProds = await res.json();
-            if (!apiProds.length) return;
-
-            // Store in Dexie
-            if (db) {
-                for (const p of apiProds) {
-                    if (!p.product_id) {
-                        p.product_id = Date.now() + '_' + Math.random().toString(36).substr(2,6);
-                    }
-                    await db.products.put({
-                        id: p.product_id,
-                        name: p.name,
-                        brand: p.brand,
-                        category: p.category || '',
-                        cost_price: p.cost_price,
-                        selling_price: p.selling_price,
-                        stock: p.stock,
-                        discount: p.discount || 0
-                    });
-                    // Store batches
-                    if (p.batches && p.batches.length) {
-                        for (const b of p.batches) {
-                            await db.batches.put({
-                                id: b.batch_id,
-                                product_id: p.product_id,
-                                quantity: b.batch_quantity || b.remaining_quantity,
-                                remaining_quantity: b.remaining_quantity,
-                                cost_price: b.cost_price,
-                                selling_price: b.selling_price,
-                                discount: b.discount || 0,
-                                claimed_quantity: b.claimed_quantity || 0,
-                                date: b.date,
-                                action: b.action || '',
-                                source: b.source || '',
-                                is_faulty: b.is_faulty || false
-                            });
-                        }
+            for (const p of apiProds) {
+                if (!p.product_id) {
+                    p.product_id = Date.now() + '_' + Math.random().toString(36).substr(2,6);
+                }
+                await db.products.put({
+                    id: p.product_id,
+                    name: p.name,
+                    brand: p.brand,
+                    category: p.category || '',
+                    cost_price: p.cost_price,
+                    selling_price: p.selling_price,
+                    stock: p.stock,
+                    discount: p.discount || 0
+                });
+                if (p.batches && p.batches.length > 0) {
+                    for (const b of p.batches) {
+                        await db.batches.put({
+                            id: b.batch_id,
+                            product_id: p.product_id,
+                            quantity: b.batch_quantity || b.remaining_quantity,
+                            remaining_quantity: b.remaining_quantity,
+                            cost_price: b.cost_price,
+                            selling_price: b.selling_price,
+                            discount: b.discount || 0,
+                            claimed_quantity: b.claimed_quantity || 0,
+                            date: b.date,
+                            action: b.action || '',
+                            source: b.source || '',
+                            is_faulty: b.is_faulty || false
+                        });
                     }
                 }
-                // Reload from Dexie to reflect fresh data
-                await loadProducts();
             }
+            console.log('✅ Stored products in Dexie');
         } catch (e) {
-            console.warn('Background refresh failed:', e);
+            console.warn('Failed to store in Dexie:', e);
         }
     }
 
@@ -360,7 +368,6 @@
             const btn = document.createElement('button');
             btn.className = 'w-full text-left px-3 py-2 hover:bg-gray-100 rounded-lg border-b';
             
-            // Check stock breakdown
             let hasFaulty = false;
             let faultyCount = 0;
             let goodStock = 0;
@@ -463,7 +470,7 @@
         console.log('🔍 Opening batch selector for:', product.name);
         console.log('📦 Product stock:', product.stock);
 
-        // 1. Attempt to get batches from the product object (already attached from Dexie)
+        // 1. Attempt to get batches from the product object (already attached)
         if (product.batches && product.batches.length > 0) {
             batches = product.batches;
             console.log('📦 Using batches from product object:', batches.length);
@@ -509,7 +516,7 @@
 
         currentBatches = filteredBatches;
 
-        // Build the batch selection UI with stock breakdown (unchanged UI)
+        // Build the batch selection UI with stock breakdown
         const container = document.getElementById('batchList');
         container.innerHTML = '';
         batchSelection = [];

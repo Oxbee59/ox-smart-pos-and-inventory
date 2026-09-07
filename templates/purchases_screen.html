@@ -394,7 +394,6 @@
                 '- Cached products\n- Cached purchases\n- Pending sales\n- Pending purchases\n- Pending deletions\n\n' +
                 'Are you sure you want to continue?')) return;
         try {
-            // Clear all localStorage (except essential UI state)
             const keysToKeep = ['ox_user', 'pin_unlocked', 'app_version', 'screen_summary_collapsed'];
             const allKeys = Object.keys(localStorage);
             allKeys.forEach(key => {
@@ -464,7 +463,6 @@
         const arrow = document.getElementById('summaryArrowIcon');
         const badge = document.getElementById('summaryStatusBadge');
 
-        // Load saved state
         try {
             const saved = localStorage.getItem(SUMMARY_STATE_KEY);
             if (saved === 'true') summaryCollapsed = true;
@@ -919,135 +917,152 @@
         document.body.style.overflow = '';
     }
 
-    // ======================== LOAD PURCHASES (Dexie-first) ========================
+    // ======================== LOAD PURCHASES (API-FIRST) ========================
     async function loadPurchases(forceRefresh = false) {
         if (isLoading) return;
         isLoading = true;
         updateOfflineBanner();
 
         let purchases = [];
+        let apiSuccess = false;
 
-        // 1. Always read from Dexie first
-        if (db) {
+        // 1. Try API first (if online)
+        if (navigator.onLine && !forceRefresh) {
+            try {
+                const res = await fetch('/api/purchases?category=Screen');
+                if (res.ok) {
+                    const apiPurchases = await res.json();
+                    if (Array.isArray(apiPurchases) && apiPurchases.length > 0) {
+                        purchases = apiPurchases.map(p => ({
+                            batch_id: p.batch_id,
+                            name: p.name,
+                            brand: p.brand,
+                            category: p.category,
+                            quantity: p.quantity,
+                            remaining_quantity: p.remaining_quantity,
+                            cost_price: p.cost_price,
+                            discount: p.discount || 0,
+                            selling_price: p.selling_price,
+                            total_cost: p.cost_price * p.quantity - (p.discount || 0),
+                            date: p.date,
+                            action: p.action || 'added',
+                            source: p.source || '',
+                            claimed_quantity: p.claimed_quantity || 0,
+                            original_quantity: p.original_quantity || p.quantity,
+                            original_date: p.original_date || p.date,
+                            original_cost_price: p.original_cost_price || p.cost_price,
+                            original_selling_price: p.original_selling_price || p.selling_price
+                        }));
+                        // Store in Dexie
+                        await storePurchasesInDexie(apiPurchases);
+                        apiSuccess = true;
+                        console.log('📦 Loaded screen purchases from API:', purchases.length);
+                    }
+                }
+            } catch (e) {
+                console.warn('API failed, using Dexie fallback');
+            }
+        }
+
+        // 2. If API failed or offline, read from Dexie
+        if (!apiSuccess || !navigator.onLine) {
             try {
                 const batches = await db.batches.toArray();
                 const productIds = [...new Set(batches.map(b => b.product_id))];
                 const products = await db.products.where('id').anyOf(productIds).toArray();
                 const productMap = {};
                 products.forEach(p => productMap[p.id] = p);
-                purchases = batches.map(b => ({
-                    batch_id: b.id,
-                    name: productMap[b.product_id]?.name || 'Unknown',
-                    brand: productMap[b.product_id]?.brand || '',
-                    category: productMap[b.product_id]?.category || '',
-                    quantity: b.quantity,
-                    remaining_quantity: b.remaining_quantity,
-                    cost_price: b.cost_price,
-                    discount: b.discount,
-                    selling_price: b.selling_price,
-                    total_cost: b.cost_price * b.quantity - (b.discount || 0),
-                    date: b.date,
-                    action: b.action,
-                    source: b.source,
-                    claimed_quantity: b.claimed_quantity || 0,
-                    original_quantity: b.original_quantity,
-                    original_date: b.original_date,
-                    original_cost_price: b.original_cost_price,
-                    original_selling_price: b.original_selling_price
-                }));
-                // Filter only Screens
-                purchases = purchases.filter(p => p.category === 'Screen');
+                purchases = batches
+                    .filter(b => (productMap[b.product_id]?.category || '') === 'Screen')
+                    .map(b => ({
+                        batch_id: b.id,
+                        name: productMap[b.product_id]?.name || 'Unknown',
+                        brand: productMap[b.product_id]?.brand || '',
+                        category: productMap[b.product_id]?.category || 'Screen',
+                        quantity: b.quantity,
+                        remaining_quantity: b.remaining_quantity,
+                        cost_price: b.cost_price,
+                        discount: b.discount || 0,
+                        selling_price: b.selling_price,
+                        total_cost: b.cost_price * b.quantity - (b.discount || 0),
+                        date: b.date,
+                        action: b.action || 'added',
+                        source: b.source || '',
+                        claimed_quantity: b.claimed_quantity || 0,
+                        original_quantity: b.original_quantity || b.quantity,
+                        original_date: b.original_date || b.date,
+                        original_cost_price: b.original_cost_price || b.cost_price,
+                        original_selling_price: b.original_selling_price || b.selling_price
+                    }));
                 console.log('📦 Loaded screen purchases from Dexie:', purchases.length);
-            } catch (err) {
-                console.warn('Failed to load from Dexie:', err);
+            } catch (e) {
+                console.warn('Dexie read failed:', e);
             }
         }
 
-        // 2. If we have data, render immediately
+        // 3. Render
+        currentPurchases = purchases;
+        currentFilteredData = purchases;
         if (purchases.length > 0) {
-            currentPurchases = purchases;
-            currentFilteredData = purchases;
             renderList(purchases);
             updateSummary(purchases);
-            updatePendingBadge();
             // Check for URL parameters after render
             setTimeout(() => {
                 checkForBatchEdit();
                 checkForShowHistory();
             }, 300);
         } else {
-            // No data in Dexie – show empty state
             document.getElementById('purchasesList').innerHTML = '<div class="text-center text-gray-400 py-8">No screen purchases found.</div>';
             updateSummary([]);
         }
-
-        // 3. If online, refresh in background (non‑blocking)
-        if (navigator.onLine && !forceRefresh) {
-            refreshPurchasesFromAPI().catch(err => console.warn('Background refresh failed:', err));
-        } else if (forceRefresh && navigator.onLine) {
-            // Force refresh – wait for API then re-render
-            await refreshPurchasesFromAPI();
-        }
-
+        updatePendingBadge();
         isLoading = false;
     }
 
-    // ---------- Background refresh from API ----------
-    async function refreshPurchasesFromAPI() {
+    // ---------- Store purchases in Dexie ----------
+    async function storePurchasesInDexie(apiPurchases) {
+        if (!db) return;
         try {
-            const res = await fetch('/api/purchases?category=Screen');
-            if (!res.ok) throw new Error('API error');
-            const apiPurchases = await res.json();
-            if (!Array.isArray(apiPurchases)) throw new Error('Invalid data format');
-
-            // Update Dexie: we need to map API purchases to batches and products
-            if (db) {
-                // Extract unique products
-                const productMap = {};
-                const batchMap = {};
-                for (const p of apiPurchases) {
-                    // Upsert product
-                    const productId = p.product_id || p.batch_id; // fallback
-                    if (!productMap[productId]) {
-                        productMap[productId] = {
-                            id: productId,
-                            name: p.name,
-                            brand: p.brand,
-                            category: p.category,
-                            cost_price: p.cost_price,
-                            selling_price: p.selling_price,
-                            stock: p.quantity - (p.remaining_quantity || 0) + (p.remaining_quantity || 0), // not accurate but we'll update from batches
-                            discount: p.discount || 0
-                        };
-                    }
-                    // Upsert batch
-                    batchMap[p.batch_id] = {
-                        id: p.batch_id,
-                        product_id: productId,
-                        quantity: p.quantity,
-                        remaining_quantity: p.remaining_quantity,
+            const productMap = {};
+            const batchMap = {};
+            for (const p of apiPurchases) {
+                const productId = p.product_id || p.batch_id;
+                if (!productMap[productId]) {
+                    productMap[productId] = {
+                        id: productId,
+                        name: p.name,
+                        brand: p.brand,
+                        category: p.category || 'Screen',
                         cost_price: p.cost_price,
                         selling_price: p.selling_price,
-                        discount: p.discount || 0,
-                        claimed_quantity: p.claimed_quantity || 0,
-                        date: p.date,
-                        action: p.action || 'added',
-                        source: p.source || '',
-                        original_quantity: p.original_quantity || p.quantity,
-                        original_date: p.original_date || p.date,
-                        original_cost_price: p.original_cost_price || p.cost_price,
-                        original_selling_price: p.original_selling_price || p.selling_price,
-                        original_discount: p.original_discount || p.discount || 0
+                        stock: p.quantity - (p.remaining_quantity || 0) + (p.remaining_quantity || 0),
+                        discount: p.discount || 0
                     };
                 }
-                // Bulk put products and batches
-                await db.products.bulkPut(Object.values(productMap));
-                await db.batches.bulkPut(Object.values(batchMap));
-                // Reload from Dexie to show fresh data
-                await loadPurchases(false);
+                batchMap[p.batch_id] = {
+                    id: p.batch_id,
+                    product_id: productId,
+                    quantity: p.quantity,
+                    remaining_quantity: p.remaining_quantity,
+                    cost_price: p.cost_price,
+                    selling_price: p.selling_price,
+                    discount: p.discount || 0,
+                    claimed_quantity: p.claimed_quantity || 0,
+                    date: p.date,
+                    action: p.action || 'added',
+                    source: p.source || '',
+                    original_quantity: p.original_quantity || p.quantity,
+                    original_date: p.original_date || p.date,
+                    original_cost_price: p.original_cost_price || p.cost_price,
+                    original_selling_price: p.original_selling_price || p.selling_price,
+                    original_discount: p.original_discount || p.discount || 0
+                };
             }
+            await db.products.bulkPut(Object.values(productMap));
+            await db.batches.bulkPut(Object.values(batchMap));
+            console.log('✅ Stored screen purchases in Dexie');
         } catch (e) {
-            console.warn('Background refresh failed:', e);
+            console.warn('Failed to store in Dexie:', e);
         }
     }
 
@@ -1506,7 +1521,6 @@
             document.getElementById('showUpdatedOnly').checked = true;
         }
 
-        // Client-side filtering from currentPurchases (Dexie data)
         let filtered = currentPurchases;
         if (fromDate && toDate) {
             const from = new Date(fromDate);
@@ -1520,7 +1534,6 @@
         if (showUpdatedOnly) {
             filtered = filtered.filter(p => p.action !== 'added');
         }
-        // Apply search/advanced search if any
         const keyword = document.getElementById('searchInput').value.trim();
         if (keyword) {
             const isBatchSearch = /^#?\d+$/.test(keyword);
@@ -1748,7 +1761,6 @@
 
     // ---------- Event listeners ----------
     document.addEventListener('DOMContentLoaded', function() {
-        // Init summary toggle
         initSummaryToggle();
 
         loadPurchases();
@@ -1782,7 +1794,6 @@
             if (e.key === 'Enter') applyAdvancedSearch();
         });
 
-        // Product name & brand suggestions with category=Screen
         document.getElementById('name').addEventListener('input', function() {
             clearTimeout(nameTimeout);
             nameTimeout = setTimeout(() => fetchProductSuggestions('name', 'nameSuggestions'), 300);

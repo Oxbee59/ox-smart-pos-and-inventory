@@ -870,7 +870,7 @@
     window.addEventListener('offline', updateOfflineBanner);
 
     // =============================================================
-    //  FIXED: Load products with Dexie integration – ALWAYS compute summary from actual data
+    //  API-FIRST PRODUCT LOADING (Accessories – exclude Screen)
     // =============================================================
     async function loadProducts(forceRefresh = false) {
         if (isLoading) return;
@@ -878,36 +878,34 @@
         updateOfflineBanner();
 
         let productsData = [];
-        let fromCache = false;
+        let apiSuccess = false;
 
-        // Try to fetch from API if online
+        // 1. Try API first (if online)
         if (navigator.onLine && !forceRefresh) {
             try {
                 const res = await fetch('/api/products?exclude_category=Screen');
-                if (!res.ok) throw new Error('Network error');
-                const data = await res.json();
-                if (data && data.products && Array.isArray(data.products)) {
-                    productsData = data.products;
-                    if (db) {
-                        await db.products.bulkPut(productsData);
-                        console.log('✅ Products stored in Dexie');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data && data.products && Array.isArray(data.products) && data.products.length > 0) {
+                        productsData = data.products;
+                        // Store in Dexie
+                        if (db) {
+                            await storeProductsInDexie(productsData);
+                        }
+                        apiSuccess = true;
+                        console.log('📦 Loaded accessory products from API:', productsData.length);
                     }
-                    fromCache = false;
-                } else {
-                    throw new Error('Invalid data format');
                 }
-            } catch (err) {
-                console.warn('⚠️ API failed, using Dexie cache:', err.message);
-                fromCache = true;
-                // Fall through to Dexie
+            } catch (e) {
+                console.warn('API failed, using Dexie fallback');
             }
         }
 
-        // If no data yet (or offline / API failed), read from Dexie
-        if (productsData.length === 0) {
+        // 2. If API failed or offline, read from Dexie
+        if (!apiSuccess || !navigator.onLine) {
             try {
+                let cached;
                 if (db) {
-                    let cached;
                     try {
                         cached = await db.products.where('category').notEqual('Screen').toArray();
                     } catch (e) {
@@ -917,8 +915,7 @@
                     }
                     if (cached && cached.length > 0) {
                         productsData = cached;
-                        fromCache = true;
-                        console.log('📦 Loaded products from Dexie');
+                        console.log('📦 Loaded accessory products from Dexie:', productsData.length);
                     }
                 }
             } catch (e) {
@@ -926,7 +923,69 @@
             }
         }
 
-        // Compute summary from productsData
+        // 3. Compute summary
+        currentProducts = productsData;
+        await updateSummary(productsData);
+
+        // 4. Render
+        applyAdvancedSearch();
+        await loadLowStock();
+        autoOpenBatches();
+
+        isLoading = false;
+    }
+
+    // ---------- Store products in Dexie ----------
+    async function storeProductsInDexie(products) {
+        if (!db) return;
+        try {
+            // Ensure each product has an id field (use product_id)
+            const toStore = products.map(p => ({
+                id: p.product_id || p.id,
+                product_id: p.product_id || p.id,
+                name: p.name,
+                brand: p.brand,
+                category: p.category || '',
+                cost_price: p.cost_price,
+                selling_price: p.selling_price,
+                stock: p.stock,
+                discount: p.discount || 0,
+                batches: p.batches || [] // store batches as well if present
+            }));
+            await db.products.bulkPut(toStore);
+            // Also store batches separately for cross-reference
+            const allBatches = [];
+            products.forEach(p => {
+                if (p.batches && p.batches.length > 0) {
+                    p.batches.forEach(b => {
+                        allBatches.push({
+                            id: b.batch_id,
+                            product_id: p.product_id || p.id,
+                            quantity: b.quantity || b.batch_quantity,
+                            remaining_quantity: b.remaining_quantity,
+                            cost_price: b.cost_price,
+                            selling_price: b.selling_price,
+                            discount: b.discount || 0,
+                            claimed_quantity: b.claimed_quantity || 0,
+                            date: b.date,
+                            action: b.action || '',
+                            source: b.source || '',
+                            is_faulty: b.is_faulty || false
+                        });
+                    });
+                }
+            });
+            if (allBatches.length > 0) {
+                await db.batches.bulkPut(allBatches);
+            }
+            console.log('✅ Stored accessory products in Dexie');
+        } catch (e) {
+            console.warn('Failed to store in Dexie:', e);
+        }
+    }
+
+    // ---------- Update summary ----------
+    async function updateSummary(productsData) {
         let totalProducts = productsData.length;
         let totalBatches = 0;
         let totalQty = 0;
@@ -947,29 +1006,16 @@
         });
         const totalGood = Math.max(totalQty - totalClaimed, 0);
 
-        const summaryData = {
-            total_products: totalProducts,
-            total_batches: totalBatches,
-            total_quantity: totalQty,
-            total_claimed: totalClaimed,
-            total_good: totalGood
-        };
+        document.getElementById('totalProductsCount').textContent = totalProducts || 0;
+        document.getElementById('totalBatchesCount').textContent = totalBatches || 0;
+        document.getElementById('totalQuantityCount').textContent = totalQty || 0;
+        document.getElementById('totalClaimedCount').textContent = totalClaimed || 0;
+        document.getElementById('totalGoodCount').textContent = totalGood || 0;
 
-        currentProducts = productsData;
-
-        document.getElementById('totalProductsCount').textContent = summaryData.total_products || 0;
-        document.getElementById('totalBatchesCount').textContent = summaryData.total_batches || 0;
-        document.getElementById('totalQuantityCount').textContent = summaryData.total_quantity || 0;
-        document.getElementById('totalClaimedCount').textContent = summaryData.total_claimed || 0;
-        document.getElementById('totalGoodCount').textContent = summaryData.total_good || 0;
-
-        await loadLowStock();
-        applyAdvancedSearch();
-        autoOpenBatches();
-        isLoading = false;
+        // Low stock count will be updated separately
     }
 
-    // ---------- Low stock loading ----------
+    // ---------- Low stock loading (API‑first) ----------
     async function loadLowStock() {
         if (navigator.onLine) {
             try {

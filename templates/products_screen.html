@@ -863,7 +863,7 @@
     window.addEventListener('offline', updateOfflineBanner);
 
     // =============================================================
-    //  DEXIE-FIRST LOAD: Screen products
+    //  API-FIRST PRODUCT LOADING (Screens)
     // =============================================================
     async function loadProducts(forceRefresh = false) {
         if (isLoading) return;
@@ -871,108 +871,141 @@
         updateOfflineBanner();
 
         let productsData = [];
+        let apiSuccess = false;
 
-        // 1. Read from Dexie first
-        if (db) {
+        // 1. Try API first (if online)
+        if (navigator.onLine && !forceRefresh) {
+            try {
+                const res = await fetch('/api/products?category=Screen');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data && data.products && Array.isArray(data.products) && data.products.length > 0) {
+                        productsData = data.products;
+                        // Store in Dexie
+                        if (db) {
+                            await storeProductsInDexie(productsData);
+                        }
+                        apiSuccess = true;
+                        console.log('📦 Loaded screen products from API:', productsData.length);
+                    }
+                }
+            } catch (e) {
+                console.warn('API failed, using Dexie fallback');
+            }
+        }
+
+        // 2. If API failed or offline, read from Dexie
+        if (!apiSuccess || !navigator.onLine) {
             try {
                 let cached;
-                try {
-                    cached = await db.products.where('category').equals('Screen').toArray();
-                } catch (e) {
-                    // fallback to manual filter if index missing
-                    const all = await db.products.toArray();
-                    cached = all.filter(p => p.category === 'Screen');
-                }
-                if (cached.length > 0) {
-                    productsData = cached;
-                    console.log('📦 Loaded screen products from Dexie');
+                if (db) {
+                    try {
+                        cached = await db.products.where('category').equals('Screen').toArray();
+                    } catch (e) {
+                        const all = await db.products.toArray();
+                        cached = all.filter(p => p.category === 'Screen');
+                    }
+                    if (cached && cached.length > 0) {
+                        productsData = cached;
+                        console.log('📦 Loaded screen products from Dexie:', productsData.length);
+                    }
                 }
             } catch (e) {
                 console.warn('Failed to read from Dexie:', e);
             }
         }
 
-        // 2. Render immediately if we have data
-        if (productsData.length > 0) {
-            currentProducts = productsData;
-            // Compute summary
-            let totalProducts = productsData.length;
-            let totalBatches = 0;
-            let totalQty = 0;
-            let totalClaimed = 0;
-            productsData.forEach(p => {
-                totalQty += p.stock || 0;
+        // 3. Compute summary
+        currentProducts = productsData;
+        await updateSummary(productsData);
+
+        // 4. Render
+        applyAdvancedSearch();
+        await loadLowStock();
+        autoOpenBatches();
+
+        isLoading = false;
+    }
+
+    // ---------- Store products in Dexie ----------
+    async function storeProductsInDexie(products) {
+        if (!db) return;
+        try {
+            // Ensure each product has an id field (use product_id)
+            const toStore = products.map(p => ({
+                id: p.product_id || p.id,
+                product_id: p.product_id || p.id,
+                name: p.name,
+                brand: p.brand,
+                category: p.category || 'Screen',
+                cost_price: p.cost_price,
+                selling_price: p.selling_price,
+                stock: p.stock,
+                discount: p.discount || 0,
+                batches: p.batches || []
+            }));
+            await db.products.bulkPut(toStore);
+            // Also store batches separately for cross-reference
+            const allBatches = [];
+            products.forEach(p => {
                 if (p.batches && p.batches.length > 0) {
-                    totalBatches += p.batches.length;
-                    p.batches.forEach(b => { totalClaimed += b.claimed_quantity || 0; });
-                } else if (p.stock > 0) {
-                    totalBatches += 1;
+                    p.batches.forEach(b => {
+                        allBatches.push({
+                            id: b.batch_id,
+                            product_id: p.product_id || p.id,
+                            quantity: b.quantity || b.batch_quantity,
+                            remaining_quantity: b.remaining_quantity,
+                            cost_price: b.cost_price,
+                            selling_price: b.selling_price,
+                            discount: b.discount || 0,
+                            claimed_quantity: b.claimed_quantity || 0,
+                            date: b.date,
+                            action: b.action || '',
+                            source: b.source || '',
+                            is_faulty: b.is_faulty || false
+                        });
+                    });
                 }
             });
-            const totalGood = Math.max(totalQty - totalClaimed, 0);
-            document.getElementById('totalProductsCount').textContent = totalProducts || 0;
-            document.getElementById('totalBatchesCount').textContent = totalBatches || 0;
-            document.getElementById('totalQuantityCount').textContent = totalQty || 0;
-            document.getElementById('totalClaimedCount').textContent = totalClaimed || 0;
-            document.getElementById('totalGoodCount').textContent = totalGood || 0;
-            applyAdvancedSearch();
-            await loadLowStock();
-            autoOpenBatches();
-            isLoading = false;
-        } else {
-            // No data in Dexie – show empty
-            document.getElementById('productsList').innerHTML = '<div class="text-center text-gray-400 py-8">No screen products found.</div>';
-            document.getElementById('totalProductsCount').textContent = '0';
-            document.getElementById('totalBatchesCount').textContent = '0';
-            document.getElementById('totalQuantityCount').textContent = '0';
-            document.getElementById('totalClaimedCount').textContent = '0';
-            document.getElementById('totalGoodCount').textContent = '0';
-            document.getElementById('lowStockCount').textContent = '0';
-            renderLowStockList([]);
-            isLoading = false;
-        }
-
-        // 3. If online, refresh in background (non‑blocking)
-        if (navigator.onLine && !forceRefresh) {
-            refreshProductsFromAPI().catch(err => console.warn('Background refresh failed:', err));
-        } else if (forceRefresh && navigator.onLine) {
-            await refreshProductsFromAPI();
-        }
-    }
-
-    // ---------- Background refresh from API ----------
-    async function refreshProductsFromAPI() {
-        try {
-            const res = await fetch('/api/products?category=Screen');
-            if (!res.ok) throw new Error('API error');
-            const data = await res.json();
-            if (data && data.products && Array.isArray(data.products)) {
-                // Store in Dexie
-                if (db) {
-                    await db.products.bulkPut(data.products);
-                    // Also batches if available
-                    const allBatches = [];
-                    for (const p of data.products) {
-                        if (p.batches && p.batches.length) {
-                            for (const b of p.batches) {
-                                b.product_id = p.product_id;
-                                allBatches.push(b);
-                            }
-                        }
-                    }
-                    if (allBatches.length) {
-                        await db.batches.bulkPut(allBatches);
-                    }
-                }
-                // Reload from Dexie to reflect fresh data
-                await loadProducts(false);
+            if (allBatches.length > 0) {
+                await db.batches.bulkPut(allBatches);
             }
+            console.log('✅ Stored screen products in Dexie');
         } catch (e) {
-            console.warn('Background refresh failed:', e);
+            console.warn('Failed to store in Dexie:', e);
         }
     }
 
-    // ---------- Low stock loading ----------
+    // ---------- Update summary ----------
+    async function updateSummary(productsData) {
+        let totalProducts = productsData.length;
+        let totalBatches = 0;
+        let totalQty = 0;
+        let totalClaimed = 0;
+
+        productsData.forEach(p => {
+            totalQty += p.stock || 0;
+            if (p.batches && p.batches.length > 0) {
+                totalBatches += p.batches.length;
+                p.batches.forEach(b => {
+                    totalClaimed += b.claimed_quantity || 0;
+                });
+            } else {
+                if (p.stock > 0) {
+                    totalBatches += 1;
+                }
+            }
+        });
+        const totalGood = Math.max(totalQty - totalClaimed, 0);
+
+        document.getElementById('totalProductsCount').textContent = totalProducts || 0;
+        document.getElementById('totalBatchesCount').textContent = totalBatches || 0;
+        document.getElementById('totalQuantityCount').textContent = totalQty || 0;
+        document.getElementById('totalClaimedCount').textContent = totalClaimed || 0;
+        document.getElementById('totalGoodCount').textContent = totalGood || 0;
+    }
+
+    // ---------- Low stock loading (API‑first) ----------
     async function loadLowStock() {
         if (navigator.onLine) {
             try {

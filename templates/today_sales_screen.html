@@ -224,7 +224,7 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {
-        console.log("DOM fully loaded - initializing screen today sales page with Dexie");
+        console.log("DOM fully loaded - initializing screen today sales page with API-first");
 
         // Get user role from hidden element
         const userRoleEl = document.getElementById('userRole');
@@ -1048,21 +1048,55 @@
             }
         }
 
-        // ========== NEW: Dexie-first load with background refresh ==========
+        // ========== API-FIRST LOAD ==========
         async function loadSalesData() {
             updateOfflineBanner();
-            console.log("Loading screen sales data (Dexie-first)...");
+            console.log("Loading screen sales data (API-first)...");
 
-            // 1. Read from Dexie immediately
-            let data = await loadSalesFromDexie();
+            let data = [];
+            let apiSuccess = false;
 
-            // 2. Filter to only screen sales (category === 'Screen')
-            data = data.filter(item => item.category === 'Screen');
+            // 1. Try API first (if online)
+            if (navigator.onLine) {
+                try {
+                    let url = '';
+                    if (currentStartDate && currentEndDate) {
+                        url = `/api/today_sales?start_date=${currentStartDate}&end_date=${currentEndDate}&category=Screen`;
+                    } else {
+                        url = `/api/today_sales?period=${currentPeriod}&category=Screen`;
+                    }
+                    const res = await fetch(url);
+                    if (res.ok) {
+                        const apiData = await res.json();
+                        if (apiData && apiData.length > 0) {
+                            // Store in Dexie
+                            await storeSalesInDexie(apiData);
+                            // Reload from Dexie to get full relationships
+                            data = await loadSalesFromDexie();
+                            // Filter to screen category
+                            data = data.filter(item => item.category === 'Screen');
+                            apiSuccess = true;
+                            console.log('📦 Loaded screen sales from API:', data.length);
+                        } else {
+                            // No data from API but still mark success to avoid fallback
+                            apiSuccess = true;
+                            console.log('API returned empty data');
+                        }
+                    }
+                } catch (e) {
+                    console.warn('API failed, using Dexie fallback');
+                }
+            }
 
-            if (data.length > 0) {
-                console.log(`📦 Loaded ${data.length} screen sales from Dexie`);
-            } else {
-                console.log('No screen sales data in Dexie, showing empty state.');
+            // 2. If API failed or offline, read from Dexie
+            if (!apiSuccess || !navigator.onLine) {
+                data = await loadSalesFromDexie();
+                data = data.filter(item => item.category === 'Screen');
+                if (data.length > 0) {
+                    console.log('📦 Loaded screen sales from Dexie:', data.length);
+                } else {
+                    console.log('No screen sales data in Dexie, showing empty state.');
+                }
             }
 
             // 3. Apply period/date filters client-side
@@ -1097,70 +1131,12 @@
             updateFilterInfo();
             applyAdvancedSearchAndRender();
 
-            // 4. If online, refresh in background
-            if (navigator.onLine) {
-                refreshSalesFromAPI().catch(err => console.warn('Background refresh failed:', err));
-            } else {
-                // Offline – show stale note
+            // If offline, show stale note
+            if (!navigator.onLine) {
                 const list = document.getElementById('salesList');
-                list.innerHTML += '<div class="text-xs text-gray-500 text-center mt-2">📦 Data may be outdated (offline)</div>';
-            }
-        }
-
-        // ---------- Background refresh from API ----------
-        async function refreshSalesFromAPI() {
-            try {
-                let url = '';
-                if (currentStartDate && currentEndDate) {
-                    url = `/api/today_sales?start_date=${currentStartDate}&end_date=${currentEndDate}&category=Screen`;
-                } else {
-                    url = `/api/today_sales?period=${currentPeriod}&category=Screen`;
+                if (list) {
+                    list.innerHTML += '<div class="text-xs text-gray-500 text-center mt-2">📦 Data may be outdated (offline)</div>';
                 }
-                const res = await fetch(url);
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                const data = await res.json();
-                if (data.error) {
-                    console.error("API error:", data.error);
-                    return;
-                }
-                // Store in Dexie
-                await storeSalesInDexie(data);
-                // Reload from Dexie to get updated data with proper relationships
-                let freshData = await loadSalesFromDexie();
-                freshData = freshData.filter(item => item.category === 'Screen');
-
-                // Apply same filters
-                let filtered = freshData;
-                if (currentPeriod !== 'all' && !(currentStartDate && currentEndDate)) {
-                    const now = new Date();
-                    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                    const startOfWeek = new Date(today);
-                    startOfWeek.setDate(today.getDate() - today.getDay());
-                    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-                    const startOfYear = new Date(today.getFullYear(), 0, 1);
-                    filtered = freshData.filter(item => {
-                        const d = new Date(item.sale_date || item.date);
-                        if (currentPeriod === 'daily') return d >= today;
-                        if (currentPeriod === 'weekly') return d >= startOfWeek;
-                        if (currentPeriod === 'monthly') return d >= startOfMonth;
-                        if (currentPeriod === 'yearly') return d >= startOfYear;
-                        return true;
-                    });
-                } else if (currentStartDate && currentEndDate) {
-                    const start = new Date(currentStartDate);
-                    start.setHours(0,0,0,0);
-                    const end = new Date(currentEndDate);
-                    end.setHours(23,59,59,999);
-                    filtered = freshData.filter(item => {
-                        const d = new Date(item.sale_date || item.date);
-                        return d >= start && d <= end;
-                    });
-                }
-                currentSalesData = filtered;
-                applyAdvancedSearchAndRender();
-                console.log('✅ Background refresh completed');
-            } catch (e) {
-                console.warn('Background refresh failed:', e);
             }
         }
 

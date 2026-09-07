@@ -28,7 +28,6 @@
     <!-- ===== SERVICE WORKER WITH CACHE-BUSTING ===== -->
     <script>
         if ('serviceWorker' in navigator) {
-            // ✅ Incremented to v=9 to force SW update with new cache
             navigator.serviceWorker.register('/sw.js?v=9')
                 .then(() => console.log('✅ Service Worker registered (v9)'))
                 .catch(err => console.log('❌ SW registration failed:', err));
@@ -691,7 +690,7 @@
     // ============================================================
     //  VERSION & PASSWORD – CHANGE TO FORCE REINSTALL
     // ============================================================
-    const APP_VERSION = 'v4';          // ✅ Incremented to v4
+    const APP_VERSION = 'v4';
     const INSTALL_PASSWORD = 'oxsmart2050';
     const PIN_CODE = '2050';
 
@@ -699,46 +698,28 @@
     //  LIST OF PROTECTED ROUTES TO CACHE FOR OFFLINE USE
     // ============================================================
     const PROTECTED_ROUTES = [
-        '/',
-        '/products',
-        '/products/screens',
-        '/sales',
-        '/sales/screens',
-        '/purchases',
-        '/purchases/screens',
-        '/analytics',
-        '/today-sales',
-        '/today-sales/screens',
-        '/archive',
-        '/claims',
-        '/logs',
-        '/admin/users',
-        '/settings',
-        '/inventory/import',
+        '/', '/products', '/products/screens',
+        '/sales', '/sales/screens',
+        '/purchases', '/purchases/screens',
+        '/analytics', '/today-sales', '/today-sales/screens',
+        '/archive', '/claims', '/logs',
+        '/admin/users', '/settings', '/inventory/import',
+        '/activities'
     ];
 
     // ============================================================
     //  CACHE ALL PAGES FOR OFFLINE USE (BOTH BROWSER & APP MODE)
     // ============================================================
     async function cacheAllPages() {
-        if (!('serviceWorker' in navigator)) {
-            console.warn('⚠️ Service Worker not supported');
-            return;
-        }
+        if (!('serviceWorker' in navigator)) return;
         try {
             const registration = await navigator.serviceWorker.ready;
-            if (!registration.active) {
-                console.warn('⚠️ No active service worker');
-                return;
-            }
+            if (!registration.active) return;
             registration.active.postMessage({
                 type: 'CACHE_ALL_PAGES',
                 urls: PROTECTED_ROUTES
             });
-            console.log('📦 Sent caching request to Service Worker.');
-        } catch (err) {
-            console.warn('⚠️ Failed to send caching request:', err);
-        }
+        } catch (e) { /* ignore */ }
     }
 
     // ============================================================
@@ -981,10 +962,9 @@
         if (!navigator.onLine || !db) return;
         const lastSync = getLastSync();
         const now = Date.now();
-        // If no sync ever or data older than threshold
         if (lastSync === 0 || (now - lastSync) > STALE_DATA_MS) {
             console.log('🔁 Data stale – background refresh triggered');
-            await performFullSync(false); // silent
+            await performFullSync(false);
         }
     }
 
@@ -1253,11 +1233,10 @@
                 return;
             }
 
-            // Pre‑cache protected pages
+            // Pre‑cache protected pages (service worker)
             cacheAllPages();
 
             // ===== SYNC LOGIC =====
-            // Check if we already did a full sync in this session
             const initialSyncDone = sessionStorage.getItem('initialSyncDone') === 'true';
 
             if (!initialSyncDone && navigator.onLine) {
@@ -1271,7 +1250,6 @@
 
             // Start offline prompt timer (if app mode)
             if (isAppMode()) {
-                startOfflinePrompt();
                 // Show sync reminder after 2 seconds if offline
                 if (!navigator.onLine) {
                     setTimeout(showSyncReminder, 2000);
