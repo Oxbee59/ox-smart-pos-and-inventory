@@ -403,8 +403,9 @@
 
             // 4. Render using the data we have
             if (summary) {
-                document.getElementById('salesValue').innerText = formatMoney(summary.total_sales || 0);
-                document.getElementById('profitValue').innerText = formatMoney(summary.total_profit || 0);
+                // ✅ FIXED: Use correct key names (sales, profit) from the API
+                document.getElementById('salesValue').innerText = formatMoney(summary.sales || 0);
+                document.getElementById('profitValue').innerText = formatMoney(summary.profit || 0);
                 document.getElementById('productsValue').innerText = summary.total_products || 0;
                 document.getElementById('batchesValue').innerText = summary.total_batches || 0;
                 document.getElementById('lowStockValue').innerText = lowStock ? lowStock.length : 0;

@@ -1498,47 +1498,98 @@ def api_delete_batch(batch_id):
 def api_sales_products():
     category = request.args.get('category')
     exclude_category = request.args.get('exclude_category')
-    products = get_products_for_sale()
     
-    if category:
-        products = [p for p in products if p.get('category') == category]
-    if exclude_category:
-        products = [p for p in products if p.get('category') != exclude_category]
+    conn = get_connection()
+    cursor = conn.cursor()
     
-    grouped = {}
-    for p in products:
-        key = (p['name'], p['brand'])
-        if key not in grouped:
-            grouped[key] = {
-                'id': p['id'],
-                'name': p['name'],
-                'brand': p['brand'],
-                'category': p.get('category', ''),
-                'cost_price': p.get('cost_price', 0),
-                'selling_price': p.get('selling_price', 0),
-                'discount': p.get('discount', 0),
-                'stock': 0,
-                'batches': []
-            }
-        grouped[key]['stock'] += p.get('stock', 0)
+    try:
+        # Fetch products with their batches in one query
+        query = """
+            SELECT 
+                p.id as product_id,
+                p.name,
+                p.brand,
+                p.category,
+                p.cost_price,
+                p.selling_price,
+                p.discount,
+                p.stock,
+                pb.id as batch_id,
+                pb.remaining_quantity,
+                pb.cost_price as batch_cost,
+                pb.selling_price as batch_selling,
+                pb.discount as batch_discount,
+                pb.date as batch_date,
+                pb.claimed_quantity,
+                pb.is_faulty,
+                pb.quantity as batch_quantity
+            FROM products p
+            LEFT JOIN purchase_batches pb ON p.id = pb.product_id AND pb.remaining_quantity > 0
+            WHERE p.stock > 0
+            AND NOT EXISTS (
+                SELECT 1 FROM deleted_products dp 
+                WHERE dp.product_id = p.id 
+                AND dp.action = 'PERMANENTLY DELETED' 
+                AND dp.source = 'product'
+            )
+        """
+        params = []
         
-        if 'batches' in p and p['batches']:
-            existing_batch_ids = {b.get('batch_id') for b in grouped[key]['batches']}
-            for batch in p['batches']:
-                if batch.get('batch_id') not in existing_batch_ids:
-                    grouped[key]['batches'].append(batch)
-        elif p.get('batch_id'):
-            grouped[key]['batches'].append({
-                'batch_id': p.get('batch_id'),
-                'remaining_quantity': p.get('stock', 0),
-                'selling_price': p.get('selling_price', 0),
-                'cost_price': p.get('cost_price', 0),
-                'batch_quantity': p.get('batch_quantity', p.get('stock', 0))
-            })
-    
-    result = list(grouped.values())
-    return jsonify(result)
-
+        if category:
+            query += " AND p.category = %s"
+            params.append(category)
+        if exclude_category:
+            query += " AND p.category != %s"
+            params.append(exclude_category)
+        
+        query += " ORDER BY p.name ASC, pb.date ASC"
+        
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        
+        # Group by product
+        product_map = {}
+        for row in rows:
+            product_id = row[0]
+            if product_id not in product_map:
+                product_map[product_id] = {
+                    'product_id': product_id,
+                    'name': row[1],
+                    'brand': row[2] or '',
+                    'category': row[3] or '',
+                    'cost_price': float(row[4] or 0),
+                    'selling_price': float(row[5] or 0),
+                    'discount': float(row[6] or 0),
+                    'stock': 0,
+                    'batches': []
+                }
+            # Add batch if exists
+            if row[8] is not None:  # batch_id exists
+                product_map[product_id]['batches'].append({
+                    'batch_id': row[8],
+                    'remaining_quantity': int(row[9] or 0),
+                    'cost_price': float(row[10] or 0),
+                    'selling_price': float(row[11] or 0),
+                    'discount': float(row[12] or 0),
+                    'date': row[13].isoformat() if row[13] else None,
+                    'claimed_quantity': int(row[14] or 0),
+                    'is_faulty': row[15] or False,
+                    'batch_quantity': int(row[16] or 0)
+                })
+                # Accumulate stock from batches
+                product_map[product_id]['stock'] += int(row[9] or 0)
+        
+        result = list(product_map.values())
+        
+        # Also include products with stock but no batches (legacy)
+        # They will have stock > 0 but no batches – the frontend will create a fallback
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f"❌ Error in api_sales_products: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
 @app.route('/api/sales/batches/<int:product_id>', methods=['GET'])
 @login_required
 def api_sales_batches(product_id):
