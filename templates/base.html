@@ -573,7 +573,7 @@
             </a>
             {% endif %}
 
-            <!-- Settings (oxbee only) -->
+            <!-- Settings & Activities (oxbee only) -->
             {% if current_user and current_user.username.lower() == 'oxbee' %}
             <div class="border-t border-gray-700 my-2"></div>
             <div class="text-xs text-amber-500 uppercase px-3 py-1 font-bold">
@@ -582,6 +582,10 @@
             <a href="/settings" class="nav-link settings-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                 <i class="fas fa-cog w-5"></i> Settings
                 <span class="settings-badge">⭐ System</span>
+            </a>
+            <a href="/activities" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
+                <i class="fas fa-activity w-5"></i> Activities
+                <span class="settings-badge">📊 Activity</span>
             </a>
             {% endif %}
 

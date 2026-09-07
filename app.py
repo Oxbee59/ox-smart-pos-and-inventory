@@ -4088,6 +4088,69 @@ def api_import_verify(job_id):
 
     return jsonify({'success': True, 'result': result})
 
+# ===================== USER ACTIVITY SUMMARY =====================
+
+@app.route('/activities')
+@login_required
+def activities():
+    # Only admins can access
+    if session.get('role') != 'admin':
+        return render_template("error.html", message="Admin access required"), 403
+    return render_template('activities.html')
+
+@app.route('/api/user/activity-summary')
+@login_required
+def api_user_activity_summary():
+    """Return aggregated activity stats per user (admins only)."""
+    if session.get('role') != 'admin':
+        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+
+    current_username = session.get('username')
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    # Get oxbee user ID to exclude if needed
+    cursor.execute("SELECT id FROM users WHERE username = 'oxbee'")
+    oxbee_row = cursor.fetchone()
+    OXBEE_USER_ID = oxbee_row[0] if oxbee_row else 1
+
+    query = """
+        SELECT 
+            u.id, u.username, u.role,
+            COUNT(l.id) as total_logs,
+            SUM(CASE WHEN l.action = 'login' THEN 1 ELSE 0 END) as login_count,
+            SUM(CASE WHEN l.action = 'logout' THEN 1 ELSE 0 END) as logout_count,
+            SUM(CASE WHEN l.action = 'login_failed' THEN 1 ELSE 0 END) as failed_login_count,
+            MAX(l.timestamp) as last_activity
+        FROM users u
+        LEFT JOIN user_logs l ON u.id = l.user_id
+        WHERE 1=1
+    """
+    params = []
+    # Exclude oxbee if current user is not oxbee (security)
+    if current_username.lower() != 'oxbee':
+        query += " AND u.id != %s"
+        params.append(OXBEE_USER_ID)
+
+    query += " GROUP BY u.id, u.username, u.role ORDER BY last_activity DESC NULLS LAST"
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+    conn.close()
+
+    result = []
+    for row in rows:
+        result.append({
+            'user_id': row[0],
+            'username': row[1],
+            'role': row[2],
+            'total_logs': row[3],
+            'login_count': row[4],
+            'logout_count': row[5],
+            'failed_login_count': row[6],
+            'last_activity': row[7].isoformat() if row[7] else None
+        })
+    return jsonify({'success': True, 'data': result})    
+
 # ===================== INITIALIZE CLAIMS TABLE =====================
 def init_claims_table():
     """Create the claims table if it doesn't exist"""

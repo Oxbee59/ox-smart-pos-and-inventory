@@ -1,0 +1,297 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<!-- Offline banner -->
+<div id="offlineBanner" class="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded hidden">
+    ⚠️ You are offline – showing cached activity data. Data will update when you reconnect.
+</div>
+
+<div class="flex justify-between items-center mb-6">
+    <div>
+        <h1 class="text-3xl font-bold text-indigo-600">👥 User Activities</h1>
+        <p class="text-gray-500 text-sm mt-1">Summary of all user actions (login, logout, failed attempts)</p>
+    </div>
+    <div>
+        <button onclick="loadActivities()" id="refreshBtn" class="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-lg">
+            🔄 Refresh
+        </button>
+    </div>
+</div>
+
+<!-- Filter / Date Range (optional) -->
+<div class="bg-white rounded-xl shadow-md p-4 mb-6">
+    <div class="flex flex-wrap gap-4 items-end">
+        <div>
+            <label class="block text-sm font-medium text-gray-700">Period</label>
+            <select id="periodFilter" class="border rounded-lg px-3 py-2">
+                <option value="all">All Time</option>
+                <option value="today">Today</option>
+                <option value="week">This Week</option>
+                <option value="month">This Month</option>
+            </select>
+        </div>
+        <button onclick="applyFilter()" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg">
+            🔍 Apply
+        </button>
+        <button onclick="clearFilter()" class="bg-gray-400 hover:bg-gray-500 text-white px-5 py-2 rounded-lg">
+            ✕ Clear
+        </button>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div id="activitySummary" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+    <!-- dynamic content -->
+</div>
+
+<!-- User Activity Table -->
+<div class="bg-white rounded-xl shadow-md overflow-hidden">
+    <div class="overflow-x-auto">
+        <table class="w-full">
+            <thead class="bg-gray-100 border-b">
+                <tr>
+                    <th class="text-left px-4 py-3 text-sm font-semibold text-gray-600">User</th>
+                    <th class="text-left px-4 py-3 text-sm font-semibold text-gray-600">Role</th>
+                    <th class="text-center px-4 py-3 text-sm font-semibold text-gray-600">Total Actions</th>
+                    <th class="text-center px-4 py-3 text-sm font-semibold text-gray-600">✅ Logins</th>
+                    <th class="text-center px-4 py-3 text-sm font-semibold text-gray-600">🚪 Logouts</th>
+                    <th class="text-center px-4 py-3 text-sm font-semibold text-gray-600">❌ Failed Logins</th>
+                    <th class="text-left px-4 py-3 text-sm font-semibold text-gray-600">Last Activity</th>
+                    <th class="text-center px-4 py-3 text-sm font-semibold text-gray-600">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="activityTableBody">
+                <tr>
+                    <td colspan="8" class="text-center py-8 text-gray-400">Loading activity data...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- ========== MODAL: VIEW USER DETAILED LOGS ========== -->
+<div id="userLogsModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+        <div class="sticky top-0 bg-white p-4 border-b flex justify-between items-center">
+            <h3 class="text-xl font-bold" id="modalTitle">User Activity Logs</h3>
+            <button onclick="closeUserLogsModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+        </div>
+        <div id="modalLogsContainer" class="p-4">
+            <!-- dynamic content -->
+        </div>
+        <div class="sticky bottom-0 bg-white p-4 border-t text-right">
+            <button onclick="closeUserLogsModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded">Close</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log("DOM loaded – initializing Activities page");
+
+        // ---------- Offline banner ----------
+        function updateOfflineBanner() {
+            const banner = document.getElementById('offlineBanner');
+            if (!navigator.onLine) {
+                banner.classList.remove('hidden');
+                document.getElementById('refreshBtn').disabled = true;
+                document.getElementById('refreshBtn').classList.add('opacity-50', 'cursor-not-allowed');
+            } else {
+                banner.classList.add('hidden');
+                document.getElementById('refreshBtn').disabled = false;
+                document.getElementById('refreshBtn').classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        }
+        window.addEventListener('online', updateOfflineBanner);
+        window.addEventListener('offline', updateOfflineBanner);
+
+        let currentData = [];
+        let currentPeriod = 'all';
+
+        // ---------- Helper functions ----------
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
+            });
+        }
+
+        function formatTimestamp(ts) {
+            if (!ts) return 'Never';
+            const date = new Date(ts);
+            return date.toLocaleString();
+        }
+
+        function getRoleBadge(role) {
+            if (role === 'admin') {
+                return '<span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Admin</span>';
+            }
+            return '<span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">User</span>';
+        }
+
+        // ---------- Load activity summary ----------
+        async function loadActivities() {
+            updateOfflineBanner();
+            const tbody = document.getElementById('activityTableBody');
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-gray-400">Loading activity data...</td></tr>';
+
+            if (!navigator.onLine) {
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-red-400">Offline – cannot load activity data. Please connect to the internet.</td></tr>';
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/user/activity-summary');
+                const data = await res.json();
+                if (data.success) {
+                    currentData = data.data;
+                    applyFilter();
+                } else {
+                    tbody.innerHTML = `<tr><td colspan="8" class="text-center py-8 text-red-400">Error: ${escapeHtml(data.error)}</td></tr>`;
+                }
+            } catch (err) {
+                console.error('Failed to load activity summary:', err);
+                tbody.innerHTML = `<tr><td colspan="8" class="text-center py-8 text-red-400">Failed to load data. Please try again.</td></tr>`;
+            }
+        }
+
+        // ---------- Apply period filter ----------
+        function applyFilter() {
+            const period = document.getElementById('periodFilter').value;
+            currentPeriod = period;
+            let filteredData = currentData;
+
+            if (period !== 'all') {
+                const now = new Date();
+                let cutoff = new Date();
+                if (period === 'today') {
+                    cutoff.setHours(0,0,0,0);
+                } else if (period === 'week') {
+                    cutoff.setDate(now.getDate() - 7);
+                } else if (period === 'month') {
+                    cutoff.setMonth(now.getMonth() - 1);
+                }
+                filteredData = currentData.filter(user => {
+                    if (!user.last_activity) return false;
+                    const last = new Date(user.last_activity);
+                    return last >= cutoff;
+                });
+            }
+
+            renderSummary(filteredData);
+            renderTable(filteredData);
+        }
+
+        function clearFilter() {
+            document.getElementById('periodFilter').value = 'all';
+            applyFilter();
+        }
+
+        // ---------- Render summary cards ----------
+        function renderSummary(data) {
+            const container = document.getElementById('activitySummary');
+            const totalUsers = data.length;
+            let totalLogins = 0, totalLogouts = 0, totalFailed = 0;
+            data.forEach(u => {
+                totalLogins += u.login_count || 0;
+                totalLogouts += u.logout_count || 0;
+                totalFailed += u.failed_login_count || 0;
+            });
+            container.innerHTML = `
+                <div class="bg-white rounded-xl shadow-md p-4 text-center border border-gray-100">
+                    <p class="text-xs text-gray-500">👥 Total Users</p>
+                    <p class="text-2xl font-bold text-indigo-600">${totalUsers}</p>
+                </div>
+                <div class="bg-white rounded-xl shadow-md p-4 text-center border border-gray-100">
+                    <p class="text-xs text-gray-500">✅ Successful Logins</p>
+                    <p class="text-2xl font-bold text-green-600">${totalLogins}</p>
+                </div>
+                <div class="bg-white rounded-xl shadow-md p-4 text-center border border-gray-100">
+                    <p class="text-xs text-gray-500">❌ Failed Login Attempts</p>
+                    <p class="text-2xl font-bold text-red-600">${totalFailed}</p>
+                </div>
+            `;
+        }
+
+        // ---------- Render table ----------
+        function renderTable(data) {
+            const tbody = document.getElementById('activityTableBody');
+            if (!data || data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-gray-400">No user activity found for this period.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = data.map(user => `
+                <tr class="border-b hover:bg-gray-50 transition">
+                    <td class="px-4 py-3 text-sm font-medium text-indigo-700">${escapeHtml(user.username)}</td>
+                    <td class="px-4 py-3">${getRoleBadge(user.role)}</td>
+                    <td class="px-4 py-3 text-center font-semibold">${user.total_logs || 0}</td>
+                    <td class="px-4 py-3 text-center text-green-600">${user.login_count || 0}</td>
+                    <td class="px-4 py-3 text-center text-blue-600">${user.logout_count || 0}</td>
+                    <td class="px-4 py-3 text-center text-red-600">${user.failed_login_count || 0}</td>
+                    <td class="px-4 py-3 text-sm text-gray-500">${formatTimestamp(user.last_activity)}</td>
+                    <td class="px-4 py-3 text-center">
+                        <button onclick="viewUserLogs(${user.user_id}, '${escapeHtml(user.username)}')" 
+                                class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm">
+                            📋 View Logs
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // ---------- View detailed logs for a user ----------
+        async function viewUserLogs(userId, username) {
+            const modal = document.getElementById('userLogsModal');
+            const title = document.getElementById('modalTitle');
+            const container = document.getElementById('modalLogsContainer');
+            title.textContent = `📋 Logs for ${username}`;
+            container.innerHTML = '<div class="text-center text-gray-400 py-8"><i class="fas fa-spinner fa-spin text-2xl"></i> Loading logs...</div>';
+            modal.classList.remove('hidden');
+
+            try {
+                const res = await fetch(`/api/user/logs?user_id=${userId}&limit=100`);
+                const data = await res.json();
+                if (data.success && data.logs.length > 0) {
+                    container.innerHTML = data.logs.map(log => `
+                        <div class="border rounded p-3 mb-2 hover:bg-gray-50 transition">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <span class="font-medium">${escapeHtml(log.action)}</span>
+                                    <span class="text-xs text-gray-500 ml-2">${formatTimestamp(log.timestamp)}</span>
+                                </div>
+                                <span class="text-xs text-gray-400">IP: ${escapeHtml(log.ip_address || 'N/A')}</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">Device: ${escapeHtml(log.user_agent || 'N/A')}</div>
+                        </div>
+                    `).join('');
+                    if (data.total > 100) {
+                        container.innerHTML += `<div class="text-xs text-gray-400 mt-2 text-center">Showing latest 100 of ${data.total} logs</div>`;
+                    }
+                } else {
+                    container.innerHTML = '<div class="text-center text-gray-400 py-8">No logs found for this user.</div>';
+                }
+            } catch (err) {
+                console.error('Failed to load user logs:', err);
+                container.innerHTML = '<div class="text-center text-red-500 py-8">Failed to load logs. Please try again.</div>';
+            }
+        }
+
+        function closeUserLogsModal() {
+            document.getElementById('userLogsModal').classList.add('hidden');
+        }
+
+        // ---------- Initial load ----------
+        updateOfflineBanner();
+        loadActivities();
+
+        // Refresh on reconnect
+        window.addEventListener('online', function() {
+            loadActivities();
+        });
+    });
+</script>
+{% endblock %}
