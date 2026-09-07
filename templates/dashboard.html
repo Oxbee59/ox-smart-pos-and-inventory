@@ -339,18 +339,44 @@
                 return;
             }
 
-            // 2. Compute KPIs
-            const totalProducts = products.length;
-            const totalBatches = batches.length;
-            // Total sales: sum of `total` from sales (non‑reversed)
+            // 2. Get date range from UI
+            const range = getDateTimeRange();
+            let filteredSales = sales;
+
+            if (range.start_datetime && range.end_datetime) {
+                const start = new Date(range.start_datetime);
+                const end = new Date(range.end_datetime);
+                filteredSales = sales.filter(s => {
+                    const d = new Date(s.date);
+                    return d >= start && d <= end;
+                });
+            } else if (selectedDate) {
+                const start = new Date(selectedDate);
+                start.setHours(0,0,0,0);
+                const end = new Date(selectedDate);
+                end.setHours(23,59,59,999);
+                filteredSales = sales.filter(s => {
+                    const d = new Date(s.date);
+                    return d >= start && d <= end;
+                });
+            }
+
+            // 3. Compute KPIs from filtered sales
+            const seenSales = new Set();
             let totalSales = 0;
             let totalProfit = 0;
-            sales.forEach(s => {
-                totalSales += s.total || 0;
-                totalProfit += s.profit || 0;
-            });
+            for (const sale of filteredSales) {
+                if (!seenSales.has(sale.id)) {
+                    totalSales += sale.total || 0;
+                    totalProfit += sale.profit || 0;
+                    seenSales.add(sale.id);
+                }
+            }
 
-            // Low stock: from batches where remaining_quantity <= 10
+            const totalProducts = products.length;
+            const totalBatches = batches.length;
+
+            // 4. Low stock (from batches, regardless of date)
             const lowStockMap = {};
             batches.forEach(b => {
                 if (b.remaining_quantity <= 10 && b.remaining_quantity > 0) {
@@ -374,14 +400,14 @@
             const lowStockList = Object.values(lowStockMap);
             lowStockProducts = lowStockList;
 
-            // 3. Update KPI cards
+            // 5. Update KPI cards
             document.getElementById('salesValue').innerText = formatMoney(totalSales);
             document.getElementById('profitValue').innerText = formatMoney(totalProfit);
             document.getElementById('productsValue').innerText = totalProducts;
             document.getElementById('batchesValue').innerText = totalBatches;
             document.getElementById('lowStockValue').innerText = lowStockList.length;
 
-            // 4. Show low stock alert once (if any)
+            // 6. Show low stock alert once
             if (!lowStockShown && lowStockList.length > 0) {
                 let productList = lowStockList.slice(0, 10).map(item => {
                     const batchInfo = item.batch_ids && item.batch_ids.length > 0 ?
@@ -397,11 +423,13 @@
             }
             renderLowStockList(lowStockList);
 
-            // 5. Top products: aggregate sales_items by product_id
+            // 7. Top products (from filtered sales)
+            const filteredSaleIds = new Set(filteredSales.map(s => s.id));
+            const filteredItems = salesItems.filter(item => filteredSaleIds.has(item.sale_id));
             const productSales = {};
-            salesItems.forEach(item => {
+            for (const item of filteredItems) {
                 const product = products.find(p => p.id === item.product_id);
-                if (!product) return;
+                if (!product) continue;
                 const key = product.id;
                 if (!productSales[key]) {
                     productSales[key] = {
@@ -412,10 +440,10 @@
                     };
                 }
                 productSales[key].qty += item.quantity || 0;
-            });
+            }
             let topProducts = Object.values(productSales).sort((a, b) => b.qty - a.qty).slice(0, 10);
 
-            // 6. Render top products
+            // 8. Render top products
             const topContainer = document.getElementById('topProductsList');
             topContainer.innerHTML = '';
             if (topProducts.length) {
@@ -436,7 +464,7 @@
                 topContainer.innerHTML = '<div class="text-gray-400 text-center py-4 text-sm">📊 No sales data for this period.</div>';
             }
 
-            // 7. Pie chart
+            // 9. Pie chart (from topProducts)
             if (pieChart) pieChart.destroy();
             const ctx = document.getElementById('pieChart');
             const container = document.getElementById('pieChartContainer');
@@ -469,27 +497,7 @@
                 offlineMsg.classList.remove('hidden');
             }
 
-            // 8. Sales history (aggregated by date)
-            // For the selected period (date range / time), filter sales
-            const range = getDateTimeRange();
-            let filteredSales = sales;
-            if (range.start_datetime && range.end_datetime) {
-                const start = new Date(range.start_datetime);
-                const end = new Date(range.end_datetime);
-                filteredSales = sales.filter(s => {
-                    const d = new Date(s.date);
-                    return d >= start && d <= end;
-                });
-            } else if (selectedDate) {
-                const d = new Date(selectedDate);
-                const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0,0,0);
-                const end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23,59,59);
-                filteredSales = sales.filter(s => {
-                    const sd = new Date(s.date);
-                    return sd >= start && sd <= end;
-                });
-            }
-            // Group by date
+            // 10. Sales history (already filtered)
             const historyMap = {};
             filteredSales.forEach(s => {
                 const dateStr = s.date ? new Date(s.date).toISOString().split('T')[0] : 'unknown';
@@ -525,7 +533,6 @@
                     `;
                     historyContainer.appendChild(div);
                 });
-                // If offline, show note
                 if (!navigator.onLine) {
                     const note = document.createElement('div');
                     note.className = 'text-[10px] md:text-xs text-amber-500 mt-2 text-center';
@@ -536,7 +543,7 @@
                 historyContainer.innerHTML = '<div class="text-gray-400 text-center py-4 text-sm">📅 No sales history found for this period.</div>';
             }
 
-            // 9. Background refresh if online (without blocking UI)
+            // 11. Background refresh if online (without blocking UI)
             if (navigator.onLine) {
                 refreshDashboardData().catch(err => console.warn('Background refresh failed:', err));
             }
@@ -545,13 +552,11 @@
         // ---------- Background refresh: pull latest data from API and update Dexie ----------
         async function refreshDashboardData() {
             try {
-                // Use the global pullData to update all tables
                 if (typeof pullData === 'function') {
                     await pullData();
                     // Re‑load dashboard to show fresh data
                     await loadDashboard();
                 } else {
-                    // Fallback: call individual APIs if pullData not available (shouldn't happen)
                     console.warn('pullData not available, skipping background refresh');
                 }
             } catch (e) {
@@ -620,7 +625,6 @@
         });
 
         // ---------- Initialisation ----------
-        // Set default date range
         const today = new Date().toISOString().split('T')[0];
         document.getElementById('startDate').value = today;
         document.getElementById('endDate').value = today;
