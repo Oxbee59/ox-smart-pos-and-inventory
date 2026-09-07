@@ -246,7 +246,7 @@
         window.addEventListener('online', updateOfflineBanner);
         window.addEventListener('offline', updateOfflineBanner);
 
-        // ---------- Dexie helpers ----------
+        // ---------- Dexie helpers with username ----------
         async function storeSalesInDexie(salesData) {
             if (!db) return;
             try {
@@ -264,6 +264,7 @@
                             payment_method: item.payment_method || 'cash',
                             cheque_number: item.cheque_number || null,
                             user_id: null,
+                            username: item.username || 'Unknown'   // ✅ Store username
                         });
                     }
                     let product_id = null;
@@ -326,7 +327,7 @@
                             net_profit: sale.profit || 0,
                             payment_method: sale.payment_method || 'cash',
                             cheque_number: sale.cheque_number || null,
-                            username: 'Unknown'
+                            username: sale.username || 'Unknown'   // ✅ Read username
                         });
                     }
                 }

@@ -403,7 +403,6 @@
 
             // 4. Render using the data we have
             if (summary) {
-                // ✅ FIXED: Use correct key names (sales, profit) from the API
                 document.getElementById('salesValue').innerText = formatMoney(summary.sales || 0);
                 document.getElementById('profitValue').innerText = formatMoney(summary.profit || 0);
                 document.getElementById('productsValue').innerText = summary.total_products || 0;
@@ -428,7 +427,7 @@
                     else if (index === 2) medal = '🥉 ';
                     div.innerHTML = `
                         <span>${medal}<strong class="text-indigo-700">${escapeHtml(p.name)}</strong> <span class="text-gray-600 text-[10px] md:text-xs">(${escapeHtml(p.brand)} | ${escapeHtml(p.category)})</span></span>
-                        <span class="font-bold text-indigo-600 text-xs md:text-sm">${p.qty_sold || p.quantity || 0} sold</span>
+                        <span class="font-bold text-indigo-600 text-xs md:text-sm">${p.qty || 0} sold</span>
                     `;
                     topContainer.appendChild(div);
                 });
@@ -445,7 +444,7 @@
                 container.classList.remove('hidden');
                 offlineMsg.classList.add('hidden');
                 let labels = topProducts.map(p => `${p.name.substring(0, 15)}${p.name.length > 15 ? '...' : ''}`);
-                let values = topProducts.map(p => p.qty_sold || p.quantity || 0);
+                let values = topProducts.map(p => p.qty || 0);
                 if (values.length > 8) {
                     const top8Values = values.slice(0,8);
                     const top8Labels = labels.slice(0,8);
