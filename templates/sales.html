@@ -435,7 +435,9 @@
                 if (claimed > 0 || batch.is_faulty) {
                     hasFaulty = true;
                     faultyCount += claimed;
-                    faultyBatches.push(batch.id);
+                    // ✅ Use batch_id or id
+                    const batchId = batch.batch_id || batch.id;
+                    faultyBatches.push(batchId);
                 }
                 goodStock += remaining - claimed;
             });
@@ -461,7 +463,7 @@
         renderProductList(filtered);
     });
 
-    // ========== BATCH SELECTOR – NO FALLBACK ==========
+    // ========== BATCH SELECTOR – NO FALLBACK, FIXED BATCH ID ==========
     async function openBatchSelector(product, qty) {
         currentProductForBatch = product;
         neededQty = qty;
@@ -550,7 +552,9 @@
             cb.className = 'w-5 h-5 cursor-pointer';
             
             const batchIdSpan = document.createElement('span');
-            batchIdSpan.innerText = batch.is_fallback ? '⚠️ FALLBACK' : batch.id;
+            // ✅ FIX: Use batch_id or id
+            const batchId = batch.batch_id || batch.id;
+            batchIdSpan.innerText = batch.is_fallback ? '⚠️ FALLBACK' : batchId;
             batchIdSpan.className = 'text-sm';
             if (batch.is_fallback) {
                 batchIdSpan.classList.add('text-orange-600', 'font-bold');
@@ -598,7 +602,8 @@
                 batch, 
                 checkbox: cb, 
                 qtyInput, 
-                batchId: batch.id,
+                // ✅ Use batch_id or id
+                batchId: batch.batch_id || batch.id,
                 isFaulty: isFaulty,
                 goodStock: good
             });
