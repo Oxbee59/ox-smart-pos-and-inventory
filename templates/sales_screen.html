@@ -452,7 +452,7 @@
         renderProductList(filtered);
     });
 
-    // ========== BATCH SELECTOR – Dexie‑first ==========
+    // ========== BATCH SELECTOR – NO FALLBACK ==========
     async function openBatchSelector(product, qty) {
         currentProductForBatch = product;
         neededQty = qty;
@@ -480,20 +480,10 @@
             }
         }
 
-        // 3. If still no batches and we have stock, create a fallback batch
-        if (batches.length === 0 && product.stock > 0) {
-            console.warn('⚠️ No batches found, creating fallback batch from product stock');
-            batches = [{
-                id: 'fallback_' + product.id,
-                product_id: product.id,
-                remaining_quantity: product.stock,
-                selling_price: product.selling_price,
-                cost_price: product.cost_price || 0,
-                quantity: product.stock,
-                is_fallback: true,
-                is_faulty: false,
-                claimed_quantity: 0
-            }];
+        // ✅ No fallback – if no batches, show error and abort
+        if (batches.length === 0) {
+            alert(`❌ No stock batches available for "${product.name}".\n\nPlease add a purchase for this product first.`);
+            return false;
         }
 
         // Filter only batches with remaining stock
@@ -788,7 +778,7 @@
             }
         }
         
-        // Check if using fallback batch
+        // Check if using fallback batch – this should never happen now, but keep safety check
         const hasFallback = selected.some(s => s.is_fallback);
         if (hasFallback) {
             if (!confirm('⚠️ This product has stock but no specific batch. Selling from fallback will NOT deduct from real inventory. Continue?')) {
