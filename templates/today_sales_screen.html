@@ -1,9 +1,9 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<!-- Offline banner (updated for screens) -->
+<!-- Offline banner -->
 <div id="offlineBanner" class="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded hidden">
-    ⚠️ You are offline – showing cached screen sales data. Data will refresh when you reconnect.
+    ⚠️ You are offline – Please connect to the internet to view screen sales data.
 </div>
 
 <!-- Hidden user role for JavaScript -->
@@ -29,9 +29,7 @@
             <button id="advancedToggle" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1.5 rounded-lg text-sm">
                 ⚙️ Advanced
             </button>
-            <button id="clearSearchBtn" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-lg text-sm">
-                ✕ Clear
-            </button>
+            <button id="clearSearchBtn" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-lg text-sm">✕ Clear</button>
         </div>
     </div>
     
@@ -112,7 +110,7 @@
     <div class="text-center text-gray-400 py-8">Loading screen sales data...</div>
 </div>
 
-<!-- ========== SUMMARY – Now inside the content flow (not fixed) ========== -->
+<!-- ========== SUMMARY ========== -->
 <div id="summaryBar" class="mt-6 p-3 md:p-4 bg-gray-900 rounded-xl text-teal-400 text-center font-bold shadow-lg text-xs md:text-sm">
     <!-- totals will appear here -->
 </div>
@@ -152,7 +150,7 @@
     </div>
 </div>
 
-<!-- ========== MODAL: BATCH DETAILS (with Open in Purchases button) ========== -->
+<!-- ========== MODAL: BATCH DETAILS ========== -->
 <div id="batchDetailsModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div class="sticky top-0 bg-white p-3 md:p-4 border-b flex justify-between items-center">
@@ -172,33 +170,26 @@
 </div>
 
 <style>
-    /* ===== VISIBLE SCROLLBAR FOR MOBILE & DESKTOP ===== */
     .scrollable-area {
         scrollbar-width: thin;
         scrollbar-color: #cbd5e1 #f1f1f1;
     }
-    
     .scrollable-area::-webkit-scrollbar {
         width: 8px;
         height: 8px;
     }
-    
     .scrollable-area::-webkit-scrollbar-track {
         background: #f1f1f1;
         border-radius: 10px;
     }
-    
     .scrollable-area::-webkit-scrollbar-thumb {
         background: #cbd5e1;
         border-radius: 10px;
         border: 2px solid #f1f1f1;
     }
-    
     .scrollable-area::-webkit-scrollbar-thumb:hover {
         background: #94a3b8;
     }
-    
-    /* Mobile scrollbar - slightly larger for touch */
     @media (max-width: 767px) {
         .scrollable-area::-webkit-scrollbar {
             width: 10px;
@@ -213,8 +204,6 @@
             scrollbar-color: #94a3b8 #f1f1f1;
         }
     }
-    
-    /* Highlight matching text */
     .highlight-match {
         background-color: #fef08a;
         padding: 0 2px;
@@ -224,12 +213,10 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {
-        console.log("DOM fully loaded - initializing screen today sales page with API-first");
+        console.log("DOM loaded – initializing Screen Sales (API-only)");
 
-        // Get user role from hidden element
         const userRoleEl = document.getElementById('userRole');
         const isAdmin = userRoleEl ? userRoleEl.getAttribute('data-role') === 'admin' : false;
-        console.log("User is admin:", isAdmin);
 
         let currentSalesData = [];
         let currentFilteredData = [];
@@ -238,16 +225,12 @@
         let currentEndDate = null;
         let currentSearchTerm = '';
 
-        // Advanced search settings
         let searchMode = 'contains';
         let searchField = 'all';
         let caseSensitive = false;
 
-        // For reversal modal
         let currentReverseSaleId = null;
         let currentReverseItems = [];
-
-        // For view details
         let currentViewSaleId = null;
         let currentViewItems = [];
 
@@ -263,99 +246,7 @@
         window.addEventListener('online', updateOfflineBanner);
         window.addEventListener('offline', updateOfflineBanner);
 
-        // ========== DEXIE HELPERS WITH USERNAME ==========
-        async function storeSalesInDexie(salesData) {
-            if (!db) return;
-            try {
-                const saleMap = new Map();
-                for (const item of salesData) {
-                    if (!saleMap.has(item.sale_id)) {
-                        saleMap.set(item.sale_id, {
-                            id: item.sale_id,
-                            date: item.sale_date || item.date,
-                            subtotal: item.subtotal || 0,
-                            discount: item.discount || 0,
-                            total: item.total || 0,
-                            profit: item.net_profit || 0,
-                            reversed: 0,
-                            payment_method: item.payment_method || 'cash',
-                            cheque_number: item.cheque_number || null,
-                            user_id: null,
-                            username: item.username || 'Unknown'   // ✅ Store username
-                        });
-                    }
-                    let product_id = null;
-                    if (item.name && db) {
-                        const product = await db.products.where({ name: item.name, brand: item.brand || '' }).first();
-                        if (product) product_id = product.id;
-                    }
-                    const saleItem = {
-                        sale_id: item.sale_id,
-                        product_id: product_id,
-                        batch_id: item.batch_id || -1,
-                        quantity: item.quantity,
-                        selling_price: item.selling_price || 0,
-                        cost_price: item.cost_price || 0,
-                        profit: item.profit || 0,
-                    };
-                    saleMap.get(item.sale_id).items = saleMap.get(item.sale_id).items || [];
-                    saleMap.get(item.sale_id).items.push(saleItem);
-                }
-                for (const [saleId, sale] of saleMap) {
-                    await db.sales.put(sale);
-                    for (const item of sale.items) {
-                        await db.sales_items.put(item);
-                    }
-                }
-                console.log('✅ Screen sales data stored in Dexie');
-            } catch (e) {
-                console.warn('Error storing screen sales in Dexie:', e);
-            }
-        }
-
-        async function loadSalesFromDexie() {
-            if (!db) return [];
-            try {
-                const sales = await db.sales.where('reversed').equals(0).toArray();
-                const items = await db.sales_items.toArray();
-                const result = [];
-                for (const sale of sales) {
-                    const saleItems = items.filter(item => item.sale_id === sale.id);
-                    for (const item of saleItems) {
-                        let product = null;
-                        if (item.product_id) {
-                            product = await db.products.get(item.product_id);
-                        }
-                        result.push({
-                            sale_id: sale.id,
-                            name: product?.name || 'Unknown',
-                            brand: product?.brand || '',
-                            category: product?.category || '',
-                            quantity: item.quantity,
-                            selling_price: item.selling_price,
-                            subtotal: item.quantity * item.selling_price,
-                            discount: sale.discount || 0,
-                            total: sale.total || 0,
-                            profit: item.profit || 0,
-                            batch_id: item.batch_id,
-                            cost_price: item.cost_price || 0,
-                            sale_date: sale.date,
-                            is_deleted_batch: item.batch_id === -1 || false,
-                            net_profit: sale.profit || 0,
-                            payment_method: sale.payment_method || 'cash',
-                            cheque_number: sale.cheque_number || null,
-                            username: sale.username || 'Unknown'   // ✅ Read username
-                        });
-                    }
-                }
-                return result;
-            } catch (e) {
-                console.warn('Error loading screen sales from Dexie:', e);
-                return [];
-            }
-        }
-
-        // ---------- Helper: format currency ----------
+        // ---------- Formatting helpers ----------
         function formatMoney(amount) {
             return '₵' + (parseFloat(amount) || 0).toFixed(2);
         }
@@ -382,78 +273,52 @@
             }
         }
 
-        // ---------- Advanced Search Functions ----------
+        // ---------- Advanced Search ----------
         function matchesSearch(value, searchTerm, mode, caseSensitive) {
             if (!value) return false;
-            
-            let searchValue = value;
-            let term = searchTerm;
-            
-            if (!caseSensitive) {
-                searchValue = searchValue.toLowerCase();
-                term = term.toLowerCase();
-            }
-            
+            let searchValue = value, term = searchTerm;
+            if (!caseSensitive) { searchValue = searchValue.toLowerCase(); term = term.toLowerCase(); }
             switch(mode) {
-                case 'exact':
-                    return searchValue === term;
-                case 'starts':
-                    return searchValue.startsWith(term);
-                case 'ends':
-                    return searchValue.endsWith(term);
-                case 'words':
+                case 'exact': return searchValue === term;
+                case 'starts': return searchValue.startsWith(term);
+                case 'ends': return searchValue.endsWith(term);
+                case 'words': {
                     const words = term.split(/\s+/).filter(w => w.length > 0);
                     return words.every(word => searchValue.includes(word));
-                case 'contains':
-                default:
-                    return searchValue.includes(term);
+                }
+                default: return searchValue.includes(term);
             }
         }
 
         function getSearchableText(sale, field) {
             switch(field) {
-                case 'name':
-                    return sale.name || '';
-                case 'brand':
-                    return sale.brand || '';
-                case 'username':
-                    return sale.username || '';
-                case 'category':
-                    return sale.category || '';
-                case 'all':
-                default:
-                    return [
-                        sale.name || '',
-                        sale.brand || '',
-                        sale.username || '',
-                        sale.category || ''
-                    ].join(' ');
+                case 'name': return sale.name || '';
+                case 'brand': return sale.brand || '';
+                case 'username': return sale.username || '';
+                case 'category': return sale.category || '';
+                default: return [sale.name, sale.brand, sale.username, sale.category].filter(Boolean).join(' ');
             }
         }
 
         function applyAdvancedSearchAndRender() {
             const searchInput = document.getElementById('searchInput');
             currentSearchTerm = searchInput ? searchInput.value : '';
-            
             searchMode = document.getElementById('searchMode').value;
             searchField = document.getElementById('searchField').value;
             caseSensitive = document.getElementById('caseSensitive').value === 'true';
             
             let filtered = currentSalesData;
-            
             if (currentSearchTerm.trim()) {
-                const searchTerm = currentSearchTerm.trim();
+                const term = currentSearchTerm.trim();
                 filtered = currentSalesData.filter(sale => {
-                    const searchableText = getSearchableText(sale, searchField);
-                    return matchesSearch(searchableText, searchTerm, searchMode, caseSensitive);
+                    const text = getSearchableText(sale, searchField);
+                    return matchesSearch(text, term, searchMode, caseSensitive);
                 });
             }
-            
             currentFilteredData = filtered;
             updateFilterInfo();
             renderSales(filtered, currentSearchTerm);
             
-            // Count distinct sales (by sale_id) for the result count
             const distinctSales = new Set();
             filtered.forEach(item => distinctSales.add(item.sale_id));
             const distinctCount = distinctSales.size;
@@ -471,50 +336,95 @@
             }
         }
 
+        // ---------- Data loading (API-only - NO DEXIE) ----------
+        async function loadSalesData() {
+            updateOfflineBanner();
+            console.log("Loading screen sales data (API-only)");
+
+            const container = document.getElementById('salesList');
+            container.innerHTML = '<div class="text-center text-gray-400 py-8">⏳ Loading screen sales data...</div>';
+
+            // If offline, show message
+            if (!navigator.onLine) {
+                container.innerHTML = `
+                    <div class="text-center text-gray-400 py-8">
+                        ⚠️ You are offline. Please connect to the internet to view screen sales.
+                        <br><span class="text-sm text-gray-500">Sales data requires an active internet connection.</span>
+                    </div>
+                `;
+                document.getElementById('summaryBar').innerHTML = '📡 Offline – connect to view screen sales';
+                return;
+            }
+
+            try {
+                let url = '';
+                if (currentStartDate && currentEndDate) {
+                    url = `/api/today_sales?start_date=${currentStartDate}&end_date=${currentEndDate}&category=Screen`;
+                } else {
+                    url = `/api/today_sales?period=${currentPeriod}&category=Screen`;
+                }
+                
+                console.log('Fetching screen sales:', url);
+                const res = await fetch(url);
+                
+                if (!res.ok) {
+                    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+                }
+                
+                const apiData = await res.json();
+                
+                if (apiData && apiData.length > 0) {
+                    currentSalesData = apiData;
+                    console.log('📦 Loaded screen sales from API:', currentSalesData.length);
+                    
+                    // Log sample to verify username
+                    if (currentSalesData.length > 0) {
+                        console.log('Sample screen sale:', {
+                            id: currentSalesData[0].sale_id,
+                            username: currentSalesData[0].username,
+                            category: currentSalesData[0].category,
+                            date: currentSalesData[0].sale_date
+                        });
+                    }
+                } else {
+                    currentSalesData = [];
+                    console.log('API returned empty data for screen period:', currentPeriod);
+                }
+                
+                updateFilterInfo();
+                applyAdvancedSearchAndRender();
+                
+            } catch (error) {
+                console.error('Error loading screen sales:', error);
+                container.innerHTML = `
+                    <div class="text-center text-red-500 py-8">
+                        ❌ Error loading screen sales data. Please try refreshing.
+                        <br><span class="text-sm text-gray-400">${error.message}</span>
+                    </div>
+                `;
+                document.getElementById('summaryBar').innerHTML = '❌ Failed to load screen sales data';
+            }
+        }
+
         // ---------- Update filter info ----------
         function updateFilterInfo() {
             const filterInfo = document.getElementById('filterInfo');
             const filterDesc = document.getElementById('filterDescription');
-            
-            let hasFilter = false;
-            let descriptions = [];
-            
+            let hasFilter = false, descriptions = [];
             if (currentSearchTerm) {
                 hasFilter = true;
-                let modeText = {
-                    'contains': 'contains',
-                    'exact': 'exactly matches',
-                    'starts': 'starts with',
-                    'ends': 'ends with',
-                    'words': 'contains all words'
-                }[searchMode] || 'contains';
-                
-                let fieldText = {
-                    'all': 'all fields',
-                    'name': 'product name',
-                    'brand': 'brand',
-                    'username': 'user',
-                    'category': 'category'
-                }[searchField] || 'all fields';
-                
+                let modeText = { 'contains': 'contains', 'exact': 'exactly matches', 'starts': 'starts with', 'ends': 'ends with', 'words': 'contains all words' }[searchMode] || 'contains';
+                let fieldText = { 'all': 'all fields', 'name': 'product name', 'brand': 'brand', 'username': 'user', 'category': 'category' }[searchField] || 'all fields';
                 descriptions.push(`Search: "${currentSearchTerm}" (${modeText} in ${fieldText})`);
             }
-            
             if (currentStartDate && currentEndDate) {
                 hasFilter = true;
                 descriptions.push(`Date: ${currentStartDate} to ${currentEndDate}`);
             } else if (currentPeriod) {
                 hasFilter = true;
-                const periodNames = {
-                    'daily': 'Today',
-                    'weekly': 'This Week',
-                    'monthly': 'This Month',
-                    'yearly': 'This Year',
-                    'all': 'All Time'
-                };
+                const periodNames = { 'daily': 'Today', 'weekly': 'This Week', 'monthly': 'This Month', 'yearly': 'This Year', 'all': 'All Time' };
                 descriptions.push(`Period: ${periodNames[currentPeriod] || currentPeriod}`);
             }
-            
             if (hasFilter) {
                 filterInfo.classList.remove('hidden');
                 filterDesc.textContent = descriptions.join(' | ');
@@ -523,24 +433,194 @@
             }
         }
 
-        // ---------- Reverse modal functions ----------
+        // ---------- Render sales cards ----------
+        function renderSales(sales, searchTerm = '') {
+            const container = document.getElementById('salesList');
+            if (!sales || sales.length === 0) {
+                const message = searchTerm ? `No screen sales found matching "${searchTerm}"` : 'No screen sales recorded for this period.';
+                container.innerHTML = `<div class="text-center text-gray-400 py-8">${message}</div>`;
+                updateSummary([]);
+                return;
+            }
+            const saleMap = new Map();
+            for (const sale of sales) {
+                if (!sale.sale_id) continue;
+                if (!saleMap.has(sale.sale_id)) {
+                    saleMap.set(sale.sale_id, {
+                        sale_id: sale.sale_id,
+                        discount: sale.discount || 0,
+                        total: sale.total || 0,
+                        date: sale.sale_date || sale.date,
+                        netProfit: sale.net_profit || 0,
+                        payment_method: sale.payment_method || 'unknown',
+                        cheque_number: sale.cheque_number || null,
+                        username: sale.username || 'Unknown',
+                        items: []
+                    });
+                }
+                saleMap.get(sale.sale_id).items.push(sale);
+            }
+            let html = '', saleCount = 0;
+            for (const [saleId, saleGroup] of saleMap) {
+                if (!saleGroup.items || saleGroup.items.length === 0) continue;
+                saleCount++;
+                const paymentBadge = getPaymentBadge(saleGroup.payment_method, saleGroup.cheque_number);
+                const itemsHtml = saleGroup.items.map(item => {
+                    const statusText = item.is_deleted_batch ? '⚠️ (Batch Deleted - History Only)' : '';
+                    let displayName = escapeHtml(item.name);
+                    let displayBrand = escapeHtml(item.brand);
+                    if (searchTerm && searchTerm.trim()) {
+                        const term = searchTerm.trim();
+                        if (item.name && item.name.toLowerCase().includes(term.toLowerCase())) {
+                            const regex = new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+                            displayName = escapeHtml(item.name).replace(regex, '<span class="highlight-match">$1</span>');
+                        }
+                        if (item.brand && item.brand.toLowerCase().includes(term.toLowerCase())) {
+                            const regex = new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+                            displayBrand = escapeHtml(item.brand).replace(regex, '<span class="highlight-match">$1</span>');
+                        }
+                    }
+                    let extraDetails = '';
+                    if (isAdmin) {
+                        extraDetails = `
+                            <div>Cost: ${formatMoney(item.cost_price)}</div>
+                            <div>Profit: ${formatMoney(item.profit)}</div>
+                        `;
+                    }
+                    return `
+                        <div class="border-b pb-1 md:pb-2 mb-1 md:mb-2 last:border-0">
+                            <div class="font-semibold text-indigo-700 text-sm md:text-base">${displayName} (${displayBrand}) ${statusText}</div>
+                            <div class="text-xs md:text-sm grid grid-cols-2 gap-0.5 md:gap-1">
+                                <div>Qty: ${item.quantity}</div>
+                                <div>Selling: ${formatMoney(item.selling_price)}</div>
+                                <div>Batch: ${item.batch_id === -1 ? 'DELETED' : '#' + item.batch_id}</div>
+                                ${extraDetails}
+                                <div>Subtotal: ${formatMoney(item.subtotal)}</div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                html += `
+                    <div class="bg-white rounded-xl shadow-md p-3 md:p-4 border" data-sale-id="${saleId}">
+                        <div class="flex flex-wrap justify-between items-start mb-1 md:mb-2 gap-1">
+                            <div class="text-xs md:text-sm text-gray-500">Sale #${saleId} | ${saleGroup.date}</div>
+                            <div>${paymentBadge}</div>
+                        </div>
+                        <div class="text-xs text-gray-600 mb-1">👤 User: ${escapeHtml(saleGroup.username)}</div>
+                        ${itemsHtml}
+                        <div class="mt-1 md:mt-2 pt-1 md:pt-2 border-t flex flex-wrap justify-between items-center gap-2">
+                            <div class="flex gap-1">
+                                <button class="reverse-sale-btn bg-red-500 hover:bg-red-600 text-white px-2 py-0.5 md:px-3 md:py-1 rounded text-xs md:text-sm" data-sale-id="${saleId}" data-sale-items='${JSON.stringify(saleGroup.items)}'>↺ Reverse</button>
+                                ${isAdmin ? `<button class="view-details-btn bg-blue-500 hover:bg-blue-600 text-white px-2 py-0.5 md:px-3 md:py-1 rounded text-xs md:text-sm" data-sale-id="${saleId}" data-sale-items='${JSON.stringify(saleGroup.items)}'>📋 Details</button>` : ''}
+                            </div>
+                            <div class="flex flex-wrap items-center gap-1 md:gap-2">
+                                <span class="text-xs md:text-sm">Discount: ${formatMoney(saleGroup.discount)}</span>
+                                <span class="text-base md:text-lg font-bold">Total: ${formatMoney(saleGroup.total)}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            container.innerHTML = html;
+            updateSummary(sales);
+
+            document.querySelectorAll('.reverse-sale-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const saleId = parseInt(btn.getAttribute('data-sale-id'));
+                    const saleItems = JSON.parse(btn.getAttribute('data-sale-items'));
+                    openReverseModal(saleId, saleItems);
+                });
+            });
+
+            if (isAdmin) {
+                document.querySelectorAll('.view-details-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const saleId = parseInt(btn.getAttribute('data-sale-id'));
+                        const saleItems = JSON.parse(btn.getAttribute('data-sale-items'));
+                        openViewDetailsModal(saleId, saleItems);
+                    });
+                });
+            }
+            console.log(`✅ Rendered ${saleCount} screen sales with ${sales.length} total items`);
+        }
+
+        // ---------- Update summary ----------
+        function updateSummary(sales) {
+            const seenSales = new Set();
+            let totalSales = 0, totalDiscount = 0, totalProfit = 0, totalItems = 0;
+            let cashTotal = 0, momoTotal = 0, chequeTotal = 0;
+            for (const sale of sales) {
+                if (!seenSales.has(sale.sale_id)) {
+                    totalSales += sale.total || 0;
+                    totalDiscount += sale.discount || 0;
+                    totalProfit += sale.net_profit || 0;
+                    seenSales.add(sale.sale_id);
+                    const method = (sale.payment_method || 'cash').toLowerCase();
+                    if (method === 'cash' || method === '') {
+                        cashTotal += sale.total || 0;
+                    } else if (method === 'momo') {
+                        momoTotal += sale.total || 0;
+                    } else if (method === 'cheque') {
+                        chequeTotal += sale.total || 0;
+                    } else {
+                        cashTotal += sale.total || 0;
+                    }
+                }
+                totalItems += sale.quantity || 0;
+            }
+            const totalSalesCount = seenSales.size;
+            let periodText = '';
+            if (currentStartDate && currentEndDate) {
+                periodText = `📅 ${currentStartDate} to ${currentEndDate}`;
+            } else {
+                const periodNames = { 'daily': 'Today', 'weekly': 'This Week', 'monthly': 'This Month', 'yearly': 'This Year', 'all': 'All Time' };
+                periodText = `📅 ${periodNames[currentPeriod] || currentPeriod}`;
+            }
+            let filterSummary = currentSearchTerm ? ` | 🔍 "${currentSearchTerm}"` : '';
+
+            let profitHtml = '';
+            if (isAdmin) {
+                profitHtml = `<span class="text-gray-500">|</span>
+                              <span>📈 Profit: <strong class="${totalProfit >= 0 ? 'text-teal-400' : 'text-red-400'}">${formatMoney(totalProfit)}</strong></span>`;
+            }
+
+            document.getElementById('summaryBar').innerHTML = `
+                <div class="flex flex-wrap justify-center items-center gap-1 md:gap-2 text-[10px] md:text-xs">
+                    <span class="text-teal-300">${periodText}</span>
+                    <span class="text-gray-500">|</span>
+                    <span>🧾 Screen Sales: <strong>${totalSalesCount}</strong></span>
+                    <span class="text-gray-500">|</span>
+                    <span>📦 Items: <strong>${totalItems}</strong></span>
+                    <span class="text-gray-500">|</span>
+                    <span>💰 Sales: <strong class="text-green-400">${formatMoney(totalSales)}</strong></span>
+                    <span class="text-gray-500">|</span>
+                    <span>📉 Disc: <strong class="text-red-400">${formatMoney(totalDiscount)}</strong></span>
+                    ${profitHtml}
+                    ${filterSummary}
+                </div>
+                <div class="flex flex-wrap justify-center items-center gap-1 md:gap-2 text-[9px] md:text-xs mt-0.5">
+                    <span class="text-green-400">💵 Cash: ${formatMoney(cashTotal)}</span>
+                    <span class="text-gray-600">|</span>
+                    <span class="text-blue-400">📱 MoMo: ${formatMoney(momoTotal)}</span>
+                    <span class="text-gray-600">|</span>
+                    <span class="text-purple-400">📝 Cheque: ${formatMoney(chequeTotal)}</span>
+                </div>
+            `;
+        }
+
+        // ---------- Reverse modal ----------
         window.openReverseModal = function (saleId, saleItems) {
             currentReverseSaleId = saleId;
             const container = document.getElementById('reverseItemList');
             container.innerHTML = '';
             currentReverseItems = [];
-
             saleItems.forEach((item, idx) => {
-                const itemDiv = document.createElement('div');
-                itemDiv.className = 'border rounded-lg p-2 md:p-3 flex items-start space-x-2 md:space-x-3';
+                const div = document.createElement('div');
+                div.className = 'border rounded-lg p-2 md:p-3 flex items-start space-x-2 md:space-x-3';
                 const cb = document.createElement('input');
                 cb.type = 'checkbox';
                 cb.className = 'mt-1';
-                cb.dataset.item = JSON.stringify({
-                    batch_id: item.batch_id,
-                    quantity: item.quantity,
-                    product_id: item.product_id
-                });
+                cb.dataset.item = JSON.stringify({ batch_id: item.batch_id, quantity: item.quantity, product_id: item.product_id });
                 const info = document.createElement('div');
                 info.className = 'flex-1 text-xs md:text-sm';
                 let details = `
@@ -553,13 +633,12 @@
                     details += `<br>Cost: ${formatMoney(item.cost_price)}<br>Profit: ${formatMoney(item.profit)}`;
                 }
                 info.innerHTML = details;
-                itemDiv.appendChild(cb);
-                itemDiv.appendChild(info);
-                container.appendChild(itemDiv);
+                div.appendChild(cb);
+                div.appendChild(info);
+                container.appendChild(div);
                 currentReverseItems.push({ checkbox: cb, itemData: item });
             });
-
-            document.getElementById('reverseModalTitle').innerHTML = `Reverse Items from Sale #${saleId}`;
+            document.getElementById('reverseModalTitle').innerHTML = `Reverse Items from Screen Sale #${saleId}`;
             document.getElementById('reverseModal').classList.remove('hidden');
         };
 
@@ -572,7 +651,6 @@
         window.selectAllReverseItems = function () {
             currentReverseItems.forEach(i => i.checkbox.checked = true);
         };
-
         window.deselectAllReverseItems = function () {
             currentReverseItems.forEach(i => i.checkbox.checked = false);
         };
@@ -587,17 +665,12 @@
                 alert('Please select at least one item to reverse.');
                 return;
             }
-
             const itemsToReverse = selected.map(i => JSON.parse(i.checkbox.dataset.item));
-
             try {
                 const response = await fetch('/api/sales/reverse_items', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        sale_id: currentReverseSaleId,
-                        items: itemsToReverse
-                    })
+                    body: JSON.stringify({ sale_id: currentReverseSaleId, items: itemsToReverse })
                 });
                 const data = await response.json();
                 if (data.success) {
@@ -612,7 +685,7 @@
             }
         }
 
-        // ---------- View Details: open modal with items (only if admin) ----------
+        // ---------- View Details modal (admin) ----------
         window.openViewDetailsModal = function (saleId, saleItems) {
             if (!isAdmin) return;
             currentViewSaleId = saleId;
@@ -659,7 +732,7 @@
                 div.appendChild(viewBtn);
                 container.appendChild(div);
             });
-            document.getElementById('viewDetailsTitle').innerHTML = `Sale #${saleId} – Select Item`;
+            document.getElementById('viewDetailsTitle').innerHTML = `Screen Sale #${saleId} – Select Item`;
             document.getElementById('viewDetailsModal').classList.remove('hidden');
         };
 
@@ -669,14 +742,13 @@
             currentViewItems = [];
         };
 
-        // ========== FIXED: Open in Purchases for screens – uses the correct route ==========
+        // ---------- Batch details modal ----------
         window.openInPurchases = function(batchId) {
             if (batchId && batchId !== -1) {
                 window.location.href = `/purchases/screens?show_history=${batchId}`;
             }
         };
 
-        // ---------- Show batch details using the purchase history endpoint ----------
         window.showBatchDetails = async function (batchId, productName, productBrand, quantitySold, sellingPrice, costPrice) {
             const openInPurchasesBtn = document.getElementById('openInPurchasesBtn');
             if (batchId === -1) {
@@ -778,246 +850,29 @@
             document.getElementById('batchDetailsModal').classList.add('hidden');
         };
 
-        // ---------- Render sales cards ----------
-        function renderSales(sales, searchTerm = '') {
-            const container = document.getElementById('salesList');
-            if (!sales || sales.length === 0) {
-                const message = searchTerm ? 
-                    `No screen sales found matching "${searchTerm}"` : 
-                    'No screen sales recorded for this period.';
-                container.innerHTML = `<div class="text-center text-gray-400 py-8">${message}</div>`;
-                updateSummary([]);
-                return;
-            }
-
-            const saleMap = new Map();
-            for (const sale of sales) {
-                if (!sale.sale_id) continue;
-                if (!saleMap.has(sale.sale_id)) {
-                    saleMap.set(sale.sale_id, {
-                        sale_id: sale.sale_id,
-                        discount: sale.discount || 0,
-                        total: sale.total || 0,
-                        date: sale.sale_date || sale.date,
-                        netProfit: sale.net_profit || 0,
-                        payment_method: sale.payment_method || 'unknown',
-                        cheque_number: sale.cheque_number || null,
-                        username: sale.username || 'Unknown',
-                        items: []
-                    });
-                }
-                saleMap.get(sale.sale_id).items.push(sale);
-            }
-
-            let html = '';
-            let saleCount = 0;
-            
-            for (const [saleId, saleGroup] of saleMap) {
-                if (!saleGroup.items || saleGroup.items.length === 0) continue;
-                saleCount++;
-                const paymentBadge = getPaymentBadge(saleGroup.payment_method, saleGroup.cheque_number);
-
-                const itemsHtml = saleGroup.items.map(item => {
-                    const statusText = item.is_deleted_batch ? '⚠️ (Batch Deleted - History Only)' : '';
-                    let displayName = escapeHtml(item.name);
-                    let displayBrand = escapeHtml(item.brand);
-                    
-                    if (searchTerm && searchTerm.trim()) {
-                        const term = searchTerm.trim();
-                        if (item.name && item.name.toLowerCase().includes(term.toLowerCase())) {
-                            const regex = new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-                            displayName = escapeHtml(item.name).replace(regex, '<span class="highlight-match">$1</span>');
-                        }
-                        if (item.brand && item.brand.toLowerCase().includes(term.toLowerCase())) {
-                            const regex = new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-                            displayBrand = escapeHtml(item.brand).replace(regex, '<span class="highlight-match">$1</span>');
-                        }
-                    }
-                    
-                    let extraDetails = '';
-                    if (isAdmin) {
-                        extraDetails = `
-                            <div>Cost: ${formatMoney(item.cost_price)}</div>
-                            <div>Profit: ${formatMoney(item.profit)}</div>
-                        `;
-                    }
-                    
-                    return `
-                        <div class="border-b pb-1 md:pb-2 mb-1 md:mb-2 last:border-0">
-                            <div class="font-semibold text-indigo-700 text-sm md:text-base">${displayName} (${displayBrand}) ${statusText}</div>
-                            <div class="text-xs md:text-sm grid grid-cols-2 gap-0.5 md:gap-1">
-                                <div>Qty: ${item.quantity}</div>
-                                <div>Selling: ${formatMoney(item.selling_price)}</div>
-                                <div>Batch: ${item.batch_id === -1 ? 'DELETED' : '#' + item.batch_id}</div>
-                                ${extraDetails}
-                                <div>Subtotal: ${formatMoney(item.subtotal)}</div>
-                            </div>
-                        </div>
-                    `;
-                }).join('');
-
-                html += `
-                    <div class="bg-white rounded-xl shadow-md p-3 md:p-4 border" data-sale-id="${saleId}">
-                        <div class="flex flex-wrap justify-between items-start mb-1 md:mb-2 gap-1">
-                            <div class="text-xs md:text-sm text-gray-500">Sale #${saleId} | ${saleGroup.date}</div>
-                            <div>${paymentBadge}</div>
-                        </div>
-                        <div class="text-xs text-gray-600 mb-1">👤 User: ${escapeHtml(saleGroup.username)}</div>
-                        ${itemsHtml}
-                        <div class="mt-1 md:mt-2 pt-1 md:pt-2 border-t flex flex-wrap justify-between items-center gap-2">
-                            <div class="flex gap-1">
-                                <button class="reverse-sale-btn bg-red-500 hover:bg-red-600 text-white px-2 py-0.5 md:px-3 md:py-1 rounded text-xs md:text-sm" data-sale-id="${saleId}" data-sale-items='${JSON.stringify(saleGroup.items)}'>↺ Reverse</button>
-                                ${isAdmin ? `<button class="view-details-btn bg-blue-500 hover:bg-blue-600 text-white px-2 py-0.5 md:px-3 md:py-1 rounded text-xs md:text-sm" data-sale-id="${saleId}" data-sale-items='${JSON.stringify(saleGroup.items)}'>📋 Details</button>` : ''}
-                            </div>
-                            <div class="flex flex-wrap items-center gap-1 md:gap-2">
-                                <span class="text-xs md:text-sm">Discount: ${formatMoney(saleGroup.discount)}</span>
-                                <span class="text-base md:text-lg font-bold">Total: ${formatMoney(saleGroup.total)}</span>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }
-            
-            container.innerHTML = html;
-            updateSummary(sales);
-
-            document.querySelectorAll('.reverse-sale-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    const saleId = parseInt(btn.getAttribute('data-sale-id'));
-                    const saleItems = JSON.parse(btn.getAttribute('data-sale-items'));
-                    openReverseModal(saleId, saleItems);
-                });
-            });
-
-            if (isAdmin) {
-                document.querySelectorAll('.view-details-btn').forEach(btn => {
-                    btn.addEventListener('click', (e) => {
-                        const saleId = parseInt(btn.getAttribute('data-sale-id'));
-                        const saleItems = JSON.parse(btn.getAttribute('data-sale-items'));
-                        openViewDetailsModal(saleId, saleItems);
-                    });
-                });
-            }
-            
-            console.log(`✅ Rendered ${saleCount} screen sales with ${sales.length} total items`);
-        }
-
-        // ---------- Update summary ----------
-        function updateSummary(sales) {
-            const seenSales = new Set();
-            let totalSales = 0, totalDiscount = 0, totalProfit = 0, totalItems = 0;
-            let cashTotal = 0, momoTotal = 0, chequeTotal = 0;
-
-            for (const sale of sales) {
-                if (!seenSales.has(sale.sale_id)) {
-                    totalSales += sale.total || 0;
-                    totalDiscount += sale.discount || 0;
-                    totalProfit += sale.net_profit || 0;
-                    seenSales.add(sale.sale_id);
-
-                    const method = (sale.payment_method || 'cash').toLowerCase();
-                    if (method === 'cash' || method === '') {
-                        cashTotal += sale.total || 0;
-                    } else if (method === 'momo') {
-                        momoTotal += sale.total || 0;
-                    } else if (method === 'cheque') {
-                        chequeTotal += sale.total || 0;
-                    } else {
-                        cashTotal += sale.total || 0;
-                    }
-                }
-                totalItems += sale.quantity || 0;
-            }
-
-            const totalSalesCount = seenSales.size;
-
-            let periodText = '';
-            if (currentStartDate && currentEndDate) {
-                periodText = `📅 ${currentStartDate} to ${currentEndDate}`;
-            } else {
-                switch (currentPeriod) {
-                    case 'daily': periodText = '📅 Today'; break;
-                    case 'weekly': periodText = '📅 This Week'; break;
-                    case 'monthly': periodText = '📅 This Month'; break;
-                    case 'yearly': periodText = '📅 This Year'; break;
-                    case 'all': periodText = '📅 All Time'; break;
-                    default: periodText = '📅 Today';
-                }
-            }
-
-            let filterSummary = currentSearchTerm ? ` | 🔍 "${currentSearchTerm}"` : '';
-
-            let profitHtml = '';
-            if (isAdmin) {
-                profitHtml = `<span class="text-gray-500">|</span>
-                              <span>📈 Profit: <strong class="${totalProfit >= 0 ? 'text-teal-400' : 'text-red-400'}">${formatMoney(totalProfit)}</strong></span>`;
-            }
-
-            document.getElementById('summaryBar').innerHTML = `
-                <div class="flex flex-wrap justify-center items-center gap-1 md:gap-2 text-[10px] md:text-xs">
-                    <span class="text-teal-300">${periodText}</span>
-                    <span class="text-gray-500">|</span>
-                    <span>🧾 Sales: <strong>${totalSalesCount}</strong></span>
-                    <span class="text-gray-500">|</span>
-                    <span>📦 Items: <strong>${totalItems}</strong></span>
-                    <span class="text-gray-500">|</span>
-                    <span>💰 Sales: <strong class="text-green-400">${formatMoney(totalSales)}</strong></span>
-                    <span class="text-gray-500">|</span>
-                    <span>📉 Disc: <strong class="text-red-400">${formatMoney(totalDiscount)}</strong></span>
-                    ${profitHtml}
-                    ${filterSummary}
-                </div>
-                <div class="flex flex-wrap justify-center items-center gap-1 md:gap-2 text-[9px] md:text-xs mt-0.5">
-                    <span class="text-green-400">💵 Cash: ${formatMoney(cashTotal)}</span>
-                    <span class="text-gray-600">|</span>
-                    <span class="text-blue-400">📱 MoMo: ${formatMoney(momoTotal)}</span>
-                    <span class="text-gray-600">|</span>
-                    <span class="text-purple-400">📝 Cheque: ${formatMoney(chequeTotal)}</span>
-                </div>
-            `;
-        }
-
         // ---------- PDF export ----------
         async function exportPDF() {
             if (!navigator.onLine) {
                 alert('PDF export requires internet. Please connect and try again.');
                 return;
             }
-            
             const dataToExport = currentFilteredData;
-            
             if (!dataToExport || dataToExport.length === 0) {
                 alert('No data to export. Please adjust your filters.');
                 return;
             }
-            
             let periodText = '';
             if (currentStartDate && currentEndDate) {
                 periodText = `Period: ${currentStartDate} to ${currentEndDate}`;
             } else {
-                const periodNames = {
-                    'daily': 'Today',
-                    'weekly': 'This Week',
-                    'monthly': 'This Month',
-                    'yearly': 'This Year',
-                    'all': 'All Time'
-                };
+                const periodNames = { 'daily': 'Today', 'weekly': 'This Week', 'monthly': 'This Month', 'yearly': 'This Year', 'all': 'All Time' };
                 periodText = periodNames[currentPeriod] || 'Today';
             }
-            
             if (currentSearchTerm) {
-                const modeText = {
-                    'contains': 'contains',
-                    'exact': 'exactly matches',
-                    'starts': 'starts with',
-                    'ends': 'ends with',
-                    'words': 'contains all words'
-                }[searchMode] || 'contains';
+                const modeText = { 'contains': 'contains', 'exact': 'exactly matches', 'starts': 'starts with', 'ends': 'ends with', 'words': 'contains all words' }[searchMode] || 'contains';
                 periodText += ` (Filtered by: "${currentSearchTerm}" - ${modeText})`;
             }
-            
             const summary = document.getElementById('summaryBar').innerText;
-            
             try {
                 const response = await fetch('/api/today_sales/pdf', {
                     method: 'POST',
@@ -1049,127 +904,22 @@
             }
         }
 
-        // ========== API-FIRST LOAD ==========
-        async function loadSalesData() {
-            updateOfflineBanner();
-            console.log("Loading screen sales data (API-first)...");
-
-            let data = [];
-            let apiSuccess = false;
-
-            // 1. Try API first (if online)
-            if (navigator.onLine) {
-                try {
-                    let url = '';
-                    if (currentStartDate && currentEndDate) {
-                        url = `/api/today_sales?start_date=${currentStartDate}&end_date=${currentEndDate}&category=Screen`;
-                    } else {
-                        url = `/api/today_sales?period=${currentPeriod}&category=Screen`;
-                    }
-                    const res = await fetch(url);
-                    if (res.ok) {
-                        const apiData = await res.json();
-                        if (apiData && apiData.length > 0) {
-                            // Store in Dexie
-                            await storeSalesInDexie(apiData);
-                            // Reload from Dexie to get full relationships
-                            data = await loadSalesFromDexie();
-                            // Filter to screen category
-                            data = data.filter(item => item.category === 'Screen');
-                            apiSuccess = true;
-                            console.log('📦 Loaded screen sales from API:', data.length);
-                        } else {
-                            // No data from API but still mark success to avoid fallback
-                            apiSuccess = true;
-                            console.log('API returned empty data');
-                        }
-                    }
-                } catch (e) {
-                    console.warn('API failed, using Dexie fallback');
-                }
-            }
-
-            // 2. If API failed or offline, read from Dexie
-            if (!apiSuccess || !navigator.onLine) {
-                data = await loadSalesFromDexie();
-                data = data.filter(item => item.category === 'Screen');
-                if (data.length > 0) {
-                    console.log('📦 Loaded screen sales from Dexie:', data.length);
-                } else {
-                    console.log('No screen sales data in Dexie, showing empty state.');
-                }
-            }
-
-            // 3. Apply period/date filters client-side
-            let filteredByDate = data;
-            if (currentPeriod !== 'all' && !(currentStartDate && currentEndDate)) {
-                const now = new Date();
-                const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                const startOfWeek = new Date(today);
-                startOfWeek.setDate(today.getDate() - today.getDay());
-                const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-                const startOfYear = new Date(today.getFullYear(), 0, 1);
-                filteredByDate = data.filter(item => {
-                    const d = new Date(item.sale_date || item.date);
-                    if (currentPeriod === 'daily') return d >= today;
-                    if (currentPeriod === 'weekly') return d >= startOfWeek;
-                    if (currentPeriod === 'monthly') return d >= startOfMonth;
-                    if (currentPeriod === 'yearly') return d >= startOfYear;
-                    return true;
-                });
-            } else if (currentStartDate && currentEndDate) {
-                const start = new Date(currentStartDate);
-                start.setHours(0,0,0,0);
-                const end = new Date(currentEndDate);
-                end.setHours(23,59,59,999);
-                filteredByDate = data.filter(item => {
-                    const d = new Date(item.sale_date || item.date);
-                    return d >= start && d <= end;
-                });
-            }
-
-            currentSalesData = filteredByDate;
-            updateFilterInfo();
-            applyAdvancedSearchAndRender();
-
-            // If offline, show stale note
-            if (!navigator.onLine) {
-                const list = document.getElementById('salesList');
-                if (list) {
-                    list.innerHTML += '<div class="text-xs text-gray-500 text-center mt-2">📦 Data may be outdated (offline)</div>';
-                }
-            }
-        }
-
         // ---------- Event listeners ----------
         document.getElementById('refreshBtn').addEventListener('click', () => loadSalesData());
         document.getElementById('pdfBtn').addEventListener('click', exportPDF);
         document.getElementById('confirmReverseBtn').addEventListener('click', confirmReverseSelected);
-        
-        document.getElementById('searchInput').addEventListener('input', () => {
-            applyAdvancedSearchAndRender();
-        });
-        
+        document.getElementById('searchInput').addEventListener('input', applyAdvancedSearchAndRender);
         document.getElementById('clearSearchBtn').addEventListener('click', () => {
             document.getElementById('searchInput').value = '';
             applyAdvancedSearchAndRender();
         });
-        
         document.getElementById('advancedToggle').addEventListener('click', () => {
-            const advanced = document.getElementById('advancedSearch');
-            advanced.classList.toggle('hidden');
+            document.getElementById('advancedSearch').classList.toggle('hidden');
         });
-        
-        document.getElementById('applyAdvancedSearch').addEventListener('click', () => {
-            applyAdvancedSearchAndRender();
-        });
-        
+        document.getElementById('applyAdvancedSearch').addEventListener('click', applyAdvancedSearchAndRender);
         document.getElementById('searchInput').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                applyAdvancedSearchAndRender();
-            }
+            if (e.key === 'Enter') applyAdvancedSearchAndRender();
         });
-
         document.getElementById('applyDateBtn').addEventListener('click', () => {
             const start = document.getElementById('startDate').value;
             const end = document.getElementById('endDate').value;
@@ -1182,7 +932,6 @@
                 alert('Please select both start and end dates.');
             }
         });
-
         document.querySelectorAll('.period-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 currentPeriod = btn.getAttribute('data-period');
@@ -1195,8 +944,8 @@
                 loadSalesData();
             });
         });
-
-        window.addEventListener('online', function () {
+        window.addEventListener('online', () => {
+            updateOfflineBanner();
             loadSalesData();
         });
 
