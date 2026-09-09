@@ -358,7 +358,6 @@
             const btn = document.createElement('button');
             btn.className = 'w-full text-left px-3 py-2 hover:bg-gray-100 rounded-lg border-b';
             
-            // Check stock breakdown
             let hasFaulty = false;
             let faultyCount = 0;
             let goodStock = 0;
@@ -426,7 +425,6 @@
                 if (claimed > 0 || batch.is_faulty) {
                     hasFaulty = true;
                     faultyCount += claimed;
-                    // ✅ Use batch_id or id
                     const batchId = batch.batch_id || batch.id;
                     faultyBatches.push(batchId);
                 }
@@ -543,7 +541,6 @@
             cb.className = 'w-5 h-5 cursor-pointer';
             
             const batchIdSpan = document.createElement('span');
-            // ✅ FIX: Use batch_id or id
             const batchId = batch.batch_id || batch.id;
             batchIdSpan.innerText = batch.is_fallback ? '⚠️ FALLBACK' : batchId;
             batchIdSpan.className = 'text-sm';
@@ -593,7 +590,6 @@
                 batch, 
                 checkbox: cb, 
                 qtyInput, 
-                // ✅ FIX: Use batch_id or id
                 batchId: batch.batch_id || batch.id,
                 isFaulty: isFaulty,
                 goodStock: good
@@ -840,7 +836,6 @@
             const faultyWarning = item.hasFaulty ? 
                 '<span class="text-red-500 text-xs font-bold ml-2">⚠️ FAULTY</span>' : '';
             
-            // Calculate stock breakdown for display
             let totalGood = 0;
             let totalClaimed = 0;
             item.selectedBatches.forEach(b => {
@@ -998,7 +993,7 @@
         return `${date} ${time}`;
     }
 
-    // ---------- Execute Sale ----------
+    // ========== FIXED: Execute Sale with correct product_id ==========
     async function executeSaleWithPayment(paymentMethod, chequeNum) {
         if (!pendingSaleCallback) return;
         
@@ -1013,8 +1008,20 @@
         
         const selectedBatches = [];
         pendingSaleCallback.cart.forEach(item => {
+            // ✅ FIX: Get the product ID correctly
+            const productId = item.product.product_id || item.product.id;
+            
+            if (!productId) {
+                console.warn('⚠️ Missing product_id for item:', item.product);
+                return;
+            }
+            
             item.selectedBatches.forEach(b => {
-                selectedBatches.push({ batch_id: b.batch_id, qty: b.qty, product_id: item.product.id });
+                selectedBatches.push({ 
+                    batch_id: b.batch_id, 
+                    qty: b.qty, 
+                    product_id: productId
+                });
             });
         });
         
