@@ -1698,8 +1698,12 @@ def api_sales_complete():
         receipt_cart = []
         for idx, item in enumerate(cart_items):
             product_batches = []
+            # ✅ FIX: Get product_id from the product object
+            product_id_from_item = item['product'].get('product_id') or item['product'].get('id')
+            
             for sb in selected_batches:
-                if sb.get('product_id') == item['product']['id']:
+                # ✅ Compare with product_id_from_item
+                if sb.get('product_id') == product_id_from_item:
                     batch_info = get_batch_by_id(sb['batch_id'])
                     if batch_info:
                         product_batches.append({
@@ -1733,7 +1737,6 @@ def api_sales_complete():
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 400
-
 # ===================== REVERSE SALE API =====================
 @app.route('/api/sales/reverse/<int:sale_id>', methods=['POST'])
 @login_required
