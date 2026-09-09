@@ -1004,7 +1004,7 @@
         return `${date} ${time}`;
     }
 
-    // ========== FIXED: Execute Sale with correct product_id ==========
+    // ========== FIXED: Execute Sale with BOTH IDs for compatibility ==========
     async function executeSaleWithPayment(paymentMethod, chequeNum) {
         if (!pendingSaleCallback) return;
         
@@ -1031,7 +1031,9 @@
                 selectedBatches.push({ 
                     batch_id: b.batch_id, 
                     qty: b.qty, 
-                    product_id: productId
+                    product_id: productId,
+                    // ✅ Also send as 'id' for backward compatibility with backend
+                    id: productId
                 });
             });
         });
