@@ -365,7 +365,12 @@ def create_multi_sale(cart_items, sale_datetime=None, selected_batches=None, pay
         # 4. Process each cart item
         for item in cart_items:
             product = item["product"]
-            product_id = product["id"]
+            # ✅ FIX: Get product_id correctly - product has 'product_id' not 'id'
+            product_id = product.get("product_id") or product.get("id")
+            
+            if not product_id:
+                raise ValueError(f"Product has no ID: {product}")
+            
             quantity = int(item["qty"])
             discount = float(item.get("discount", 0))
             selling_price = float(product.get("selling_price", 0))
@@ -497,7 +502,8 @@ def create_multi_sale(cart_items, sale_datetime=None, selected_batches=None, pay
                 "subtotal": subtotal,
                 "discount": discount,
                 "total": final_total,
-                "has_faulty": has_faulty_batch
+                "has_faulty": has_faulty_batch,
+                "product_id": product_id  # ✅ Include product_id in receipt data
             })
         
         # 5. Execute batch updates
