@@ -1,0 +1,31 @@
+<!--
+    Reusable two-panel low-stock section.
+    Pass `low_stock_category` from the including template:
+        dashboard   → "all"
+        products    → "Accessory"
+        screens     → "Screen"
+-->
+<div id="lowStockSplitRoot"
+     data-category="{{ low_stock_category or 'all' }}"
+     class="bg-white rounded-xl shadow-md p-4 mb-4">
+    <div class="flex items-center justify-between mb-3">
+        <h2 class="text-base md:text-xl font-semibold">⚠️ Low Stock & Out of Stock</h2>
+        <span class="text-xs text-gray-400" id="lowStockSplitSubtitle">Loading…</span>
+    </div>
+    <div id="lowStockSplitBody">
+        <div class="text-center text-gray-400 py-6 text-sm">Loading…</div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/low_stock_split.js') }}"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const root = document.getElementById('lowStockSplitRoot');
+        if (root) {
+            LowStockSplit.init({
+                rootId: 'lowStockSplitRoot',
+                category: root.dataset.category || 'all'
+            });
+        }
+    });
+</script>

@@ -1359,7 +1359,30 @@ def api_suggest_product():
     )
     return jsonify(results)
 # ===================== PRODUCT API =====================
+# ---------- IMPORT ----------
+from services.low_stock_service import get_low_stock_split
+
+# ---------- ROUTE ----------
+@app.route('/api/low_stock/split', methods=['GET'])
+@login_required
+def api_low_stock_split():
+    """
+    Returns both batch-level and product-level low/out-of-stock data.
+    Query params:
+        category = 'Screen' | 'Accessory' | 'all' (default 'all')
+    """
+    category = request.args.get('category')
+    try:
+        data = get_low_stock_split(category)
+        return jsonify({'success': True, **data})
+    except Exception as e:
+        print(f"❌ Error in api_low_stock_split: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 # ===================== PRODUCT API =====================
+
 @app.route('/api/products', methods=['GET'])
 @login_required
 def api_get_products():
