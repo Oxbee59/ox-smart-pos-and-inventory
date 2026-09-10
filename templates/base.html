@@ -8,7 +8,7 @@
     <!-- ===== PWA MANIFEST & THEME ===== -->
     <link rel="manifest" href="/static/manifest.json">
     <meta name="theme-color" content="#00CFCF">
-    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
     <!-- Tailwind CSS -->
@@ -723,6 +723,45 @@
     }
 
     // ============================================================
+    //  ✅ NEW: CLEAR ALL BROWSER DATA HELPER
+    // ============================================================
+    async function clearAllBrowserData() {
+        console.log('🧹 Clearing all browser data...');
+        
+        // 1. Clear localStorage
+        try {
+            Object.keys(localStorage).forEach(key => localStorage.removeItem(key));
+            console.log('✅ localStorage cleared');
+        } catch(e) { console.warn('localStorage clear failed:', e); }
+        
+        // 2. Clear sessionStorage
+        try {
+            sessionStorage.clear();
+            console.log('✅ sessionStorage cleared');
+        } catch(e) { console.warn('sessionStorage clear failed:', e); }
+        
+        // 3. Delete IndexedDB databases
+        const dbNames = [
+            'OxSmartOfflineDB', 'OfflineSalesDB', 'SalesDB',
+            'offlineDB', 'PendingDB', 'ImportQueueDB', 'DexieDB'
+        ];
+        for (const dbName of dbNames) {
+            try { indexedDB.deleteDatabase(dbName); } catch(e) {}
+        }
+        
+        // 4. Clear browser caches
+        if ('caches' in window) {
+            try {
+                const cacheNames = await caches.keys();
+                await Promise.all(cacheNames.map(name => caches.delete(name)));
+                console.log(`🗑️ Cleared ${cacheNames.length} caches`);
+            } catch(e) {}
+        }
+        
+        console.log('🎉 All browser data cleared');
+    }
+
+    // ============================================================
     //  VERSION CHECK – ONLY FOR STANDALONE, SKIP PUBLIC PAGES
     // ============================================================
     (function checkVersion() {
@@ -1089,16 +1128,47 @@
     });
 
     // ============================================================
-    //  LOGOUT – clears both server and local sessions
+    //  ✅ FIXED: LOGOUT – clears ALL browser data (localStorage, IndexedDB, caches)
     // ============================================================
     async function logout() {
+        console.log('🚪 Logging out – clearing all browser data...');
+        
+        // 1. Clear stored session
         clearSession();
+        
+        // 2. Clear sessionStorage
+        try { sessionStorage.clear(); } catch(e) {}
+        
+        // 3. Delete IndexedDB databases
+        const dbNames = [
+            'OxSmartOfflineDB', 'OfflineSalesDB', 'SalesDB',
+            'offlineDB', 'PendingDB', 'ImportQueueDB', 'DexieDB'
+        ];
+        for (const dbName of dbNames) {
+            try { indexedDB.deleteDatabase(dbName); } catch(e) {}
+        }
+        
+        // 4. Clear browser caches
+        if ('caches' in window) {
+            try {
+                const cacheNames = await caches.keys();
+                await Promise.all(cacheNames.map(name => caches.delete(name)));
+                console.log(`🗑️ Cleared ${cacheNames.length} caches`);
+            } catch(e) {}
+        }
+        
+        // 5. Clear server session
         if (navigator.onLine) {
             try {
-                await fetch('/api/auth/logout', { method: 'POST' });
+                await fetch('/api/auth/logout', { 
+                    method: 'POST',
+                    credentials: 'include'
+                });
             } catch (e) {}
         }
-        window.location.href = '/login';
+        
+        // 6. Force full page reload with cache-buster
+        window.location.href = '/login?_t=' + Date.now();
     }
 
     // ============================================================
@@ -1214,16 +1284,24 @@
 
             if (navigator.onLine) {
                 try {
-                    const res = await fetch('/api/auth/check');
+                    // ✅ FIX: Send credentials to ensure cookie is included
+                    const res = await fetch('/api/auth/check', { credentials: 'include' });
                     const data = await res.json();
                     if (data.logged_in) {
+                        // ✅ Server confirms logged in – update stored session with fresh data
                         setStoredSession({ username: data.username, role: data.role, id: data.id });
                         isLoggedIn = true;
+                        console.log('✅ Server session valid for:', data.username);
                     } else {
-                        console.log('🔑 Server says not logged in, but stored session is valid – keeping it');
+                        // ❌ Server says NOT logged in – clear everything
+                        console.log('🔑 Server says NOT logged in – clearing session');
+                        clearSession();
+                        isLoggedIn = false;
                     }
                 } catch (e) {
                     console.log('🌐 Network error during session check – using stored session');
+                    // Only trust stored session if it's still valid AND we're offline/network-error
+                    isLoggedIn = sessionValid;
                 }
             }
 
@@ -1328,6 +1406,38 @@
             await pullData();
         }
     };
+
+    // ============================================================
+    //  ✅ NEW: GLOBAL 401 HANDLER – redirect to login if session expired
+    // ============================================================
+    (function installGlobal401Handler() {
+        const originalFetch = window.fetch;
+        window.fetch = async function(...args) {
+            const response = await originalFetch.apply(this, args);
+            
+            // Ignore auth check/login endpoints (they legitimately return logged_in: false)
+            const url = typeof args[0] === 'string' ? args[0] : (args[0]?.url || '');
+            const isAuthEndpoint = url.includes('/api/auth/check') || url.includes('/api/auth/login');
+            
+            if (response.status === 401 && !isAuthEndpoint) {
+                console.warn('🚫 Got 401 Unauthorized – clearing session and redirecting to login');
+                
+                // Clear session
+                try {
+                    localStorage.removeItem('ox_user');
+                    localStorage.removeItem('pin_unlocked');
+                } catch(e) {}
+                
+                // Don't redirect if already on login page
+                if (!window.location.pathname.includes('/login')) {
+                    window.location.href = '/login?expired=true&_t=' + Date.now();
+                }
+            }
+            
+            return response;
+        };
+        console.log('✅ Global 401 handler installed');
+    })();
 </script>
 </body>
 </html>

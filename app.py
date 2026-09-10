@@ -62,7 +62,8 @@ from services.auth_service import (
     logout_user,
     get_user_by_id,
     is_protected_user,
-    get_user_logs
+    get_user_logs,
+    update_user_password  # ← ADD THIS
 )
 
 # ---------- IMPORT ARCHIVE SERVICES ----------
@@ -179,8 +180,20 @@ def parse_date_cell(value):
     return None
 
 # ===================== CREATE APP =====================
+# ===================== CREATE APP =====================
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "temporary-dev-key")
+
+# ✅ Add session lifetime (7 days)
+from datetime import timedelta
+app.permanent_session_lifetime = timedelta(days=7)
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+
+# ✅ Auto-detect production (Render) vs local dev
+IS_PRODUCTION = os.getenv("FLASK_ENV") == "production" or os.getenv("RENDER")
+app.config['SESSION_COOKIE_SAMESITE'] = 'None' if IS_PRODUCTION else 'Lax'
+app.config['SESSION_COOKIE_SECURE'] = True if IS_PRODUCTION else False
 
 @app.route('/sw.js')
 def service_worker():
@@ -557,12 +570,20 @@ def api_auth_login():
     ip_address = request.headers.get('X-Forwarded-For', request.remote_addr)
     user_agent = request.headers.get('User-Agent')
     
+    # ✅ Clear any existing session first
+    session.clear()
+    
     user = login_user(username, password, ip_address, user_agent)
     if user:
         session['user_id'] = user['id']
         session['username'] = user['username']
         session['role'] = user['role']
-        return jsonify({'success': True, 'user': user})
+        session.permanent = True  # ✅ Make session permanent
+        return jsonify({
+            'success': True, 
+            'user': user,
+            'session_token': str(uuid.uuid4())  # ✅ Optional: for tracking
+        })
     else:
         return jsonify({'success': False, 'error': 'Invalid credentials'}), 401
 
@@ -610,6 +631,7 @@ def api_auth_check():
     if 'user_id' in session:
         return jsonify({
             'logged_in': True,
+            'id': session.get('user_id'),  # ← ADD THIS
             'username': session.get('username'),
             'role': session.get('role')
         })
@@ -1229,12 +1251,7 @@ def api_purchases_pdf():
                          download_name=f"Purchases_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
                          mimetype='application/pdf')
 
-    except Exception as e:
-        print(f"❌ PDF generation error: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
-
+    
     except Exception as e:
         print(f"❌ PDF generation error: {str(e)}")
         import traceback
