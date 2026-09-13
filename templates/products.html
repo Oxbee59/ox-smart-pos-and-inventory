@@ -126,8 +126,8 @@
     <div id="cacheStatus" class="text-xs text-gray-400 mt-2 text-center hidden"></div>
 </div>
 
-<!-- ✅ Split Low Stock Panel (Accessories only) -->
-{% set low_stock_category = 'Accessory' %}
+<!-- ✅ Split Low Stock Panel (everything that is NOT a Screen) -->
+{% set low_stock_category = 'non-Screen' %}
 {% include '_low_stock_split.html' %}
 
 <!-- Products List (cards) -->
@@ -931,7 +931,7 @@
     async function loadLowStockCount() {
         try {
             if (navigator.onLine) {
-                const res = await fetch('/api/low_stock/split?category=Accessory');
+                const res = await fetch('/api/low_stock/split?category=non-Screen');
                 if (res.ok) {
                     const data = await res.json();
                     if (data.success && data.product_level) {

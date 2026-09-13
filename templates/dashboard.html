@@ -48,7 +48,7 @@
     <div class="bg-white rounded-xl shadow-md p-2 md:p-4 col-span-2 md:col-span-1">
         <p class="text-gray-500 text-[10px] md:text-sm">Low Stock Items</p>
         <p id="lowStockValue" class="text-base md:text-2xl font-bold text-red-600">0</p>
-        <p class="text-[9px] text-gray-400 mt-0.5">Batches with 1–10 units</p>
+        <p class="text-[9px] text-gray-400 mt-0.5">Products with 1–10 units</p>
     </div>
 </div>
 
@@ -60,7 +60,7 @@
         <p class="text-[10px] md:text-xs text-gray-400 mt-1 md:mt-2">* Based on total quantity sold for selected period</p>
     </div>
 
-    <!-- ✅ NEW: Split Low Stock Panel (Dashboard = all categories) -->
+    <!-- ✅ Split Low Stock Panel (Dashboard = all categories) -->
     {% set low_stock_category = 'all' %}
     {% include '_low_stock_split.html' %}
 </div>
@@ -264,6 +264,7 @@
             let topProducts = [];
             let salesHistory = [];
             let lowStock = [];
+            let lowStockSplit = null;
             let apiSuccess = false;
 
             // 1. Try API first (if online)
@@ -272,7 +273,7 @@
                     const summaryUrl = `/api/dashboard/summary${params.toString() ? '?' + params.toString() : ''}`;
                     const topUrl = `/api/dashboard/top_products${params.toString() ? '?' + params.toString() : ''}`;
                     const historyUrl = `/api/dashboard/sales_history${params.toString() ? '?' + params.toString() : ''}`;
-                    const lowStockUrl = '/api/products/low_stock?threshold=10';
+                    const lowStockUrl = '/api/low_stock/split?category=all';
 
                     const [summaryRes, topRes, historyRes, lowStockRes] = await Promise.all([
                         fetch(summaryUrl),
@@ -284,13 +285,18 @@
                     if (summaryRes.ok) summary = await summaryRes.json();
                     if (topRes.ok) topProducts = await topRes.json();
                     if (historyRes.ok) salesHistory = await historyRes.json();
-                    if (lowStockRes.ok) lowStock = await lowStockRes.json();
+                    if (lowStockRes.ok) {
+                        lowStockSplit = await lowStockRes.json();
+                        if (lowStockSplit && lowStockSplit.product_level) {
+                            lowStock = lowStockSplit.product_level.low_stock || [];
+                        }
+                    }
 
                     // Store in Dexie cache for offline
                     await db.cache.put({ key: 'dashboard_summary', value: summary, timestamp: Date.now() });
                     await db.cache.put({ key: 'dashboard_top_products', value: topProducts, timestamp: Date.now() });
                     await db.cache.put({ key: 'dashboard_sales_history', value: salesHistory, timestamp: Date.now() });
-                    await db.cache.put({ key: 'dashboard_low_stock', value: lowStock, timestamp: Date.now() });
+                    await db.cache.put({ key: 'dashboard_low_stock_split', value: lowStockSplit, timestamp: Date.now() });
                     await db.cache.put({ key: 'dashboard_last_update', value: Date.now(), timestamp: Date.now() });
 
                     apiSuccess = true;
@@ -309,8 +315,17 @@
                     if (cachedTop) topProducts = cachedTop.value;
                     const cachedHistory = await db.cache.get('dashboard_sales_history');
                     if (cachedHistory) salesHistory = cachedHistory.value;
-                    const cachedLowStock = await db.cache.get('dashboard_low_stock');
-                    if (cachedLowStock) lowStock = cachedLowStock.value;
+
+                    // ✅ Read split data with legacy fallback
+                    const cachedSplit = await db.cache.get('dashboard_low_stock_split');
+                    if (cachedSplit && cachedSplit.value && cachedSplit.value.product_level) {
+                        lowStockSplit = cachedSplit.value;
+                        lowStock = lowStockSplit.product_level.low_stock || [];
+                    } else {
+                        // Legacy: old key that stored just an array
+                        const cachedLowStock = await db.cache.get('dashboard_low_stock');
+                        if (cachedLowStock) lowStock = cachedLowStock.value || [];
+                    }
                     console.log('📦 Dashboard data loaded from Dexie cache');
                 } catch (e) {
                     console.warn('Failed to read from Dexie cache:', e);
@@ -409,18 +424,19 @@
                 historyContainer.innerHTML = '<div class="text-gray-400 text-center py-4 text-sm">📅 No sales history found for this period.</div>';
             }
 
-            // Low stock alert once
+            // Low stock alert (once per session, non-blocking)
             if (!lowStockShown && lowStock && lowStock.length > 0) {
-                let productList = lowStock.slice(0, 10).map(item => {
-                    const batchInfo = item.batch_ids && item.batch_ids.length > 0 ?
-                        ` (Batch: #${item.batch_ids.slice(0,3).join(', #')}${item.batch_ids.length > 3 ? '...' : ''})` :
-                        ' (No batches)';
-                    return `• ${item.name} (${item.brand}) - ${item.stock} left${batchInfo}`;
+                // ✅ Non-blocking: show for 5 items max, no product detail alert
+                const previewList = lowStock.slice(0, 5).map(item => {
+                    return `• ${item.name} (${item.brand}) - ${item.total_remaining} left`;
                 }).join('\n');
-                if (lowStock.length > 10) {
-                    productList += `\n\n... and ${lowStock.length - 10} more items`;
-                }
-                alert(`⚠️ LOW STOCK ALERT ⚠️\n\n${lowStock.length} product(s) are running low:\n\n${productList}\n\nPlease restock soon!`);
+                const moreCount = lowStock.length > 5 ? `\n\n... and ${lowStock.length - 5} more items` : '';
+
+                // Use setTimeout so it doesn't block the initial render
+                setTimeout(() => {
+                    alert(`⚠️ LOW STOCK ALERT ⚠️\n\n${lowStock.length} product(s) are running low:\n\n${previewList}${moreCount}\n\nPlease restock soon!`);
+                }, 100);
+
                 lowStockShown = true;
             }
         }

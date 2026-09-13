@@ -4,9 +4,10 @@ Split low-stock / out-of-stock data at both batch level and product level.
 - Product level: total remaining across all batches of a product is evaluated.
 
 Query param `category`:
-  - 'Screen'    → only screens
-  - 'Accessory' → only accessories
-  - 'all' or omitted → both
+  - 'Screen'      → only products with category = 'Screen'
+  - 'Accessory'   → only products with category = 'Accessory'
+  - 'non-Screen'  → everything except Screens (matches the accessories page)
+  - 'all' or omitted → no category filter
 """
 from database.db import get_connection, return_connection
 
@@ -17,14 +18,19 @@ def get_low_stock_split(category=None):
     conn = get_connection()
     cursor = conn.cursor()
     try:
-        # Normalise category filter
+        # ---------- NORMALISE CATEGORY ----------
         cat = (category or 'all').strip()
+        cat_filter = None        # exact match:  p.category = X
+        exclude_filter = None    # negative:      p.category != X
+
         if cat.lower() in ('', 'all', 'none'):
-            cat_filter = None
+            pass
         elif cat.lower() == 'screen':
             cat_filter = 'Screen'
         elif cat.lower() in ('accessory', 'accessories'):
             cat_filter = 'Accessory'
+        elif cat.lower() in ('non-screen', 'nonscreen', 'not-screen'):
+            exclude_filter = 'Screen'
         else:
             cat_filter = cat  # pass through as-is
 
@@ -52,6 +58,10 @@ def get_low_stock_split(category=None):
         if cat_filter:
             batch_query += " AND p.category = %s"
             batch_params.append(cat_filter)
+        if exclude_filter:
+            batch_query += " AND COALESCE(p.category,'') != %s"
+            batch_params.append(exclude_filter)
+
         batch_query += " AND pb.remaining_quantity BETWEEN 0 AND %s"
         batch_params.append(LOW_STOCK_THRESHOLD)
 
@@ -98,6 +108,10 @@ def get_low_stock_split(category=None):
         if cat_filter:
             product_query += " AND p.category = %s"
             product_params.append(cat_filter)
+        if exclude_filter:
+            product_query += " AND COALESCE(p.category,'') != %s"
+            product_params.append(exclude_filter)
+
         product_query += """
             GROUP BY p.id, p.name, p.brand, p.category
             HAVING COALESCE(SUM(pb.remaining_quantity), 0) <= %s
@@ -124,14 +138,22 @@ def get_low_stock_split(category=None):
             else:
                 product_out.append(item)
 
-        # Sort for predictable UI
+        # ---------- SORT FOR PREDICTABLE UI ----------
         batch_low.sort(key=lambda x: x['remaining_quantity'])
         batch_out.sort(key=lambda x: (x['name'] or '').lower())
         product_low.sort(key=lambda x: x['total_remaining'])
         product_out.sort(key=lambda x: (x['name'] or '').lower())
 
+        # Human-readable category label
+        if cat_filter:
+            display_cat = cat_filter
+        elif exclude_filter:
+            display_cat = f'non-{exclude_filter}'
+        else:
+            display_cat = 'all'
+
         return {
-            'category': cat_filter or 'all',
+            'category': display_cat,
             'threshold': LOW_STOCK_THRESHOLD,
             'batch_level': {
                 'low_stock': batch_low,

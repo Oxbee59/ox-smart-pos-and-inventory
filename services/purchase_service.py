@@ -137,7 +137,9 @@ def update_product(
       - If True (default): the new batch inherits the remaining stock from the old batch.
         The old batch's remaining_quantity is zeroed out since that stock now lives
         on the new batch — otherwise it gets counted twice in stock/capital totals.
-      - If False: the new batch gets the full new quantity (fresh stock), and the old batch is depleted.
+      - If False: the new batch gets the full new quantity (fresh stock), and the old batch
+        is depleted. ⚠️ Guarded: only allowed when the batch is the sole active batch for
+        its product, otherwise stock would double-count across the two rows.
     """
     quantity = int(quantity)
     cost_price = float(cost_price)
@@ -178,6 +180,24 @@ def update_product(
         original_cost = result[12] if len(result) > 12 else old_cost_price
         original_selling = result[13] if len(result) > 13 else old_selling_price
         original_discount = result[14] if len(result) > 14 else old_discount
+
+        # ✅ NEW: Guard against double-counting when using fresh-stock mode
+        # If keep_sold_with_old=False and the product has other active batches,
+        # creating a "fresh" batch would inflate total stock (old batch isn't
+        # actually removed, just depleted, while the new batch adds its full qty).
+        if not keep_sold_with_old:
+            cursor.execute("""
+                SELECT COUNT(*)
+                FROM purchase_batches
+                WHERE product_id = %s AND id != %s AND remaining_quantity > 0
+            """, (product_id, batch_id))
+            other_active = cursor.fetchone()[0]
+            if other_active > 0:
+                raise ValueError(
+                    f"Cannot use 'fresh stock' mode: this product has {other_active} "
+                    f"other active batch(es). Doing so would double-count inventory. "
+                    f"Use 'keep sold with old' instead, or merge batches first."
+                )
 
         # Calculate total sold
         cursor.execute("""
