@@ -234,7 +234,7 @@
         return isNaN(num) ? '0.00' : num.toFixed(decimals);
     }
 
-    // ---------- Offline helpers using central pending_ops ----------
+    // ---------- Offline helpers ----------
     function savePendingBatchDeletion(batchId, deleteType) {
         if (typeof savePendingOperation === 'function') {
             savePendingOperation('batches_delete', 'delete', batchId, { deleteType: deleteType });
@@ -336,6 +336,12 @@
 
     function navigateToPurchase(batchId) {
         window.open(`/purchases/screens?edit_batch=${batchId}`, '_blank');
+    }
+
+    // ✅ NEW: Navigate to screens today's sales page, filtered by batch
+    function navigateToBatchSales(batchId) {
+        if (!batchId) return;
+        window.open(`/today-sales/screens?batch_id=${batchId}`, '_blank');
     }
 
     // ---------- Search helpers ----------
@@ -459,7 +465,7 @@
         document.getElementById('batchModal').classList.remove('hidden');
     }
 
-    // ---------- Render batch list ----------
+    // ---------- Render batch list (✅ LAYOUT FIXED) ----------
     function renderBatchList(batches) {
         const container = document.getElementById('batchList');
         container.innerHTML = '';
@@ -481,21 +487,23 @@
             const claimedQty = batch.claimed_quantity || 0;
             const goodQty = remainingQty - claimedQty;
             const soldQty = totalQty - remainingQty;
+            const canViewSales = soldQty > 0;
 
             const batchJson = JSON.stringify(batch).replace(/'/g, "&#39;");
 
             html += `
                 <div class="border rounded-lg p-3 hover:bg-gray-50" data-batch-id="${batch.batch_id}">
-                    <div class="flex flex-col sm:flex-row items-start sm:items-center gap-2">
-                        <input type="checkbox" class="mt-1 sm:mt-0 batch-checkbox" data-batch-id="${batch.batch_id}" data-batch-data='${batchJson}'>
-                        <div class="flex-1 text-sm w-full">
-                            <div class="flex flex-wrap justify-between items-start gap-1">
-                                <div class="flex flex-wrap items-center gap-1">
+                    <!-- ✅ FIXED: Always side-by-side -->
+                    <div class="flex items-start gap-3">
+                        <input type="checkbox" class="mt-1.5 batch-checkbox flex-shrink-0" data-batch-id="${batch.batch_id}" data-batch-data='${batchJson}'>
+                        <div class="flex-1 min-w-0 text-sm">
+                            <div class="flex flex-wrap justify-between items-start gap-2">
+                                <div class="flex flex-wrap items-center gap-1 min-w-0">
                                     <strong class="text-indigo-600">Batch #${batch.batch_id}</strong>
                                     ${claimBadge}
                                     <span class="text-xs text-gray-400">${batch.date ? new Date(batch.date).toLocaleString() : 'No date'}</span>
                                 </div>
-                                <div class="flex flex-wrap items-center gap-1">
+                                <div class="flex flex-wrap items-center gap-1 flex-shrink-0">
                                     <span class="text-xs font-semibold ${statusColor}">${statusText}</span>
                                     ${hasClaims ? `<button onclick="event.stopPropagation(); viewBatchClaims(${batch.batch_id}, '${escapeHtml(currentBatchModalProductName)}', ${batchJson})" 
                                             class="bg-red-500 hover:bg-red-600 text-white text-xs px-2 py-1 rounded transition-colors flex items-center gap-1">
@@ -512,9 +520,11 @@
                                     <span class="text-gray-500 block">Total</span>
                                     <strong class="text-gray-700">${totalQty}</strong>
                                 </div>
-                                <div class="bg-blue-50 rounded px-1 py-0.5 text-center truncate">
-                                    <span class="text-gray-500 block">Sold</span>
-                                    <strong class="text-blue-600">${soldQty}</strong>
+                                <!-- ✅ CLICKABLE SOLD TILE -->
+                                <div class="bg-blue-50 rounded px-1 py-0.5 text-center truncate ${canViewSales ? 'cursor-pointer hover:bg-blue-100 transition-colors' : ''}"
+                                     ${canViewSales ? `onclick="event.stopPropagation(); navigateToBatchSales(${batch.batch_id})" title="View today's sales for this batch"` : ''}>
+                                    <span class="text-gray-500 block">Sold${canViewSales ? ' 🔍' : ''}</span>
+                                    <strong class="text-blue-600 ${canViewSales ? 'underline' : ''}">${soldQty}</strong>
                                 </div>
                                 <div class="bg-gray-100 rounded px-1 py-0.5 text-center truncate">
                                     <span class="text-gray-500 block">Remaining</span>
@@ -529,10 +539,10 @@
                                     <strong class="text-green-600">${Math.max(goodQty, 0)}</strong>
                                 </div>
                             </div>
-                            <div class="grid grid-cols-2 gap-1 mt-2 text-xs">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-1 mt-2 text-xs">
                                 <span class="bg-gray-50 rounded px-1 py-0.5 truncate">Cost: <strong>₵${safeToFixed(batch.cost_price)}</strong></span>
                                 <span class="bg-gray-50 rounded px-1 py-0.5 truncate">Selling: <strong>₵${safeToFixed(batch.selling_price)}</strong></span>
-                                ${batch.discount > 0 ? `<span class="bg-gray-50 rounded px-1 py-0.5 truncate col-span-2">Discount: <strong>₵${safeToFixed(batch.discount)}</strong></span>` : ''}
+                                ${batch.discount > 0 ? `<span class="bg-gray-50 rounded px-1 py-0.5 truncate col-span-full">Discount: <strong>₵${safeToFixed(batch.discount)}</strong></span>` : ''}
                             </div>
                             ${hasClaims ? `<div class="text-xs text-red-500 mt-2">⚠️ ${claimedQty} units claimed as faulty</div>` : ''}
                         </div>
@@ -883,7 +893,7 @@
         }
     }
 
-    // ---------- Update summary (with In Stock / Out of Stock breakdown) ----------
+    // ---------- Update summary ----------
     async function updateSummary(productsData) {
         const totalProducts = productsData.length;
         let totalBatches = 0;
@@ -1074,6 +1084,7 @@
     window.confirmDeleteProduct = confirmDeleteProduct;
     window.closeDeleteProductModal = closeDeleteProductModal;
     window.navigateToPurchase = navigateToPurchase;
+    window.navigateToBatchSales = navigateToBatchSales;
     window.clearBatchSearch = clearBatchSearch;
     window.viewBatchClaims = viewBatchClaims;
     window.closeClaimModal = closeClaimModal;

@@ -617,6 +617,7 @@
                                 </span>
                                 <span class="text-xs text-gray-400">${new Date(p.timestamp).toLocaleString()}</span>
                                 ${p.batchId ? `<span class="text-xs bg-gray-100 px-2 py-0.5 rounded">Batch #${p.batchId}</span>` : ''}
+                                ${p.data.update_mode ? `<span class="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">mode: ${p.data.update_mode}</span>` : ''}
                             </div>
                             <h3 class="font-bold text-lg mt-1">${escapeHtml(p.data.name)} (${escapeHtml(p.data.brand)})</h3>
                             <p class="text-sm text-gray-600">
@@ -1273,6 +1274,32 @@
 
     // ---------- Core submit logic (Dexie-first) ----------
     async function doSubmitPurchase(payload, actionType, batchId) {
+        // ============================================================
+        // FIX: stamp the user's explicit modal choice onto the payload
+        // BEFORE it is written to pending_ops. Without this, the queued
+        // op would sync to PUT /api/purchases/{id} with no update_mode,
+        // the server would default to 'auto', and a NEW batch would be
+        // created even though the user clicked "Update this batch".
+        //
+        //   actionType === 'update' → force same batch id (server honors)
+        //   actionType === 'create' → force new batch + honour keep_sold_with_old
+        //   actionType === 'auto'   → let server auto rules run (Case 3)
+        //   actionType === 'add'    → no update_mode (POST creates a batch)
+        // ============================================================
+        if (actionType === 'update') {
+            payload.update_mode = 'update';
+        } else if (actionType === 'create') {
+            payload.update_mode = 'create';
+            if (payload.keep_sold_with_old === undefined) {
+                // Fallback if the modal checkbox somehow didn't run;
+                // safe default = keep sold items with the original batch.
+                payload.keep_sold_with_old = true;
+            }
+        } else if (actionType === 'auto' && batchId) {
+            payload.update_mode = 'auto';
+        }
+        // 'add' → leave update_mode unset.
+
         // Always attempt to save locally via Dexie + queue
         if (db) {
             try {

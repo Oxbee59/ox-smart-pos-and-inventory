@@ -6,6 +6,19 @@
     ⚠️ You are offline – Please connect to the internet to view sales data.
 </div>
 
+<!-- ✅ NEW: Batch Filter Banner (hidden unless ?batch_id=N) -->
+<div id="batchFilterBanner" class="mb-4 bg-indigo-50 border border-indigo-300 text-indigo-800 px-4 py-3 rounded-lg hidden">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2 text-sm">
+            <span>🎯</span>
+            <span>Showing sales for <strong id="batchFilterLabel">Batch #--</strong></span>
+        </div>
+        <button id="clearBatchFilterBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded text-xs md:text-sm">
+            ✕ Clear Batch Filter
+        </button>
+    </div>
+</div>
+
 <!-- Hidden user role for JavaScript -->
 <div id="userRole" data-role="{{ current_user.role if current_user else 'user' }}" style="display:none;"></div>
 
@@ -110,7 +123,7 @@
     <div class="text-center text-gray-400 py-8">Loading sales data...</div>
 </div>
 
-<!-- ========== SUMMARY – Now inside the content flow (not fixed) ========== -->
+<!-- ========== SUMMARY ========== -->
 <div id="summaryBar" class="mt-6 p-3 md:p-4 bg-gray-900 rounded-xl text-teal-400 text-center font-bold shadow-lg text-xs md:text-sm">
     <!-- totals will appear here -->
 </div>
@@ -224,6 +237,10 @@
         let currentStartDate = null;
         let currentEndDate = null;
         let currentSearchTerm = '';
+
+        // ✅ NEW: Track batch filter
+        let currentBatchId = null;
+        let currentBatchLabel = '';
 
         let searchMode = 'contains';
         let searchField = 'all';
@@ -357,13 +374,20 @@
             }
 
             try {
-                let url = '';
+                // ✅ Build URL with optional batch_id
+                const params = new URLSearchParams();
                 if (currentStartDate && currentEndDate) {
-                    url = `/api/today_sales?start_date=${currentStartDate}&end_date=${currentEndDate}&exclude_category=Screen`;
+                    params.append('start_date', currentStartDate);
+                    params.append('end_date', currentEndDate);
                 } else {
-                    url = `/api/today_sales?period=${currentPeriod}&exclude_category=Screen`;
+                    params.append('period', currentPeriod);
+                }
+                params.append('exclude_category', 'Screen');
+                if (currentBatchId) {
+                    params.append('batch_id', currentBatchId);
                 }
                 
+                const url = `/api/today_sales?${params.toString()}`;
                 console.log('Fetching:', url);
                 const res = await fetch(url);
                 
@@ -376,18 +400,9 @@
                 if (apiData && apiData.length > 0) {
                     currentSalesData = apiData;
                     console.log('📦 Loaded sales from API:', currentSalesData.length);
-                    
-                    // Log sample to verify username
-                    if (currentSalesData.length > 0) {
-                        console.log('Sample sale:', {
-                            id: currentSalesData[0].sale_id,
-                            username: currentSalesData[0].username,
-                            date: currentSalesData[0].sale_date
-                        });
-                    }
                 } else {
                     currentSalesData = [];
-                    console.log('API returned empty data for period:', currentPeriod);
+                    console.log('API returned empty data');
                 }
                 
                 updateFilterInfo();
@@ -416,6 +431,10 @@
                 let fieldText = { 'all': 'all fields', 'name': 'product name', 'brand': 'brand', 'username': 'user', 'category': 'category' }[searchField] || 'all fields';
                 descriptions.push(`Search: "${currentSearchTerm}" (${modeText} in ${fieldText})`);
             }
+            if (currentBatchId) {
+                hasFilter = true;
+                descriptions.push(`Batch #${currentBatchId}`);
+            }
             if (currentStartDate && currentEndDate) {
                 hasFilter = true;
                 descriptions.push(`Date: ${currentStartDate} to ${currentEndDate}`);
@@ -436,7 +455,10 @@
         function renderSales(sales, searchTerm = '') {
             const container = document.getElementById('salesList');
             if (!sales || sales.length === 0) {
-                const message = searchTerm ? `No sales found matching "${searchTerm}"` : 'No sales recorded for this period (Accessories & Phones).';
+                let message = searchTerm ? `No sales found matching "${searchTerm}"` : 'No sales recorded for this period (Accessories & Phones).';
+                if (currentBatchId && !searchTerm) {
+                    message = `No sales found for Batch #${currentBatchId} in this period.`;
+                }
                 container.innerHTML = `<div class="text-center text-gray-400 py-8">${message}</div>`;
                 updateSummary([]);
                 return;
@@ -523,9 +545,8 @@
             container.innerHTML = html;
             updateSummary(sales);
 
-            // Attach reverse event
             document.querySelectorAll('.reverse-sale-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
+                btn.addEventListener('click', () => {
                     const saleId = parseInt(btn.getAttribute('data-sale-id'));
                     const saleItems = JSON.parse(btn.getAttribute('data-sale-items'));
                     openReverseModal(saleId, saleItems);
@@ -534,7 +555,7 @@
 
             if (isAdmin) {
                 document.querySelectorAll('.view-details-btn').forEach(btn => {
-                    btn.addEventListener('click', (e) => {
+                    btn.addEventListener('click', () => {
                         const saleId = parseInt(btn.getAttribute('data-sale-id'));
                         const saleItems = JSON.parse(btn.getAttribute('data-sale-items'));
                         openViewDetailsModal(saleId, saleItems);
@@ -577,6 +598,9 @@
                 periodText = `📅 ${periodNames[currentPeriod] || currentPeriod}`;
             }
             let filterSummary = currentSearchTerm ? ` | 🔍 "${currentSearchTerm}"` : '';
+            if (currentBatchId) {
+                filterSummary += ` | 🎯 Batch #${currentBatchId}`;
+            }
 
             let profitHtml = '';
             if (isAdmin) {
@@ -614,7 +638,7 @@
             const container = document.getElementById('reverseItemList');
             container.innerHTML = '';
             currentReverseItems = [];
-            saleItems.forEach((item, idx) => {
+            saleItems.forEach((item) => {
                 const div = document.createElement('div');
                 div.className = 'border rounded-lg p-2 md:p-3 flex items-start space-x-2 md:space-x-3';
                 const cb = document.createElement('input');
@@ -691,7 +715,7 @@
             currentViewSaleId = saleId;
             const container = document.getElementById('viewDetailsItemList');
             container.innerHTML = '';
-            saleItems.forEach((item, idx) => {
+            saleItems.forEach((item) => {
                 const div = document.createElement('div');
                 div.className = 'border rounded-lg p-2 md:p-3 flex items-center justify-between';
                 const info = document.createElement('div');
@@ -868,6 +892,9 @@
                 const periodNames = { 'daily': 'Today', 'weekly': 'This Week', 'monthly': 'This Month', 'yearly': 'This Year', 'all': 'All Time' };
                 periodText = periodNames[currentPeriod] || 'Today';
             }
+            if (currentBatchId) {
+                periodText += ` (Batch #${currentBatchId})`;
+            }
             if (currentSearchTerm) {
                 const modeText = { 'contains': 'contains', 'exact': 'exactly matches', 'starts': 'starts with', 'ends': 'ends with', 'words': 'contains all words' }[searchMode] || 'contains';
                 periodText += ` (Filtered by: "${currentSearchTerm}" - ${modeText})`;
@@ -902,6 +929,42 @@
             } catch (error) {
                 alert('PDF generation failed. Please check your internet connection.');
             }
+        }
+
+        // ---------- ✅ NEW: Batch filter helpers ----------
+        function showBatchFilterBanner(batchId) {
+            const banner = document.getElementById('batchFilterBanner');
+            const label = document.getElementById('batchFilterLabel');
+            if (!banner || !label) return;
+            label.textContent = `Batch #${batchId}`;
+            banner.classList.remove('hidden');
+        }
+
+        function hideBatchFilterBanner() {
+            const banner = document.getElementById('batchFilterBanner');
+            if (banner) banner.classList.add('hidden');
+        }
+
+        function readBatchIdFromURL() {
+            const params = new URLSearchParams(window.location.search);
+            const batchId = params.get('batch_id');
+            if (batchId && !isNaN(parseInt(batchId))) {
+                currentBatchId = parseInt(batchId);
+                showBatchFilterBanner(currentBatchId);
+                console.log(`🎯 Batch filter active: #${currentBatchId}`);
+                return true;
+            }
+            return false;
+        }
+
+        function clearBatchFilter() {
+            currentBatchId = null;
+            hideBatchFilterBanner();
+            // Remove batch_id from URL without reloading
+            const url = new URL(window.location.href);
+            url.searchParams.delete('batch_id');
+            window.history.replaceState({}, '', url.toString());
+            loadSalesData();
         }
 
         // ---------- Event listeners ----------
@@ -941,9 +1004,17 @@
                 document.getElementById('endDate').value = '';
                 document.getElementById('searchInput').value = '';
                 currentSearchTerm = '';
+                // ✅ Keep batch filter active when switching period
                 loadSalesData();
             });
         });
+
+        // ✅ NEW: Batch filter clear button
+        const clearBatchBtn = document.getElementById('clearBatchFilterBtn');
+        if (clearBatchBtn) {
+            clearBatchBtn.addEventListener('click', clearBatchFilter);
+        }
+
         window.addEventListener('online', () => {
             updateOfflineBanner();
             loadSalesData();
@@ -953,6 +1024,10 @@
         const today = new Date().toISOString().split('T')[0];
         document.getElementById('startDate').value = today;
         document.getElementById('endDate').value = today;
+
+        // ✅ NEW: Check for batch_id in URL BEFORE loading
+        readBatchIdFromURL();
+
         loadSalesData();
     });
 </script>

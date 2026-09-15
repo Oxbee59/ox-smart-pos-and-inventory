@@ -1896,6 +1896,7 @@ def api_today_sales():
     end_date = request.args.get('end_date')
     category = request.args.get('category')
     exclude_category = request.args.get('exclude_category')
+    batch_id = request.args.get('batch_id', type=int)   # ✅ NEW
 
     conn = get_connection()
     cursor = conn.cursor()
@@ -1953,6 +1954,9 @@ def api_today_sales():
         if exclude_category:
             where_conditions.append("products.category != %s")
             params.append(exclude_category)
+        if batch_id:   # ✅ NEW
+            where_conditions.append("sales_items.batch_id = %s")
+            params.append(batch_id)
 
         where_clause = " AND ".join(where_conditions)
         query = f"{select_clause} {from_clause} WHERE {where_clause} ORDER BY sales.date DESC"
@@ -1990,7 +1994,6 @@ def api_today_sales():
         return jsonify({'error': str(e), 'trace': traceback.format_exc()}), 500
     finally:
         conn.close()
-
 @app.route('/api/today_sales/pdf', methods=['POST'])
 @login_required
 def api_today_sales_pdf():

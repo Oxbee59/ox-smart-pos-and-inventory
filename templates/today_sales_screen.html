@@ -6,6 +6,19 @@
     ⚠️ You are offline – Please connect to the internet to view screen sales data.
 </div>
 
+<!-- ✅ NEW: Batch Filter Banner -->
+<div id="batchFilterBanner" class="mb-4 bg-indigo-50 border border-indigo-300 text-indigo-800 px-4 py-3 rounded-lg hidden">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2 text-sm">
+            <span>🎯</span>
+            <span>Showing screen sales for <strong id="batchFilterLabel">Batch #--</strong></span>
+        </div>
+        <button id="clearBatchFilterBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded text-xs md:text-sm">
+            ✕ Clear Batch Filter
+        </button>
+    </div>
+</div>
+
 <!-- Hidden user role for JavaScript -->
 <div id="userRole" data-role="{{ current_user.role if current_user else 'user' }}" style="display:none;"></div>
 
@@ -105,7 +118,7 @@
     </div>
 </div>
 
-<!-- Sales List (cards) – scrollable area with visible scrollbar -->
+<!-- Sales List (cards) -->
 <div id="salesList" class="space-y-3 md:space-y-4 scrollable-area" style="max-height: 60vh; overflow-y: auto; padding-right: 4px;">
     <div class="text-center text-gray-400 py-8">Loading screen sales data...</div>
 </div>
@@ -136,7 +149,7 @@
     </div>
 </div>
 
-<!-- ========== MODAL: VIEW DETAILS – SELECT ITEM ========== -->
+<!-- ========== MODAL: VIEW DETAILS ========== -->
 <div id="viewDetailsModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div class="sticky top-0 bg-white p-3 md:p-4 border-b flex justify-between items-center">
@@ -224,6 +237,9 @@
         let currentStartDate = null;
         let currentEndDate = null;
         let currentSearchTerm = '';
+
+        // ✅ NEW: Batch filter tracking
+        let currentBatchId = null;
 
         let searchMode = 'contains';
         let searchField = 'all';
@@ -336,7 +352,7 @@
             }
         }
 
-        // ---------- Data loading (API-only - NO DEXIE) ----------
+        // ---------- Data loading ----------
         async function loadSalesData() {
             updateOfflineBanner();
             console.log("Loading screen sales data (API-only)");
@@ -344,7 +360,6 @@
             const container = document.getElementById('salesList');
             container.innerHTML = '<div class="text-center text-gray-400 py-8">⏳ Loading screen sales data...</div>';
 
-            // If offline, show message
             if (!navigator.onLine) {
                 container.innerHTML = `
                     <div class="text-center text-gray-400 py-8">
@@ -357,13 +372,20 @@
             }
 
             try {
-                let url = '';
+                // ✅ Build URL with optional batch_id
+                const params = new URLSearchParams();
                 if (currentStartDate && currentEndDate) {
-                    url = `/api/today_sales?start_date=${currentStartDate}&end_date=${currentEndDate}&category=Screen`;
+                    params.append('start_date', currentStartDate);
+                    params.append('end_date', currentEndDate);
                 } else {
-                    url = `/api/today_sales?period=${currentPeriod}&category=Screen`;
+                    params.append('period', currentPeriod);
                 }
-                
+                params.append('category', 'Screen');
+                if (currentBatchId) {
+                    params.append('batch_id', currentBatchId);
+                }
+
+                const url = `/api/today_sales?${params.toString()}`;
                 console.log('Fetching screen sales:', url);
                 const res = await fetch(url);
                 
@@ -376,16 +398,6 @@
                 if (apiData && apiData.length > 0) {
                     currentSalesData = apiData;
                     console.log('📦 Loaded screen sales from API:', currentSalesData.length);
-                    
-                    // Log sample to verify username
-                    if (currentSalesData.length > 0) {
-                        console.log('Sample screen sale:', {
-                            id: currentSalesData[0].sale_id,
-                            username: currentSalesData[0].username,
-                            category: currentSalesData[0].category,
-                            date: currentSalesData[0].sale_date
-                        });
-                    }
                 } else {
                     currentSalesData = [];
                     console.log('API returned empty data for screen period:', currentPeriod);
@@ -417,6 +429,10 @@
                 let fieldText = { 'all': 'all fields', 'name': 'product name', 'brand': 'brand', 'username': 'user', 'category': 'category' }[searchField] || 'all fields';
                 descriptions.push(`Search: "${currentSearchTerm}" (${modeText} in ${fieldText})`);
             }
+            if (currentBatchId) {
+                hasFilter = true;
+                descriptions.push(`Batch #${currentBatchId}`);
+            }
             if (currentStartDate && currentEndDate) {
                 hasFilter = true;
                 descriptions.push(`Date: ${currentStartDate} to ${currentEndDate}`);
@@ -437,7 +453,10 @@
         function renderSales(sales, searchTerm = '') {
             const container = document.getElementById('salesList');
             if (!sales || sales.length === 0) {
-                const message = searchTerm ? `No screen sales found matching "${searchTerm}"` : 'No screen sales recorded for this period.';
+                let message = searchTerm ? `No screen sales found matching "${searchTerm}"` : 'No screen sales recorded for this period.';
+                if (currentBatchId && !searchTerm) {
+                    message = `No screen sales found for Batch #${currentBatchId} in this period.`;
+                }
                 container.innerHTML = `<div class="text-center text-gray-400 py-8">${message}</div>`;
                 updateSummary([]);
                 return;
@@ -525,7 +544,7 @@
             updateSummary(sales);
 
             document.querySelectorAll('.reverse-sale-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
+                btn.addEventListener('click', () => {
                     const saleId = parseInt(btn.getAttribute('data-sale-id'));
                     const saleItems = JSON.parse(btn.getAttribute('data-sale-items'));
                     openReverseModal(saleId, saleItems);
@@ -534,7 +553,7 @@
 
             if (isAdmin) {
                 document.querySelectorAll('.view-details-btn').forEach(btn => {
-                    btn.addEventListener('click', (e) => {
+                    btn.addEventListener('click', () => {
                         const saleId = parseInt(btn.getAttribute('data-sale-id'));
                         const saleItems = JSON.parse(btn.getAttribute('data-sale-items'));
                         openViewDetailsModal(saleId, saleItems);
@@ -577,6 +596,9 @@
                 periodText = `📅 ${periodNames[currentPeriod] || currentPeriod}`;
             }
             let filterSummary = currentSearchTerm ? ` | 🔍 "${currentSearchTerm}"` : '';
+            if (currentBatchId) {
+                filterSummary += ` | 🎯 Batch #${currentBatchId}`;
+            }
 
             let profitHtml = '';
             if (isAdmin) {
@@ -614,7 +636,7 @@
             const container = document.getElementById('reverseItemList');
             container.innerHTML = '';
             currentReverseItems = [];
-            saleItems.forEach((item, idx) => {
+            saleItems.forEach((item) => {
                 const div = document.createElement('div');
                 div.className = 'border rounded-lg p-2 md:p-3 flex items-start space-x-2 md:space-x-3';
                 const cb = document.createElement('input');
@@ -691,7 +713,7 @@
             currentViewSaleId = saleId;
             const container = document.getElementById('viewDetailsItemList');
             container.innerHTML = '';
-            saleItems.forEach((item, idx) => {
+            saleItems.forEach((item) => {
                 const div = document.createElement('div');
                 div.className = 'border rounded-lg p-2 md:p-3 flex items-center justify-between';
                 const info = document.createElement('div');
@@ -868,6 +890,9 @@
                 const periodNames = { 'daily': 'Today', 'weekly': 'This Week', 'monthly': 'This Month', 'yearly': 'This Year', 'all': 'All Time' };
                 periodText = periodNames[currentPeriod] || 'Today';
             }
+            if (currentBatchId) {
+                periodText += ` (Batch #${currentBatchId})`;
+            }
             if (currentSearchTerm) {
                 const modeText = { 'contains': 'contains', 'exact': 'exactly matches', 'starts': 'starts with', 'ends': 'ends with', 'words': 'contains all words' }[searchMode] || 'contains';
                 periodText += ` (Filtered by: "${currentSearchTerm}" - ${modeText})`;
@@ -902,6 +927,41 @@
             } catch (error) {
                 alert('PDF generation failed. Please check your internet connection.');
             }
+        }
+
+        // ---------- ✅ NEW: Batch filter helpers ----------
+        function showBatchFilterBanner(batchId) {
+            const banner = document.getElementById('batchFilterBanner');
+            const label = document.getElementById('batchFilterLabel');
+            if (!banner || !label) return;
+            label.textContent = `Batch #${batchId}`;
+            banner.classList.remove('hidden');
+        }
+
+        function hideBatchFilterBanner() {
+            const banner = document.getElementById('batchFilterBanner');
+            if (banner) banner.classList.add('hidden');
+        }
+
+        function readBatchIdFromURL() {
+            const params = new URLSearchParams(window.location.search);
+            const batchId = params.get('batch_id');
+            if (batchId && !isNaN(parseInt(batchId))) {
+                currentBatchId = parseInt(batchId);
+                showBatchFilterBanner(currentBatchId);
+                console.log(`🎯 Screen batch filter active: #${currentBatchId}`);
+                return true;
+            }
+            return false;
+        }
+
+        function clearBatchFilter() {
+            currentBatchId = null;
+            hideBatchFilterBanner();
+            const url = new URL(window.location.href);
+            url.searchParams.delete('batch_id');
+            window.history.replaceState({}, '', url.toString());
+            loadSalesData();
         }
 
         // ---------- Event listeners ----------
@@ -941,9 +1001,17 @@
                 document.getElementById('endDate').value = '';
                 document.getElementById('searchInput').value = '';
                 currentSearchTerm = '';
+                // ✅ Keep batch filter active
                 loadSalesData();
             });
         });
+
+        // ✅ NEW: Batch filter clear button
+        const clearBatchBtn = document.getElementById('clearBatchFilterBtn');
+        if (clearBatchBtn) {
+            clearBatchBtn.addEventListener('click', clearBatchFilter);
+        }
+
         window.addEventListener('online', () => {
             updateOfflineBanner();
             loadSalesData();
@@ -953,6 +1021,10 @@
         const today = new Date().toISOString().split('T')[0];
         document.getElementById('startDate').value = today;
         document.getElementById('endDate').value = today;
+
+        // ✅ NEW: Check for batch_id in URL BEFORE loading
+        readBatchIdFromURL();
+
         loadSalesData();
     });
 </script>
