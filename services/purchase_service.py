@@ -181,10 +181,7 @@ def update_product(
         original_selling = result[13] if len(result) > 13 else old_selling_price
         original_discount = result[14] if len(result) > 14 else old_discount
 
-        # ✅ NEW: Guard against double-counting when using fresh-stock mode
-        # If keep_sold_with_old=False and the product has other active batches,
-        # creating a "fresh" batch would inflate total stock (old batch isn't
-        # actually removed, just depleted, while the new batch adds its full qty).
+        # ✅ Guard against double-counting when using fresh-stock mode
         if not keep_sold_with_old:
             cursor.execute("""
                 SELECT COUNT(*)
@@ -332,12 +329,9 @@ def update_product(
 
                 if existing_product:
                     new_product_id = existing_product[0]
-                    # Determine new batch quantity and remaining based on keep_sold_with_old
                     if keep_sold_with_old:
                         new_batch_qty = current_remaining
                         new_batch_remaining = current_remaining
-                        # FIX: the unsold stock is moving to the new batch — zero the old
-                        # batch's remaining_quantity so it isn't counted on both rows.
                         cursor.execute("""
                             UPDATE purchase_batches
                             SET remaining_quantity = 0, action = 'remaining_moved_to_new_batch'
@@ -346,7 +340,6 @@ def update_product(
                     else:
                         new_batch_qty = quantity
                         new_batch_remaining = quantity
-                        # Deplete old batch
                         cursor.execute("""
                             UPDATE purchase_batches
                             SET remaining_quantity = 0, action = 'depleted_by_update'
@@ -372,7 +365,6 @@ def update_product(
                     conn.commit()
                     return new_batch_id
                 else:
-                    # Rename existing product and create new batch on it
                     cursor.execute("""
                         UPDATE products
                         SET name = %s, brand = %s, category = %s
@@ -381,7 +373,6 @@ def update_product(
                     if keep_sold_with_old:
                         new_batch_qty = current_remaining
                         new_batch_remaining = current_remaining
-                        # FIX: same double-counting guard as above
                         cursor.execute("""
                             UPDATE purchase_batches
                             SET remaining_quantity = 0, action = 'remaining_moved_to_new_batch'
@@ -416,7 +407,6 @@ def update_product(
                 if keep_sold_with_old:
                     new_batch_qty = current_remaining
                     new_batch_remaining = current_remaining
-                    # FIX: same double-counting guard as above
                     cursor.execute("""
                         UPDATE purchase_batches
                         SET remaining_quantity = 0, action = 'remaining_moved_to_new_batch'
@@ -451,8 +441,6 @@ def update_product(
                 return new_batch_id
 
         # ============ CASE 3: Quantity/Source only (or no change) ============
-        # If we reach here, either mode is 'auto' and no price/identity change, or mode is 'create' but no price/identity change.
-        # In both cases, we update the same batch.
         cursor.execute("""
             UPDATE purchase_batches
             SET quantity = %s, remaining_quantity = %s,
@@ -595,7 +583,7 @@ def get_sold_history(batch_id):
 
 
 # ============================================================
-#  GET ALL PURCHASES (WITH ORIGINAL DATA)
+#  GET ALL PURCHASES (WITH ORIGINAL DATA + REAL SOLD)
 # ============================================================
 
 def get_all_purchases():
@@ -610,7 +598,18 @@ def get_all_purchases():
                    b.date, b.action, b.source,
                    COALESCE(b.claimed_quantity, 0) as claimed_quantity,
                    b.original_quantity, b.original_date,
-                   b.original_cost_price, b.original_selling_price
+                   b.original_cost_price, b.original_selling_price,
+                   -- ✅ REAL SOLD COUNT from sales_items.
+                   --    Replaces the old `quantity - remaining` arithmetic, which
+                   --    wrongly reported stock-moved batches
+                   --    (action = 'price_updated_original' / 'remaining_moved_to_new_batch' /
+                   --     'depleted_by_update' / 'moved_new' / 'moved_forced')
+                   --    as having sold units even though no sale ever occurred.
+                   COALESCE((
+                       SELECT SUM(si.quantity)
+                       FROM sales_items si
+                       WHERE si.batch_id = b.id
+                   ), 0) AS sold_quantity
             FROM purchase_batches b
             JOIN products p ON p.id = b.product_id
             WHERE NOT EXISTS (
@@ -641,7 +640,8 @@ def get_all_purchases():
                 "original_quantity": r[14] if len(r) > 14 else r[4],
                 "original_date": r[15] if len(r) > 15 else r[10],
                 "original_cost_price": r[16] if len(r) > 16 else r[6],
-                "original_selling_price": r[17] if len(r) > 17 else r[8]
+                "original_selling_price": r[17] if len(r) > 17 else r[8],
+                "sold_quantity": int(r[18] or 0)   # ✅ NEW
             }
             for r in rows
         ]
@@ -684,7 +684,13 @@ def get_purchases_by_date_range(
                    b.date, b.action, b.source,
                    COALESCE(b.claimed_quantity, 0) as claimed_quantity,
                    b.original_quantity, b.original_date,
-                   b.original_cost_price, b.original_selling_price
+                   b.original_cost_price, b.original_selling_price,
+                   -- ✅ REAL SOLD COUNT (see get_all_purchases for rationale)
+                   COALESCE((
+                       SELECT SUM(si.quantity)
+                       FROM sales_items si
+                       WHERE si.batch_id = b.id
+                   ), 0) AS sold_quantity
             FROM purchase_batches b
             JOIN products p ON p.id = b.product_id
             WHERE {date_column}::date BETWEEN %s AND %s
@@ -723,7 +729,8 @@ def get_purchases_by_date_range(
                 "original_quantity": r[14] if len(r) > 14 else r[4],
                 "original_date": r[15] if len(r) > 15 else r[10],
                 "original_cost_price": r[16] if len(r) > 16 else r[6],
-                "original_selling_price": r[17] if len(r) > 17 else r[8]
+                "original_selling_price": r[17] if len(r) > 17 else r[8],
+                "sold_quantity": int(r[18] or 0)   # ✅ NEW
             }
             for r in rows
         ]
@@ -907,7 +914,13 @@ def get_batch_by_id(batch_id):
                    b.date, b.action, b.source,
                    COALESCE(b.claimed_quantity, 0) as claimed_quantity,
                    b.original_quantity, b.original_date,
-                   b.original_cost_price, b.original_selling_price
+                   b.original_cost_price, b.original_selling_price,
+                   -- ✅ REAL SOLD COUNT (see get_all_purchases for rationale)
+                   COALESCE((
+                       SELECT SUM(si.quantity)
+                       FROM sales_items si
+                       WHERE si.batch_id = b.id
+                   ), 0) AS sold_quantity
             FROM purchase_batches b
             JOIN products p ON p.id = b.product_id
             WHERE b.id = %s
@@ -938,7 +951,8 @@ def get_batch_by_id(batch_id):
                 "original_quantity": row[14] if len(row) > 14 else row[4],
                 "original_date": row[15] if len(row) > 15 else row[10],
                 "original_cost_price": row[16] if len(row) > 16 else row[6],
-                "original_selling_price": row[17] if len(row) > 17 else row[8]
+                "original_selling_price": row[17] if len(row) > 17 else row[8],
+                "sold_quantity": int(row[18] or 0)   # ✅ NEW
             }
         return None
     except Exception as e:

@@ -179,12 +179,18 @@ def update_product(batch_id, name, brand, category, quantity, cost_price, discou
         conn.close()
 
 
-# ===================== OPTIMIZED GET ALL PRODUCTS (FIXED - Stock from batches) =====================
+# ===================== OPTIMIZED GET ALL PRODUCTS (FIXED — real sold count) =====================
 def get_all_products():
     """
     Get all products with their batches and claim information.
-    ✅ FIXED: Stock is calculated from batches, not from products.stock
-    ✅ FIXED: Shows products with zero stock (all batches depleted)
+
+    ✅ Stock is calculated from batches, not from products.stock
+    ✅ Shows products with zero stock (all batches depleted)
+    ✅ NEW: each batch carries `sold_quantity` — the true count from sales_items.
+           The frontend can now display "Sold" accurately without relying on
+           quantity − remaining_quantity arithmetic (which misleads on batches
+           whose stock was moved to a successor batch during a price/identity
+           update).
     """
     conn = get_connection()
     cursor = conn.cursor()
@@ -207,7 +213,16 @@ def get_all_products():
                 pb.date as batch_date,
                 COALESCE(pb.is_faulty, FALSE) as is_faulty,
                 COALESCE(pb.claimed_quantity, 0) as claimed_quantity,
-                COALESCE(c.claim_count, 0) as active_claims_qty
+                COALESCE(c.claim_count, 0) as active_claims_qty,
+                -- ✅ NEW: real sold count from sales_items, so the UI shows
+                -- the actual number of units sold — not the arithmetic
+                -- (quantity − remaining) which is wrong for batches whose
+                -- stock was moved to a successor batch.
+                COALESCE((
+                    SELECT SUM(si.quantity)
+                    FROM sales_items si
+                    WHERE si.batch_id = pb.id
+                ), 0) AS sold_quantity
             FROM products p
             LEFT JOIN purchase_batches pb ON pb.product_id = p.id
             LEFT JOIN (
@@ -257,6 +272,7 @@ def get_all_products():
                 active_claims = r[16] or 0
                 remaining_qty = int(r[9] or 0)
                 claimed_qty = r[15] or 0
+                sold_qty_real = int(r[17] or 0)  # ✅ NEW — real sold count
                 
                 batch = {
                     "batch_id": r[7],
@@ -269,7 +285,8 @@ def get_all_products():
                     "is_faulty": r[14] or False,
                     "claimed_quantity": claimed_qty,
                     "active_claims": active_claims,
-                    "good_stock": remaining_qty - claimed_qty  # ✅ Good stock per batch
+                    "good_stock": remaining_qty - claimed_qty,  # ✅ Good stock per batch
+                    "sold_quantity": sold_qty_real              # ✅ NEW — true sold count
                 }
                 products_dict[product_id]["batches"].append(batch)
                 products_dict[product_id]["stock"] += remaining_qty  # ✅ Calculate stock from batches

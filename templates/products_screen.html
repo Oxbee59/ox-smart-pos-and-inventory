@@ -669,7 +669,7 @@
         document.getElementById('batchModal').classList.remove('hidden');
     }
 
-    // ---------- Render batch list (BULLETPROOF v3 — CSS GRID) ----------
+    // ---------- Render batch list (BULLETPROOF v3 — CSS GRID + REAL SOLD) ----------
     function renderBatchList(batches) {
         const container = document.getElementById('batchList');
         container.innerHTML = '';
@@ -694,8 +694,18 @@
             const remainingQty = batch.remaining_quantity || 0;
             const claimedQty = batch.claimed_quantity || 0;
             const goodQty = remainingQty - claimedQty;
-            const soldQty = totalQty - remainingQty;
+
+            // ✅ REAL SOLD COUNT — from sales_items (batch.sold_quantity from the API).
+            //    Falls back to arithmetic only if the API field is missing (older
+            //    Dexie cache from before the backend change). The arithmetic path
+            //    wrongly counts stock-moved batches as "sold" — which is why a
+            //    batch with action='price_updated_original' used to show Sold=1
+            //    even though no sale existed.
+            const soldQty = (typeof batch.sold_quantity === 'number')
+                ? batch.sold_quantity
+                : Math.max(totalQty - remainingQty, 0);
             const canViewSales = soldQty > 0;
+
             const dateStr = batch.date ? new Date(batch.date).toLocaleString() : 'No date';
 
             html += `
@@ -1019,6 +1029,7 @@
                             selling_price: b.selling_price,
                             discount: b.discount || 0,
                             claimed_quantity: b.claimed_quantity || 0,
+                            sold_quantity: b.sold_quantity || 0,
                             date: b.date,
                             action: b.action || '',
                             source: b.source || '',
