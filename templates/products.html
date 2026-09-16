@@ -135,38 +135,38 @@
     <!-- dynamic content -->
 </div>
 
-<!-- Modal: View Batches (ULTRA-FIXED) -->
-<div id="batchModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-60 flex items-center justify-center p-4">
-    <div class="bg-white rounded-xl shadow-xl w-full max-w-4xl" style="height: 90vh; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden;">
+<!-- Modal: View Batches (BULLETPROOF v2) -->
+<div id="batchModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-60" style="align-items:center; justify-content:center; padding:1rem;">
+    <!-- Inner shell: inline styles so it doesn't depend on Tailwind -->
+    <div id="batchModalInner">
         <!-- Header -->
-        <div class="bg-white p-4 border-b flex justify-between items-center flex-shrink-0">
-            <h3 class="text-xl font-bold" id="modalTitle">Batches</h3>
-            <button onclick="closeBatchModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+        <div class="bmi-modal-header">
+            <h3 id="modalTitle">Batches</h3>
+            <button onclick="closeBatchModal()" class="bmi-modal-close">&times;</button>
         </div>
         <!-- Search Bar -->
-        <div class="p-4 border-b bg-gray-50 flex-shrink-0">
-            <div class="flex items-center gap-3">
-                <div class="flex-1">
-                    <input type="text" id="batchSearchInput" placeholder="🔍 Search batch by ID..." 
-                           class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+        <div class="bmi-modal-searchbar">
+            <div class="bmi-modal-searchbar-row">
+                <div style="flex:1 1 auto; min-width:0;">
+                    <input type="text" id="batchSearchInput" placeholder="🔍 Search batch by ID..." class="bmi-modal-search-input">
                 </div>
-                <div class="flex items-center gap-2">
-                    <span id="batchCountDisplay" class="text-sm text-gray-600 font-medium"></span>
-                    <button onclick="clearBatchSearch()" class="text-gray-400 hover:text-gray-600 text-sm hidden" id="clearBatchSearchBtn">✕ Clear</button>
+                <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
+                    <span id="batchCountDisplay" class="bmi-modal-count"></span>
+                    <button onclick="clearBatchSearch()" class="bmi-modal-clearbtn hidden" id="clearBatchSearchBtn">✕ Clear</button>
                 </div>
             </div>
         </div>
-        <!-- Scrollable list – takes remaining space -->
-        <div id="batchList" class="p-4 space-y-3 overflow-y-auto" style="flex: 1 1 0; min-height: 0;"></div>
+        <!-- Scrollable list -->
+        <div id="batchList"></div>
         <!-- Footer -->
-        <div class="bg-white p-4 border-t flex flex-wrap justify-between gap-2 flex-shrink-0">
-            <div class="flex gap-2">
-                <button onclick="selectAllBatches()" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm">Select All</button>
-                <button onclick="deselectAllBatches()" class="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1 rounded text-sm">Deselect All</button>
+        <div class="bmi-modal-footer">
+            <div style="display:flex; gap:8px;">
+                <button onclick="selectAllBatches()" class="bmi-footer-btn bmi-footer-btn-blue">Select All</button>
+                <button onclick="deselectAllBatches()" class="bmi-footer-btn bmi-footer-btn-orange">Deselect All</button>
             </div>
-            <div class="flex gap-2">
-                <button onclick="deleteSelectedBatches()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded text-sm">Delete Selected</button>
-                <button onclick="closeBatchModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">Close</button>
+            <div style="display:flex; gap:8px;">
+                <button onclick="deleteSelectedBatches()" class="bmi-footer-btn bmi-footer-btn-red">Delete Selected</button>
+                <button onclick="closeBatchModal()" class="bmi-footer-btn bmi-footer-btn-gray">Close</button>
             </div>
         </div>
     </div>
@@ -187,7 +187,7 @@
 
 <!-- Modal: View Claim Details -->
 <div id="claimModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-60 flex items-center justify-center p-4">
-    <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl h-[90vh] max-h-[90vh] flex flex-col overflow-hidden">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl" style="height:90vh; max-height:90vh; display:flex; flex-direction:column; overflow:hidden;">
         <div class="bg-white p-4 border-b flex justify-between items-center flex-shrink-0">
             <h3 class="text-xl font-bold" id="claimModalTitle">Claim Details</h3>
             <button onclick="closeClaimModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
@@ -225,6 +225,250 @@
         background-color: #fffbeb !important;
         transition: all 0.3s ease;
     }
+
+    /* ============================================================
+       BATCH MODAL — BULLETPROOF CSS
+       Does not depend on Tailwind. Layout-critical rules are inline
+       or in this block. Safe against any style.css override because
+       the class names are unique (bmi-*) and !important is used
+       only on isolated layout properties.
+       ============================================================ */
+    #batchModal { position: fixed !important; top:0; left:0; right:0; bottom:0; }
+    #batchModal.hidden { display: none !important; }
+    #batchModal:not(.hidden) { display: flex !important; }
+
+    #batchModalInner {
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
+        width: 100% !important;
+        max-width: 56rem !important;   /* matches old max-w-4xl */
+        height: 90vh !important;
+        max-height: 90vh !important;
+        display: flex !important;
+        flex-direction: column !important;
+        overflow: hidden !important;
+        box-sizing: border-box !important;
+    }
+
+    .bmi-modal-header {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px;
+        border-bottom: 1px solid #e5e7eb;
+        background: #fff;
+    }
+    .bmi-modal-header h3 { font-size: 1.25rem; font-weight: 700; margin: 0; }
+    .bmi-modal-close {
+        border: 0; background: transparent; cursor: pointer;
+        color: #6b7280; font-size: 1.75rem; line-height: 1; padding: 0 4px;
+    }
+    .bmi-modal-close:hover { color: #111827; }
+
+    .bmi-modal-searchbar {
+        flex: 0 0 auto;
+        padding: 16px;
+        border-bottom: 1px solid #e5e7eb;
+        background: #f9fafb;
+    }
+    .bmi-modal-searchbar-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    .bmi-modal-search-input {
+        width: 100%;
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        padding: 8px 12px;
+        font-size: 0.875rem;
+        outline: none;
+        box-sizing: border-box;
+    }
+    .bmi-modal-search-input:focus { border-color: #60a5fa; }
+    .bmi-modal-count { font-size: 0.875rem; color: #4b5563; font-weight: 500; }
+    .bmi-modal-clearbtn {
+        border: 0; background: transparent; cursor: pointer;
+        color: #6b7280; font-size: 0.875rem;
+    }
+    .bmi-modal-clearbtn:hover { color: #111827; }
+    .bmi-modal-clearbtn.hidden { display: none !important; }
+
+    #batchList {
+        flex: 1 1 0 !important;
+        min-height: 0 !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        padding: 16px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 12px !important;
+        box-sizing: border-box !important;
+        width: 100% !important;
+    }
+
+    /* ---------- Batch item ---------- */
+    .batch-item {
+        display: flex !important;
+        align-items: flex-start !important;
+        gap: 12px !important;
+        padding: 12px !important;
+        border: 1px solid #e5e7eb !important;
+        border-radius: 8px !important;
+        background: #fff !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+    }
+    .batch-item:hover { background: #f9fafb !important; }
+
+    .batch-item-checkbox {
+        flex: 0 0 auto !important;
+        width: 16px !important;
+        height: 16px !important;
+        margin: 4px 0 0 0 !important;
+        cursor: pointer;
+    }
+
+    .batch-item-body {
+        flex: 1 1 0 !important;
+        min-width: 0 !important;
+        width: 0 !important;
+        font-size: 0.875rem;
+        line-height: 1.3;
+        box-sizing: border-box;
+    }
+
+    .batch-item-header {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 6px !important;
+        margin-bottom: 6px !important;
+    }
+    .batch-item-title {
+        display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+        min-width: 0;
+    }
+    .batch-item-title strong { color: #4f46e5; }
+    .batch-item-actions {
+        display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+        flex-shrink: 0;
+    }
+    .batch-status-pill { font-size: 0.75rem; font-weight: 600; }
+    .batch-claim-badge {
+        display: inline-block;
+        font-size: 0.7rem;
+        background: #fee2e2;
+        color: #991b1b;
+        padding: 1px 6px;
+        border-radius: 4px;
+    }
+    .batch-item-date {
+        font-size: 0.75rem;
+        color: #9ca3af;
+        margin-bottom: 6px;
+    }
+
+    .batch-item-stats {
+        display: grid !important;
+        grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+        gap: 4px !important;
+        margin-bottom: 6px !important;
+    }
+    .batch-stat {
+        background: #f3f4f6;
+        border-radius: 4px;
+        padding: 2px 4px;
+        text-align: center;
+        min-width: 0;
+        overflow: hidden;
+        box-sizing: border-box;
+    }
+    .batch-stat-label {
+        display: block;
+        color: #6b7280;
+        font-size: 0.65rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .batch-stat-value { font-weight: 700; white-space: nowrap; }
+    .batch-stat.sold { background: #eff6ff; }
+    .batch-stat.sold .batch-stat-value { color: #2563eb; }
+    .batch-stat.sold.clickable { cursor: pointer; }
+    .batch-stat.sold.clickable:hover { background: #dbeafe; }
+    .batch-stat.claimed { background: #fef2f2; }
+    .batch-stat.claimed .batch-stat-value { color: #dc2626; }
+    .batch-stat.good { background: #ecfdf5; }
+    .batch-stat.good .batch-stat-value { color: #16a34a; }
+
+    .batch-item-prices {
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 4px !important;
+    }
+    .batch-price {
+        background: #f9fafb;
+        border-radius: 4px;
+        padding: 2px 6px;
+        font-size: 0.7rem;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .batch-price.full { grid-column: 1 / -1; }
+
+    .batch-btn {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 4px !important;
+        border: 0 !important;
+        border-radius: 4px !important;
+        padding: 4px 8px !important;
+        font-size: 0.75rem !important;
+        color: #fff !important;
+        cursor: pointer !important;
+        line-height: 1.1 !important;
+        font-weight: 500 !important;
+    }
+    .batch-btn-claims { background: #ef4444 !important; }
+    .batch-btn-claims:hover { background: #dc2626 !important; }
+    .batch-btn-update { background: #eab308 !important; }
+    .batch-btn-update:hover { background: #ca8a04 !important; }
+
+    .bmi-modal-footer {
+        flex: 0 0 auto;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: space-between;
+        padding: 16px;
+        border-top: 1px solid #e5e7eb;
+        background: #fff;
+    }
+    .bmi-footer-btn {
+        border: 0; border-radius: 6px; padding: 8px 14px;
+        color: #fff; font-size: 0.875rem; cursor: pointer;
+    }
+    .bmi-footer-btn-blue   { background: #3b82f6; }
+    .bmi-footer-btn-blue:hover   { background: #2563eb; }
+    .bmi-footer-btn-orange { background: #f97316; }
+    .bmi-footer-btn-orange:hover { background: #ea580c; }
+    .bmi-footer-btn-red    { background: #dc2626; }
+    .bmi-footer-btn-red:hover    { background: #b91c1c; }
+    .bmi-footer-btn-gray   { background: #9ca3af; }
+    .bmi-footer-btn-gray:hover   { background: #6b7280; }
+
+    @media (max-width: 640px) {
+        .batch-item-stats { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+        .batch-item-prices { grid-template-columns: 1fr !important; }
+    }
 </style>
 
 <script>
@@ -239,7 +483,6 @@
         if (typeof savePendingOperation === 'function') {
             savePendingOperation('batches_delete', 'delete', batchId, { deleteType: deleteType });
         } else {
-            console.warn('savePendingOperation not available, falling back to localStorage');
             let pending = JSON.parse(localStorage.getItem('pendingBatchDeletions') || '[]');
             pending.push({ id: Date.now() + '_' + Math.random().toString(36).substr(2,5), batchId, deleteType, timestamp: new Date().toISOString() });
             localStorage.setItem('pendingBatchDeletions', JSON.stringify(pending));
@@ -251,7 +494,6 @@
         if (typeof savePendingOperation === 'function') {
             savePendingOperation('products', 'delete', productId, { deleteType: deleteType });
         } else {
-            console.warn('savePendingOperation not available, falling back to localStorage');
             let pending = JSON.parse(localStorage.getItem('pendingProductDeletions') || '[]');
             pending.push({ id: Date.now() + '_' + Math.random().toString(36).substr(2,5), productId, deleteType, timestamp: new Date().toISOString() });
             localStorage.setItem('pendingProductDeletions', JSON.stringify(pending));
@@ -264,49 +506,28 @@
 
     // ---------- Force refresh & clear cache ----------
     function forceRefresh() {
-        if (!confirm('⚠️ This will clear your local cache and reload all data from the server.\n\nContinue?')) {
-            return;
-        }
+        if (!confirm('⚠️ This will clear your local cache and reload all data from the server.\n\nContinue?')) return;
         try {
-            if (db) {
-                db.products.clear();
-                db.batches.clear();
-            }
-            console.log('✅ Dexie data cleared');
+            if (db) { db.products.clear(); db.batches.clear(); }
             loadProducts(true);
             alert('✅ Cache cleared. Data reloaded from server.');
         } catch (e) {
-            console.error('Error clearing cache:', e);
             alert('❌ Failed to clear cache. Please try refreshing the page.');
         }
     }
 
     function clearAllLocalData() {
-        if (!confirm('⚠️⚠️⚠️ WARNING: This will delete ALL locally stored data including:\n\n' +
-                     '- Cached products\n- Cached purchases\n- Pending sales\n- Pending purchases\n- Pending deletions\n\n' +
-                     'Are you sure you want to continue?')) {
-            return;
-        }
+        if (!confirm('⚠️⚠️⚠️ WARNING: This will delete ALL locally stored data.\n\nContinue?')) return;
         try {
             const keysToKeep = ['ox_user', 'pin_unlocked', 'app_version', 'accessory_summary_collapsed'];
-            const allKeys = Object.keys(localStorage);
-            allKeys.forEach(key => {
-                if (!keysToKeep.includes(key)) {
-                    localStorage.removeItem(key);
-                }
-            });
-            if (db) {
-                db.delete().then(() => {
-                    console.log('🗑️ Dexie database deleted');
-                }).catch(err => console.warn('Error deleting Dexie:', err));
-            }
+            Object.keys(localStorage).forEach(key => { if (!keysToKeep.includes(key)) localStorage.removeItem(key); });
+            if (db) db.delete().catch(()=>{});
             sessionStorage.removeItem('autoOpenBatches');
             sessionStorage.removeItem('autoOpenProduct');
             sessionStorage.removeItem('autoHighlightBatch');
             alert('✅ All local data cleared. Refreshing page...');
             location.reload();
         } catch (e) {
-            console.error('Error clearing all data:', e);
             alert('❌ Failed to clear data. Please try refreshing the page.');
         }
     }
@@ -320,9 +541,6 @@
     let currentBatchSelections = [];
     let currentBatchModalProductName = "";
     let currentBatches = [];
-    // ✅ FINAL FIX: JS-side lookup that replaces JSON-in-attribute.
-    //    Keys = batch_id (number), value = full batch object.
-    //    Populated by renderBatchList() and consumed by viewBatchClaims().
     let batchLookup = {};
     let isLoading = false;
     let searchMode = 'contains';
@@ -331,7 +549,7 @@
 
     // ---------- Utilities ----------
     function escapeHtml(str) {
-        if (!str) return '';
+        if (!str && str !== 0) return '';
         return String(str).replace(/[&<>"']/g, function(m) {
             if (m === '&') return '&amp;';
             if (m === '<') return '&lt;';
@@ -345,36 +563,30 @@
     function navigateToPurchase(batchId) {
         window.open(`/purchases?edit_batch=${batchId}`, '_blank');
     }
-
-    // ✅ NEW: Navigate to today's sales page, filtered by batch
     function navigateToBatchSales(batchId) {
         if (!batchId) return;
         window.open(`/today-sales?batch_id=${batchId}`, '_blank');
     }
 
     // ---------- Search helpers ----------
-    function matchesSearch(value, searchTerm, mode, caseSensitive) {
+    function matchesSearch(value, searchTerm, mode, cs) {
         if (!value) return false;
-        let searchValue = value, term = searchTerm;
-        if (!caseSensitive) { searchValue = searchValue.toLowerCase(); term = term.toLowerCase(); }
+        let s = value, t = searchTerm;
+        if (!cs) { s = s.toLowerCase(); t = t.toLowerCase(); }
         switch(mode) {
-            case 'exact': return searchValue === term;
-            case 'starts': return searchValue.startsWith(term);
-            case 'ends': return searchValue.endsWith(term);
-            case 'words': {
-                const words = term.split(/\s+/).filter(w => w.length > 0);
-                return words.every(word => searchValue.includes(word));
-            }
-            default: return searchValue.includes(term);
+            case 'exact': return s === t;
+            case 'starts': return s.startsWith(t);
+            case 'ends': return s.endsWith(t);
+            case 'words': return t.split(/\s+/).filter(Boolean).every(w => s.includes(w));
+            default: return s.includes(t);
         }
     }
-
-    function getSearchableText(product, field) {
+    function getSearchableText(p, field) {
         switch(field) {
-            case 'name': return product.name || '';
-            case 'brand': return product.brand || '';
-            case 'category': return product.category || '';
-            default: return [product.name || '', product.brand || '', product.category || ''].join(' ');
+            case 'name': return p.name || '';
+            case 'brand': return p.brand || '';
+            case 'category': return p.category || '';
+            default: return [p.name||'', p.brand||'', p.category||''].join(' ');
         }
     }
 
@@ -394,9 +606,7 @@
             let hasSearchedBatch = false;
             if (batchKeyword) {
                 const batchNum = parseInt(batchKeyword.replace('#', ''));
-                if (p.batches && p.batches.length > 0) {
-                    hasSearchedBatch = p.batches.some(b => b.batch_id === batchNum);
-                }
+                if (p.batches && p.batches.length > 0) hasSearchedBatch = p.batches.some(b => b.batch_id === batchNum);
             }
             if (p.batches && p.batches.length > 0) {
                 p.batches.forEach(batch => {
@@ -409,10 +619,8 @@
             const statusColor = totalStock > 0 ? "text-green-600" : "text-red-600";
             const faultyBadge = hasFaulty ? `<span class="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded ml-2">⚠️ ${totalClaimed} Claimed</span>` : '';
             const batchMatchBadge = hasSearchedBatch ? `<span class="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded ml-2 border border-yellow-400">🔍 Batch Match</span>` : '';
-
             const productId = p.product_id || p.id;
 
-            // ✅ FINAL FIX: no more JSON in attributes. Only the numeric id.
             return `
                 <div class="bg-white rounded-xl shadow-md p-4 border hover:shadow-lg transition-shadow duration-200 ${hasSearchedBatch ? 'border-yellow-400 border-2' : ''}">
                     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
@@ -445,25 +653,19 @@
         }).join('');
     }
 
-    // ---------- Safe view batches handler ----------
-    // ✅ FINAL FIX: only the product id crosses the DOM boundary.
-    //    We look up the full product (with batches) from currentProducts.
+    // ---------- View batches ----------
     function viewBatchesWithData(productId) {
         const idNum = parseInt(productId);
         const product = currentProducts.find(p => (p.product_id || p.id) === idNum);
-        if (!product) {
-            alert('Product data not found. Please refresh and try again.');
-            return;
-        }
+        if (!product) { alert('Product data not found. Please refresh and try again.'); return; }
         viewBatches(idNum, product.name, product.batches || []);
     }
 
-    // ---------- View batches ----------
     function viewBatches(productId, productName, batches) {
         currentBatches = batches || [];
         currentBatchModalProductName = productName;
         const totalBatches = batches ? batches.length : 0;
-        document.getElementById('modalTitle').innerHTML = `Batches for ${escapeHtml(productName)} (${totalBatches})`;
+        document.getElementById('modalTitle').textContent = `Batches for ${productName} (${totalBatches})`;
         document.getElementById('batchSearchInput').value = '';
         document.getElementById('clearBatchSearchBtn').classList.add('hidden');
         renderBatchList(batches || []);
@@ -471,18 +673,15 @@
         document.getElementById('batchModal').classList.remove('hidden');
     }
 
-    // ---------- Render batch list (✅ FINAL FIX APPLIED) ----------
+    // ---------- Render batch list (BULLETPROOF v2) ----------
     function renderBatchList(batches) {
         const container = document.getElementById('batchList');
         container.innerHTML = '';
         currentBatchSelections = [];
-
-        // ✅ FINAL FIX: rebuild the lookup so viewBatchClaims / delete flow
-        //    can retrieve full batch data without passing JSON through the DOM.
         batchLookup = {};
 
         if (!batches || batches.length === 0) {
-            container.innerHTML = '<div class="text-center text-gray-400 py-8">No batches available for this product.</div>';
+            container.innerHTML = '<div style="text-align:center;color:#9ca3af;padding:32px 0;">No batches available for this product.</div>';
             return;
         }
 
@@ -491,78 +690,65 @@
         let html = '';
         batches.forEach((batch) => {
             const hasClaims = batch.claimed_quantity && batch.claimed_quantity > 0;
-            const claimBadge = hasClaims ? `<span class="text-xs bg-red-100 text-red-800 px-1.5 py-0.5 rounded ml-1">⚠️ ${batch.claimed_quantity} Claimed</span>` : '';
-            const statusText = batch.remaining_quantity > 0 ? '● In Stock' : '● Depleted';
-            const statusColor = batch.remaining_quantity > 0 ? 'text-green-600' : 'text-red-600';
+            const claimBadge = hasClaims ? `<span class="batch-claim-badge">⚠️ ${batch.claimed_quantity} Claimed</span>` : '';
+            const inStock = batch.remaining_quantity > 0;
+            const statusColor = inStock ? '#16a34a' : '#dc2626';
+            const statusText = inStock ? '● In Stock' : '● Depleted';
             const totalQty = batch.quantity || 0;
             const remainingQty = batch.remaining_quantity || 0;
             const claimedQty = batch.claimed_quantity || 0;
             const goodQty = remainingQty - claimedQty;
             const soldQty = totalQty - remainingQty;
             const canViewSales = soldQty > 0;
+            const dateStr = batch.date ? new Date(batch.date).toLocaleString() : 'No date';
 
-            // ✅ FINAL FIX: no JSON inside attributes or inline onclick.
-            //    Only the numeric batch id is passed; the rest lives in batchLookup.
             html += `
-                <div class="border rounded-lg p-3 hover:bg-gray-50" data-batch-id="${batch.batch_id}">
-                    <!-- Always side-by-side, no breakpoint conflict -->
-                    <div class="flex items-start gap-3">
-                        <input type="checkbox"
-                               class="mt-1.5 batch-checkbox flex-shrink-0"
-                               data-batch-id="${batch.batch_id}">
-                        <div class="flex-1 min-w-0 text-sm">
-                            <!-- Header row: batch info + actions (wraps on narrow) -->
-                            <div class="flex flex-wrap justify-between items-start gap-2">
-                                <div class="flex flex-wrap items-center gap-1 min-w-0">
-                                    <strong class="text-indigo-600">Batch #${batch.batch_id}</strong>
-                                    ${claimBadge}
-                                    <span class="text-xs text-gray-400">${batch.date ? new Date(batch.date).toLocaleString() : 'No date'}</span>
-                                </div>
-                                <div class="flex flex-wrap items-center gap-1 flex-shrink-0">
-                                    <span class="text-xs font-semibold ${statusColor}">${statusText}</span>
-                                    ${hasClaims ? `<button onclick="event.stopPropagation(); viewBatchClaims(${batch.batch_id})" 
-                                            class="bg-red-500 hover:bg-red-600 text-white text-xs px-2 py-1 rounded transition-colors flex items-center gap-1">
-                                        📋 Claims
-                                    </button>` : ''}
-                                    <button onclick="event.stopPropagation(); navigateToPurchase(${batch.batch_id})" 
-                                            class="bg-yellow-500 hover:bg-yellow-600 text-white text-xs px-2 py-1 rounded transition-colors flex items-center gap-1">
-                                        ✏️ Update
-                                    </button>
-                                </div>
+                <div class="batch-item" data-batch-id="${batch.batch_id}">
+                    <input type="checkbox"
+                           class="batch-item-checkbox batch-checkbox"
+                           data-batch-id="${batch.batch_id}">
+                    <div class="batch-item-body">
+                        <div class="batch-item-header">
+                            <div class="batch-item-title">
+                                <strong>Batch #${batch.batch_id}</strong>
+                                ${claimBadge}
                             </div>
-                            <!-- Stats grid: 3 cols on mobile, 5 on sm+ -->
-                            <div class="grid grid-cols-3 sm:grid-cols-5 gap-0.5 mt-2 text-xs min-w-0">
-                                <div class="bg-gray-100 rounded px-1 py-0.5 text-center truncate">
-                                    <span class="text-gray-500 block">Total</span>
-                                    <strong class="text-gray-700">${totalQty}</strong>
-                                </div>
-                                <!-- ✅ CLICKABLE SOLD TILE -->
-                                <div class="bg-blue-50 rounded px-1 py-0.5 text-center truncate ${canViewSales ? 'cursor-pointer hover:bg-blue-100 transition-colors' : ''}"
-                                     ${canViewSales ? `onclick="event.stopPropagation(); navigateToBatchSales(${batch.batch_id})" title="View today's sales for this batch"` : ''}>
-                                    <span class="text-gray-500 block">Sold${canViewSales ? ' 🔍' : ''}</span>
-                                    <strong class="text-blue-600 ${canViewSales ? 'underline' : ''}">${soldQty}</strong>
-                                </div>
-                                <div class="bg-gray-100 rounded px-1 py-0.5 text-center truncate">
-                                    <span class="text-gray-500 block">Remaining</span>
-                                    <strong class="text-gray-700">${remainingQty}</strong>
-                                </div>
-                                <div class="bg-red-50 rounded px-1 py-0.5 text-center truncate">
-                                    <span class="text-gray-500 block">Claimed</span>
-                                    <strong class="text-red-600">${claimedQty}</strong>
-                                </div>
-                                <div class="bg-green-50 rounded px-1 py-0.5 text-center truncate">
-                                    <span class="text-gray-500 block">✅ Good</span>
-                                    <strong class="text-green-600">${Math.max(goodQty, 0)}</strong>
-                                </div>
+                            <div class="batch-item-actions">
+                                <span class="batch-status-pill" style="color:${statusColor};">${statusText}</span>
+                                ${hasClaims ? `<button onclick="event.stopPropagation(); viewBatchClaims(${batch.batch_id})" class="batch-btn batch-btn-claims">📋 Claims</button>` : ''}
+                                <button onclick="event.stopPropagation(); navigateToPurchase(${batch.batch_id})" class="batch-btn batch-btn-update">✏️ Update</button>
                             </div>
-                            <!-- Cost & Selling -->
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-1 mt-2 text-xs">
-                                <span class="bg-gray-50 rounded px-1 py-0.5 truncate">Cost: <strong>₵${safeToFixed(batch.cost_price)}</strong></span>
-                                <span class="bg-gray-50 rounded px-1 py-0.5 truncate">Selling: <strong>₵${safeToFixed(batch.selling_price)}</strong></span>
-                                ${batch.discount > 0 ? `<span class="bg-gray-50 rounded px-1 py-0.5 truncate col-span-full">Discount: <strong>₵${safeToFixed(batch.discount)}</strong></span>` : ''}
-                            </div>
-                            ${hasClaims ? `<div class="text-xs text-red-500 mt-2">⚠️ ${claimedQty} units claimed as faulty</div>` : ''}
                         </div>
+                        <div class="batch-item-date">${dateStr}</div>
+                        <div class="batch-item-stats">
+                            <div class="batch-stat">
+                                <span class="batch-stat-label">Total</span>
+                                <span class="batch-stat-value">${totalQty}</span>
+                            </div>
+                            <div class="batch-stat sold ${canViewSales ? 'clickable' : ''}"
+                                 ${canViewSales ? `onclick="event.stopPropagation(); navigateToBatchSales(${batch.batch_id})" title="View today's sales for this batch"` : ''}>
+                                <span class="batch-stat-label">Sold${canViewSales ? ' 🔍' : ''}</span>
+                                <span class="batch-stat-value">${soldQty}</span>
+                            </div>
+                            <div class="batch-stat">
+                                <span class="batch-stat-label">Remaining</span>
+                                <span class="batch-stat-value">${remainingQty}</span>
+                            </div>
+                            <div class="batch-stat claimed">
+                                <span class="batch-stat-label">Claimed</span>
+                                <span class="batch-stat-value">${claimedQty}</span>
+                            </div>
+                            <div class="batch-stat good">
+                                <span class="batch-stat-label">✅ Good</span>
+                                <span class="batch-stat-value">${Math.max(goodQty, 0)}</span>
+                            </div>
+                        </div>
+                        <div class="batch-item-prices">
+                            <span class="batch-price">Cost: <strong>₵${safeToFixed(batch.cost_price)}</strong></span>
+                            <span class="batch-price">Selling: <strong>₵${safeToFixed(batch.selling_price)}</strong></span>
+                            ${batch.discount > 0 ? `<span class="batch-price full">Discount: <strong>₵${safeToFixed(batch.discount)}</strong></span>` : ''}
+                        </div>
+                        ${hasClaims ? `<div style="font-size:0.75rem;color:#ef4444;margin-top:6px;">⚠️ ${claimedQty} units claimed as faulty</div>` : ''}
                     </div>
                 </div>
             `;
@@ -570,9 +756,7 @@
 
         container.innerHTML = html;
 
-        // ✅ FINAL FIX: no JSON.parse of attribute values. We look up from batchLookup.
-        const checkboxes = container.querySelectorAll('.batch-checkbox');
-        checkboxes.forEach(cb => {
+        container.querySelectorAll('.batch-checkbox').forEach(cb => {
             const batchId = parseInt(cb.dataset.batchId);
             const batchData = batchLookup[batchId] || {};
             currentBatchSelections.push({ cb, batchId, batch: batchData });
@@ -580,12 +764,10 @@
     }
 
     function updateBatchCount(shown, total) {
-        const countDisplay = document.getElementById('batchCountDisplay');
-        if (shown === total) {
-            countDisplay.textContent = `${total} batch${total !== 1 ? 'es' : ''}`;
-        } else {
-            countDisplay.textContent = `${shown} of ${total} batch${total !== 1 ? 'es' : ''}`;
-        }
+        const d = document.getElementById('batchCountDisplay');
+        d.textContent = (shown === total)
+            ? `${total} batch${total !== 1 ? 'es' : ''}`
+            : `${shown} of ${total} batch${total !== 1 ? 'es' : ''}`;
     }
 
     // ---------- Batch search ----------
@@ -594,9 +776,7 @@
         const clearBtn = document.getElementById('clearBatchSearchBtn');
         if (keyword) {
             clearBtn.classList.remove('hidden');
-            const filtered = currentBatches.filter(batch => 
-                batch.batch_id && batch.batch_id.toString().includes(keyword)
-            );
+            const filtered = currentBatches.filter(b => b.batch_id && b.batch_id.toString().includes(keyword));
             renderBatchList(filtered);
             updateBatchCount(filtered.length, currentBatches.length);
         } else {
@@ -620,50 +800,31 @@
         document.getElementById('clearBatchSearchBtn').classList.add('hidden');
     }
 
-    function selectAllBatches() {
-        currentBatchSelections.forEach(item => item.cb.checked = true);
-    }
-    function deselectAllBatches() {
-        currentBatchSelections.forEach(item => item.cb.checked = false);
-    }
+    function selectAllBatches()   { currentBatchSelections.forEach(i => i.cb.checked = true); }
+    function deselectAllBatches() { currentBatchSelections.forEach(i => i.cb.checked = false); }
 
     // ---------- Delete selected batches ----------
     async function deleteSelectedBatches() {
-        const selected = currentBatchSelections.filter(item => item.cb.checked);
-        if (selected.length === 0) {
-            alert('Please select at least one batch.');
-            return;
-        }
-        const choice = confirm(`Delete ${selected.length} batch(es)?\n\n- Click OK to KEEP history (recommended, can restore)\n- Click Cancel for PERMANENT deletion (cannot restore)`);
+        const selected = currentBatchSelections.filter(i => i.cb.checked);
+        if (selected.length === 0) { alert('Please select at least one batch.'); return; }
+        const choice = confirm(`Delete ${selected.length} batch(es)?\n\n- OK = KEEP history (recommended, can restore)\n- Cancel = PERMANENT deletion (cannot restore)`);
         const deleteType = choice ? 'keep' : 'clean';
         let successCount = 0;
         for (const item of selected) {
             try {
                 const res = await fetch(`/api/batches/${item.batchId}?type=${deleteType}`, { method: 'DELETE' });
                 if (res.ok) successCount++;
-                else {
-                    const data = await res.json();
-                    throw new Error(data.error || 'Unknown error');
-                }
+                else { const data = await res.json(); throw new Error(data.error || 'Unknown error'); }
             } catch (err) {
-                console.warn(`Batch deletion failed (offline): ${item.batchId}`, err);
                 savePendingBatchDeletion(item.batchId, deleteType);
             }
         }
         if (successCount > 0) alert(`${successCount} batch(es) deleted online.`);
-        if (typeof getPendingCount === 'function') {
-            const pendingCount = await getPendingCount();
-            if (pendingCount > 0) {
-                alert(`⚠️ ${pendingCount} operation(s) saved offline. They will be applied when you reconnect.`);
-            }
-        }
         closeBatchModal();
         loadProducts(true);
     }
 
     // ---------- Delete product ----------
-    // ✅ FINAL FIX: only the numeric id crosses the DOM boundary.
-    //    The name is looked up from currentProducts (no more quoting hazards).
     function confirmDeleteProduct(productId) {
         const idNum = parseInt(productId);
         const product = currentProducts.find(p => (p.product_id || p.id) === idNum);
@@ -672,12 +833,10 @@
         document.getElementById('deleteProductName').innerHTML = `Accessory Product: ${escapeHtml(productName)}`;
         document.getElementById('deleteProductModal').classList.remove('hidden');
     }
-
     function closeDeleteProductModal() {
         document.getElementById('deleteProductModal').classList.add('hidden');
         currentProductIdForDelete = null;
     }
-
     async function deleteProduct(deleteType) {
         if (!currentProductIdForDelete) return;
         try {
@@ -687,11 +846,8 @@
                 alert(`Accessory product ${deleteType === 'clean' ? 'permanently deleted' : 'deleted (history kept)'}.`);
                 closeDeleteProductModal();
                 loadProducts(true);
-            } else {
-                alert('Error: ' + data.error);
-            }
+            } else alert('Error: ' + data.error);
         } catch (err) {
-            console.warn('Product deletion failed (offline), saving for later:', err);
             savePendingProductDeletion(currentProductIdForDelete, deleteType);
             alert(`Accessory product deletion saved offline. It will be applied when you reconnect.`);
             closeDeleteProductModal();
@@ -700,9 +856,6 @@
     }
 
     // ---------- View batch claims ----------
-    // ✅ FINAL FIX: signature reduced to just batch_id.
-    //    Full batch data comes from the JS-side `batchLookup`,
-    //    product name comes from `currentBatchModalProductName`.
     async function viewBatchClaims(batchId) {
         const batchData = batchLookup[batchId] || null;
         const productName = currentBatchModalProductName || 'Unknown Product';
@@ -717,7 +870,7 @@
                 const batchRemaining = batchData ? batchData.remaining_quantity : 0;
                 const activeClaims = claims.filter(c => c.status === 'active');
                 const resolvedClaims = claims.filter(c => c.status === 'resolved');
-                const totalActive = activeClaims.reduce((sum, c) => sum + c.quantity, 0);
+                const totalActive = activeClaims.reduce((s,c) => s+c.quantity, 0);
                 const goodStock = batchRemaining - totalActive;
                 const sold = batchOriginal - batchRemaining;
 
@@ -727,15 +880,13 @@
                         <div class="stock-breakdown">
                             <div class="stock-item stock-total"><span class="text-gray-500">Total</span><p class="font-bold text-gray-700">${batchOriginal}</p></div>
                             <div class="stock-item stock-sold"><span class="text-gray-500">Sold</span><p class="font-bold text-blue-600">${sold}</p></div>
-                            <div class="stock-item stock-good"><span class="text-gray-500">✅ Good</span><p class="font-bold text-green-600">${Math.max(goodStock, 0)}</p></div>
+                            <div class="stock-item stock-good"><span class="text-gray-500">✅ Good</span><p class="font-bold text-green-600">${Math.max(goodStock,0)}</p></div>
                         </div>
-                        <div class="mt-2 text-xs text-gray-400">💡 ${batchOriginal} total → ${sold} sold → ${Math.max(goodStock, 0)} good remaining${totalActive > 0 ? ` ⚠️ ${totalActive} units claimed as faulty` : ''}</div>
-                    </div>
-                `;
+                    </div>`;
                 if (claims.length === 0) {
-                    html += `<div class="text-center text-gray-400 py-8"><i class="fas fa-check-circle text-green-500 text-4xl mb-2"></i><p>No claims have been filed for this batch.</p><p class="text-xs text-gray-400 mt-1">All ${batchRemaining} units are available as good stock.</p></div>`;
+                    html += `<div class="text-center text-gray-400 py-8"><p>No claims have been filed for this batch.</p><p class="text-xs mt-1">All ${batchRemaining} units are available as good stock.</p></div>`;
                 } else {
-                    const sortedClaims = [...claims].sort((a, b) => {
+                    const sortedClaims = [...claims].sort((a,b) => {
                         if (a.status === 'active' && b.status !== 'active') return -1;
                         if (a.status !== 'active' && b.status === 'active') return 1;
                         return new Date(b.created_at) - new Date(a.created_at);
@@ -746,18 +897,15 @@
                         html += `<div class="border-l-4 border-red-500 pl-3"><p class="text-sm font-semibold text-red-600 mb-2">⚠️ Active Claims (${activeList.length})</p>`;
                         activeList.forEach(claim => {
                             html += `<div class="bg-red-50 rounded-lg p-3 mb-2 border border-red-200">
-                                <div class="flex justify-between items-start">
-                                    <div class="flex-1">
-                                        <div class="flex items-center gap-2 flex-wrap">
-                                            <span class="text-xs font-bold text-red-600 bg-red-100 px-2 py-0.5 rounded">#${claim.id}</span>
-                                            <span class="text-xs font-semibold bg-red-100 text-red-800 px-2 py-0.5 rounded">${escapeHtml(claim.issue_type)}</span>
-                                            <span class="text-xs text-red-500 font-bold">${claim.quantity} units</span>
-                                        </div>
-                                        ${claim.description ? `<p class="text-sm text-gray-600 mt-1">📝 ${escapeHtml(claim.description)}</p>` : ''}
-                                        <div class="flex items-center gap-4 mt-1 text-xs text-gray-500"><span>📅 ${new Date(claim.created_at).toLocaleString()}</span></div>
+                                <div class="flex justify-between items-start"><div class="flex-1">
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <span class="text-xs font-bold text-red-600 bg-red-100 px-2 py-0.5 rounded">#${claim.id}</span>
+                                        <span class="text-xs font-semibold bg-red-100 text-red-800 px-2 py-0.5 rounded">${escapeHtml(claim.issue_type)}</span>
+                                        <span class="text-xs text-red-500 font-bold">${claim.quantity} units</span>
                                     </div>
-                                    <span class="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded font-medium">Active</span>
-                                </div>
+                                    ${claim.description ? `<p class="text-sm text-gray-600 mt-1">📝 ${escapeHtml(claim.description)}</p>` : ''}
+                                    <div class="text-xs text-gray-500 mt-1">📅 ${new Date(claim.created_at).toLocaleString()}</div>
+                                </div><span class="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">Active</span></div>
                             </div>`;
                         });
                         html += `</div>`;
@@ -767,43 +915,28 @@
                         html += `<div class="border-l-4 border-green-500 pl-3 mt-4"><p class="text-sm font-semibold text-green-600 mb-2">✅ Resolved Claims (${resolvedList.length})</p>`;
                         resolvedList.forEach(claim => {
                             html += `<div class="bg-green-50 rounded-lg p-3 mb-2 border border-green-200">
-                                <div class="flex justify-between items-start">
-                                    <div class="flex-1">
-                                        <div class="flex items-center gap-2 flex-wrap">
-                                            <span class="text-xs font-bold text-green-600 bg-green-100 px-2 py-0.5 rounded">#${claim.id}</span>
-                                            <span class="text-xs font-semibold bg-green-100 text-green-800 px-2 py-0.5 rounded">${escapeHtml(claim.issue_type)}</span>
-                                            <span class="text-xs text-green-500 font-bold">${claim.quantity} units</span>
-                                        </div>
-                                        ${claim.description ? `<p class="text-sm text-gray-600 mt-1">📝 ${escapeHtml(claim.description)}</p>` : ''}
-                                        <div class="flex items-center gap-4 mt-1 text-xs text-gray-500"><span>📅 ${new Date(claim.created_at).toLocaleString()}</span><span>✅ Resolved</span></div>
+                                <div class="flex justify-between items-start"><div class="flex-1">
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <span class="text-xs font-bold text-green-600 bg-green-100 px-2 py-0.5 rounded">#${claim.id}</span>
+                                        <span class="text-xs font-semibold bg-green-100 text-green-800 px-2 py-0.5 rounded">${escapeHtml(claim.issue_type)}</span>
+                                        <span class="text-xs text-green-500 font-bold">${claim.quantity} units</span>
                                     </div>
-                                    <span class="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded font-medium">Resolved</span>
-                                </div>
+                                    ${claim.description ? `<p class="text-sm text-gray-600 mt-1">📝 ${escapeHtml(claim.description)}</p>` : ''}
+                                    <div class="text-xs text-gray-500 mt-1">📅 ${new Date(claim.created_at).toLocaleString()}</div>
+                                </div><span class="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded">Resolved</span></div>
                             </div>`;
                         });
                         html += `</div>`;
                     }
-                    html += `
-                        <div class="bg-gray-50 rounded-lg p-3 mt-3 border border-gray-200">
-                            <div class="flex justify-between items-center text-sm">
-                                <span class="text-gray-600">📊 Batch Summary:</span>
-                                <span class="font-medium">${batchOriginal} total | <span class="text-red-500">${totalActive} claimed</span> | <span class="text-green-600">${Math.max(goodStock, 0)} good</span></span>
-                            </div>
-                        </div>
-                    </div>`;
+                    html += `</div>`;
                 }
                 container.innerHTML = html;
                 document.getElementById('claimModalTitle').textContent = `📋 Claims for ${productName} - Batch #${batchId}`;
                 modal.classList.remove('hidden');
             }
-        } catch (error) {
-            alert('Error loading claims: ' + error.message);
-        }
+        } catch (error) { alert('Error loading claims: ' + error.message); }
     }
-
-    function closeClaimModal() {
-        document.getElementById('claimModal').classList.add('hidden');
-    }
+    function closeClaimModal() { document.getElementById('claimModal').classList.add('hidden'); }
 
     // ---------- Offline banner ----------
     function updateOfflineBanner() {
@@ -815,7 +948,7 @@
     window.addEventListener('offline', updateOfflineBanner);
 
     // =============================================================
-    //  API-FIRST PRODUCT LOADING (Accessories – exclude Screen)
+    //  API-FIRST PRODUCT LOADING
     // =============================================================
     async function loadProducts(forceRefresh = false) {
         if (isLoading) return;
@@ -832,37 +965,25 @@
                     const data = await res.json();
                     if (data && data.products && Array.isArray(data.products) && data.products.length > 0) {
                         productsData = data.products;
-                        if (db) {
-                            await storeProductsInDexie(productsData);
-                        }
+                        if (db) await storeProductsInDexie(productsData);
                         apiSuccess = true;
-                        console.log('📦 Loaded accessory products from API:', productsData.length);
                     }
                 }
-            } catch (e) {
-                console.warn('API failed, using Dexie fallback');
-            }
+            } catch (e) { console.warn('API failed, using Dexie fallback'); }
         }
 
         if (!apiSuccess || !navigator.onLine) {
             try {
                 let cached;
                 if (db) {
-                    try {
-                        cached = await db.products.where('category').notEqual('Screen').toArray();
-                    } catch (e) {
-                        console.warn('Category index not available, filtering manually', e);
-                        cached = await db.products.toArray();
-                        cached = cached.filter(p => p.category !== 'Screen');
+                    try { cached = await db.products.where('category').notEqual('Screen').toArray(); }
+                    catch (e) {
+                        const all = await db.products.toArray();
+                        cached = all.filter(p => p.category !== 'Screen');
                     }
-                    if (cached && cached.length > 0) {
-                        productsData = cached;
-                        console.log('📦 Loaded accessory products from Dexie:', productsData.length);
-                    }
+                    if (cached && cached.length > 0) productsData = cached;
                 }
-            } catch (e) {
-                console.warn('Failed to read from Dexie:', e);
-            }
+            } catch (e) { console.warn('Failed to read from Dexie:', e); }
         }
 
         currentProducts = productsData;
@@ -874,15 +995,13 @@
         isLoading = false;
     }
 
-    // ---------- Store products in Dexie ----------
     async function storeProductsInDexie(products) {
         if (!db) return;
         try {
             const toStore = products.map(p => ({
                 id: p.product_id || p.id,
                 product_id: p.product_id || p.id,
-                name: p.name,
-                brand: p.brand,
+                name: p.name, brand: p.brand,
                 category: p.category || '',
                 cost_price: p.cost_price,
                 selling_price: p.selling_price,
@@ -912,38 +1031,22 @@
                     });
                 }
             });
-            if (allBatches.length > 0) {
-                await db.batches.bulkPut(allBatches);
-            }
-            console.log('✅ Stored accessory products in Dexie');
-        } catch (e) {
-            console.warn('Failed to store in Dexie:', e);
-        }
+            if (allBatches.length > 0) await db.batches.bulkPut(allBatches);
+        } catch (e) { console.warn('Failed to store in Dexie:', e); }
     }
 
-    // ---------- Update summary (with In Stock / Out of Stock breakdown) ----------
     async function updateSummary(productsData) {
         const totalProducts = productsData.length;
-        let totalBatches = 0;
-        let totalQty = 0;
-        let totalClaimed = 0;
-        let inStock = 0;
-        let outOfStock = 0;
-
+        let totalBatches = 0, totalQty = 0, totalClaimed = 0;
+        let inStock = 0, outOfStock = 0;
         productsData.forEach(p => {
             const stock = p.stock || 0;
-            if (stock > 0) inStock++;
-            else outOfStock++;
-
+            if (stock > 0) inStock++; else outOfStock++;
             totalQty += stock;
             if (p.batches && p.batches.length > 0) {
                 totalBatches += p.batches.length;
-                p.batches.forEach(b => {
-                    totalClaimed += b.claimed_quantity || 0;
-                });
-            } else if (stock > 0) {
-                totalBatches += 1;
-            }
+                p.batches.forEach(b => totalClaimed += b.claimed_quantity || 0);
+            } else if (stock > 0) totalBatches += 1;
         });
         const totalGood = Math.max(totalQty - totalClaimed, 0);
 
@@ -962,7 +1065,6 @@
         document.getElementById('totalGoodCount').textContent = totalGood || 0;
     }
 
-    // ---------- Low stock KPI count (from split service) ----------
     async function loadLowStockCount() {
         try {
             if (navigator.onLine) {
@@ -976,9 +1078,7 @@
                     }
                 }
             }
-        } catch (e) {
-            console.warn('Could not load low stock count:', e);
-        }
+        } catch (e) { console.warn('Could not load low stock count:', e); }
         let offlineLow = 0;
         currentProducts.forEach(p => {
             const stock = p.stock || 0;
@@ -987,7 +1087,6 @@
         document.getElementById('lowStockCount').textContent = offlineLow;
     }
 
-    // ---------- Advanced search ----------
     function applyAdvancedSearch() {
         const keyword = document.getElementById('searchInput').value.trim();
         searchMode = document.getElementById('searchMode').value;
@@ -998,12 +1097,7 @@
             const isBatchSearch = /^#?\d+$/.test(keyword);
             if (isBatchSearch) {
                 const batchNum = parseInt(keyword.replace('#', ''));
-                filtered = currentProducts.filter(p => {
-                    if (p.batches && p.batches.length > 0) {
-                        return p.batches.some(b => b.batch_id === batchNum);
-                    }
-                    return false;
-                });
+                filtered = currentProducts.filter(p => p.batches && p.batches.some(b => b.batch_id === batchNum));
                 if (filtered.length > 0) {
                     renderProducts(filtered, keyword);
                     document.getElementById('clearSearchBtn').classList.remove('hidden');
@@ -1012,12 +1106,11 @@
                         if (product) {
                             viewBatches(product.product_id || product.id, product.name, product.batches || []);
                             setTimeout(() => {
-                                const batchItems = document.querySelectorAll('#batchList .border');
-                                batchItems.forEach(item => {
+                                document.querySelectorAll('#batchList .batch-item').forEach(item => {
                                     if (item.textContent.includes(`Batch #${batchNum}`)) {
                                         item.classList.add('batch-highlight');
                                         item.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                        setTimeout(() => { item.classList.remove('batch-highlight'); }, 4000);
+                                        setTimeout(() => item.classList.remove('batch-highlight'), 4000);
                                     }
                                 });
                             }, 300);
@@ -1027,8 +1120,8 @@
                 }
             }
             filtered = currentProducts.filter(p => {
-                const searchableText = getSearchableText(p, searchField);
-                return matchesSearch(searchableText, keyword, searchMode, caseSensitive);
+                const text = getSearchableText(p, searchField);
+                return matchesSearch(text, keyword, searchMode, caseSensitive);
             });
         }
         renderProducts(filtered);
@@ -1037,14 +1130,11 @@
         else clearBtn.classList.add('hidden');
     }
 
-    // ---------- Auto-open batches (from session, honors autoHighlightBatch) ----------
     function autoOpenBatches() {
         if (sessionStorage.getItem('autoOpenBatches') !== 'true') return;
-
         const productName = sessionStorage.getItem('autoOpenProduct');
         const highlightBatchId = sessionStorage.getItem('autoHighlightBatch');
         if (!productName) return;
-
         setTimeout(() => {
             const products = document.querySelectorAll('#productsList .bg-white');
             for (const product of products) {
@@ -1052,11 +1142,9 @@
                 if (nameEl && nameEl.textContent.trim().startsWith(productName)) {
                     const viewBtn = product.querySelector('button.bg-blue-500');
                     if (viewBtn) viewBtn.click();
-
                     if (highlightBatchId) {
                         setTimeout(() => {
-                            const rows = document.querySelectorAll('#batchList [data-batch-id]');
-                            rows.forEach(row => {
+                            document.querySelectorAll('#batchList [data-batch-id]').forEach(row => {
                                 if (String(row.dataset.batchId) === String(highlightBatchId)) {
                                     row.classList.add('batch-highlight');
                                     row.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1073,20 +1161,14 @@
             sessionStorage.removeItem('autoHighlightBatch');
         }, 800);
     }
+    window.triggerAutoOpenInline = function() { autoOpenBatches(); };
 
-    window.triggerAutoOpenInline = function () {
-        autoOpenBatches();
-    };
-
-    // ---------- Event listeners ----------
     document.addEventListener('DOMContentLoaded', function() {
         loadProducts();
         if (typeof updatePendingBadge === 'function') updatePendingBadge();
 
         document.getElementById('searchInput').addEventListener('input', applyAdvancedSearch);
-        document.getElementById('searchInput').addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') applyAdvancedSearch();
-        });
+        document.getElementById('searchInput').addEventListener('keydown', e => { if (e.key === 'Enter') applyAdvancedSearch(); });
         document.getElementById('clearSearchBtn').addEventListener('click', function() {
             document.getElementById('searchInput').value = '';
             this.classList.add('hidden');
@@ -1102,7 +1184,7 @@
 
     window.addEventListener('online', () => loadProducts(true));
 
-    // Expose functions for inline onclick
+    // Expose for inline onclick
     window.viewBatchesWithData = viewBatchesWithData;
     window.viewBatches = viewBatches;
     window.closeBatchModal = closeBatchModal;
