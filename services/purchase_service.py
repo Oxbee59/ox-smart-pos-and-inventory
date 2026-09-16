@@ -1,4 +1,4 @@
- from database.db import get_connection
+from database.db import get_connection
 from datetime import datetime
 import json
 
@@ -138,7 +138,7 @@ def update_product(
         The old batch's remaining_quantity is zeroed out since that stock now lives
         on the new batch — otherwise it gets counted twice in stock/capital totals.
       - If False: the new batch gets the full new quantity (fresh stock), and the old batch
-        is depleted. ⚠️ Guarded: only allowed when the batch is the sole active batch for
+        is depleted. Guarded: only allowed when the batch is the sole active batch for
         its product, otherwise stock would double-count across the two rows.
     """
     quantity = int(quantity)
@@ -181,7 +181,7 @@ def update_product(
         original_selling = result[13] if len(result) > 13 else old_selling_price
         original_discount = result[14] if len(result) > 14 else old_discount
 
-        # ✅ Guard against double-counting when using fresh-stock mode
+        # Guard against double-counting when using fresh-stock mode
         if not keep_sold_with_old:
             cursor.execute("""
                 SELECT COUNT(*)
@@ -197,30 +197,27 @@ def update_product(
                 )
 
         # ============================================================
-        #  ✅ FIX: Preserve the batch's existing remaining when updating
+        #  FIX: Preserve the batch's existing remaining when updating
         #  in place. The safe universal rule for an in-place update is:
         #
-        #      new_remaining = old_remaining + (new_quantity − old_quantity)
+        #      new_remaining = old_remaining + (new_quantity - old_quantity)
         #
         #  Why this is correct for every case:
-        #    • Normal batch: adding units grows remaining; removing units
+        #    - Normal batch: adding units grows remaining; removing units
         #      comes off remaining first (sold history untouched).
-        #    • Batch whose stock was MOVED to a successor (action =
+        #    - Batch whose stock was MOVED to a successor (action =
         #      'price_updated_original', 'remaining_moved_to_new_batch',
         #      'depleted_by_update', 'moved_new', 'moved_forced') sits with
         #      remaining = 0 but has no real sales rows. Using the old
-        #      `quantity − total_sold` formula would resurrect those units,
+        #      `quantity - total_sold` formula would resurrect those units,
         #      double-counting inventory against the successor. The delta
         #      rule leaves them at 0 unless the user explicitly adds stock.
-        #    • Batch that was actually sold: sold units stay on sold, the
+        #    - Batch that was actually sold: sold units stay on sold, the
         #      delta only touches the unsold pool.
-        #
-        #  Replaces every previous `max(quantity − total_sold, 0)` with the
-        #  single value computed here.
         # ============================================================
         new_remaining = max(current_remaining + (quantity - current_total), 0)
 
-        # Determine changes – now case‑sensitive so even case changes trigger the modal
+        # Determine changes - case-sensitive so even case changes trigger the modal
         identity_changed = (
             old_product_name != name or
             old_product_brand != brand or
@@ -233,12 +230,12 @@ def update_product(
             abs(old_discount - discount) > 0.001
         )
 
-        print(f"📊 Batch #{batch_id}: Identity: {identity_changed}, Price: {price_changed}, Mode: {update_mode}, "
-              f"rem {current_remaining}→{new_remaining}")
+        print(f"Batch #{batch_id}: Identity: {identity_changed}, Price: {price_changed}, Mode: {update_mode}, "
+              f"rem {current_remaining}->{new_remaining}")
 
         # ============ DECIDE ACTION ============
         if update_mode == 'update':
-            # Force update of this batch – preserve original data
+            # Force update of this batch - preserve original data
             if identity_changed:
                 # Check if another product with new identity exists
                 cursor.execute("""
@@ -316,7 +313,7 @@ def update_product(
             return batch_id
 
         # ============ MODE == 'create' OR 'auto' ============
-        # Archive the old batch (for history) – common for both create and auto
+        # Archive the old batch (for history) - common for both create and auto
         cursor.execute("""
             SELECT quantity, remaining_quantity, cost_price, selling_price, discount, date, action, source
             FROM purchase_batches
@@ -473,7 +470,7 @@ def update_product(
 
     except Exception as e:
         conn.rollback()
-        print(f"❌ Error updating batch #{batch_id}: {str(e)}")
+        print(f"Error updating batch #{batch_id}: {str(e)}")
         raise e
     finally:
         conn.close()
@@ -497,7 +494,7 @@ def get_batch_update_history(batch_id):
         rows = cursor.fetchall()
         return [{"changes": r[0], "date": r[1]} for r in rows]
     except Exception as e:
-        print(f"❌ Error getting batch update history: {str(e)}")
+        print(f"Error getting batch update history: {str(e)}")
         return []
     finally:
         conn.close()
@@ -545,7 +542,7 @@ def get_purchase_history(batch_id):
             }
         return None
     except Exception as e:
-        print(f"❌ Error getting purchase history: {str(e)}")
+        print(f"Error getting purchase history: {str(e)}")
         return None
     finally:
         conn.close()
@@ -593,7 +590,7 @@ def get_sold_history(batch_id):
             for r in rows
         ]
     except Exception as e:
-        print(f"❌ Error getting sold history: {str(e)}")
+        print(f"Error getting sold history: {str(e)}")
         return []
     finally:
         conn.close()
@@ -657,7 +654,7 @@ def get_all_purchases():
             for r in rows
         ]
     except Exception as e:
-        print(f"❌ Error in get_all_purchases: {str(e)}")
+        print(f"Error in get_all_purchases: {str(e)}")
         return []
     finally:
         conn.close()
@@ -745,7 +742,7 @@ def get_purchases_by_date_range(
             for r in rows
         ]
     except Exception as e:
-        print(f"❌ Error in get_purchases_by_date_range: {str(e)}")
+        print(f"Error in get_purchases_by_date_range: {str(e)}")
         return []
     finally:
         conn.close()
@@ -758,7 +755,7 @@ def get_purchases_by_date_range(
 def get_product_suggestions(keyword):
     """
     Search products by name, brand, or batch ID.
-    Returns a limited set (1000) – practically all matching results.
+    Returns a limited set (1000) - practically all matching results.
     """
     conn = get_connection()
     try:
@@ -805,7 +802,7 @@ def get_product_suggestions(keyword):
             for r in results
         ]
     except Exception as e:
-        print(f"❌ Error in get_product_suggestions: {str(e)}")
+        print(f"Error in get_product_suggestions: {str(e)}")
         return []
     finally:
         conn.close()
@@ -831,7 +828,7 @@ def get_category_suggestions(keyword):
         results = cursor.fetchall()
         return [{"category": r[0]} for r in results if r[0]]
     except Exception as e:
-        print(f"❌ Error in get_category_suggestions: {str(e)}")
+        print(f"Error in get_category_suggestions: {str(e)}")
         return []
     finally:
         conn.close()
@@ -853,7 +850,7 @@ def get_source_suggestions(keyword):
         results = cursor.fetchall()
         return [{"source": r[0]} for r in results if r[0]]
     except Exception as e:
-        print(f"❌ Error in get_source_suggestions: {str(e)}")
+        print(f"Error in get_source_suggestions: {str(e)}")
         return []
     finally:
         conn.close()
@@ -865,7 +862,7 @@ def get_source_suggestions(keyword):
 
 def search_products_by_name_or_brand(keyword, category=None, exclude_category=None):
     """
-    Search products by name or brand (case-insensitive) – returns ALL matching results.
+    Search products by name or brand (case-insensitive) - returns ALL matching results.
     """
     conn = get_connection()
     cursor = conn.cursor()
@@ -896,7 +893,7 @@ def search_products_by_name_or_brand(keyword, category=None, exclude_category=No
             for r in rows
         ]
     except Exception as e:
-        print(f"❌ Error searching products by name/brand: {str(e)}")
+        print(f"Error searching products by name/brand: {str(e)}")
         return []
     finally:
         conn.close()
@@ -959,7 +956,7 @@ def get_batch_by_id(batch_id):
             }
         return None
     except Exception as e:
-        print(f"❌ Error in get_batch_by_id: {str(e)}")
+        print(f"Error in get_batch_by_id: {str(e)}")
         return None
     finally:
         conn.close()
@@ -976,7 +973,7 @@ def get_batch_sold_quantity(batch_id):
         """, (batch_id,))
         return cursor.fetchone()[0]
     except Exception as e:
-        print(f"❌ Error in get_batch_sold_quantity: {str(e)}")
+        print(f"Error in get_batch_sold_quantity: {str(e)}")
         return 0
     finally:
         conn.close()
