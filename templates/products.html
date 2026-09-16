@@ -135,7 +135,7 @@
     <!-- dynamic content -->
 </div>
 
-<!-- Modal: View Batches (BULLETPROOF v2) -->
+<!-- Modal: View Batches (BULLETPROOF v3 — CSS GRID LAYOUT) -->
 <div id="batchModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-60" style="align-items:center; justify-content:center; padding:1rem;">
     <!-- Inner shell: inline styles so it doesn't depend on Tailwind -->
     <div id="batchModalInner">
@@ -227,11 +227,9 @@
     }
 
     /* ============================================================
-       BATCH MODAL — BULLETPROOF CSS
-       Does not depend on Tailwind. Layout-critical rules are inline
-       or in this block. Safe against any style.css override because
-       the class names are unique (bmi-*) and !important is used
-       only on isolated layout properties.
+       BATCH MODAL — BULLETPROOF v3 (CSS GRID)
+       Layout does not depend on Tailwind. Unique class names (bmi-*
+       / batch-*) so nothing in style.css can clash.
        ============================================================ */
     #batchModal { position: fixed !important; top:0; left:0; right:0; bottom:0; }
     #batchModal.hidden { display: none !important; }
@@ -242,7 +240,7 @@
         border-radius: 12px;
         box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
         width: 100% !important;
-        max-width: 56rem !important;   /* matches old max-w-4xl */
+        max-width: 56rem !important;
         height: 90vh !important;
         max-height: 90vh !important;
         display: flex !important;
@@ -309,11 +307,12 @@
         width: 100% !important;
     }
 
-    /* ---------- Batch item ---------- */
+    /* ---------- Batch item — GRID (fixes content collapse) ---------- */
     .batch-item {
-        display: flex !important;
-        align-items: flex-start !important;
-        gap: 12px !important;
+        display: grid !important;
+        grid-template-columns: 20px minmax(0, 1fr) !important;
+        column-gap: 10px !important;
+        align-items: start !important;
         padding: 12px !important;
         border: 1px solid #e5e7eb !important;
         border-radius: 8px !important;
@@ -321,24 +320,21 @@
         width: 100% !important;
         max-width: 100% !important;
         box-sizing: border-box !important;
-        overflow: hidden !important;
     }
     .batch-item:hover { background: #f9fafb !important; }
 
     .batch-item-checkbox {
-        flex: 0 0 auto !important;
         width: 16px !important;
         height: 16px !important;
         margin: 4px 0 0 0 !important;
         cursor: pointer;
+        align-self: start !important;
     }
 
     .batch-item-body {
-        flex: 1 1 0 !important;
         min-width: 0 !important;
-        width: 0 !important;
         font-size: 0.875rem;
-        line-height: 1.3;
+        line-height: 1.35;
         box-sizing: border-box;
     }
 
@@ -673,7 +669,7 @@
         document.getElementById('batchModal').classList.remove('hidden');
     }
 
-    // ---------- Render batch list (BULLETPROOF v2) ----------
+    // ---------- Render batch list (BULLETPROOF v3 — CSS GRID) ----------
     function renderBatchList(batches) {
         const container = document.getElementById('batchList');
         container.innerHTML = '';
