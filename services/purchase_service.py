@@ -1,4 +1,4 @@
-from database.db import get_connection
+ from database.db import get_connection
 from datetime import datetime
 import json
 
@@ -196,13 +196,29 @@ def update_product(
                     f"Use 'keep sold with old' instead, or merge batches first."
                 )
 
-        # Calculate total sold
-        cursor.execute("""
-            SELECT COALESCE(SUM(quantity), 0)
-            FROM sales_items
-            WHERE batch_id = %s
-        """, (batch_id,))
-        total_sold = cursor.fetchone()[0]
+        # ============================================================
+        #  ✅ FIX: Preserve the batch's existing remaining when updating
+        #  in place. The safe universal rule for an in-place update is:
+        #
+        #      new_remaining = old_remaining + (new_quantity − old_quantity)
+        #
+        #  Why this is correct for every case:
+        #    • Normal batch: adding units grows remaining; removing units
+        #      comes off remaining first (sold history untouched).
+        #    • Batch whose stock was MOVED to a successor (action =
+        #      'price_updated_original', 'remaining_moved_to_new_batch',
+        #      'depleted_by_update', 'moved_new', 'moved_forced') sits with
+        #      remaining = 0 but has no real sales rows. Using the old
+        #      `quantity − total_sold` formula would resurrect those units,
+        #      double-counting inventory against the successor. The delta
+        #      rule leaves them at 0 unless the user explicitly adds stock.
+        #    • Batch that was actually sold: sold units stay on sold, the
+        #      delta only touches the unsold pool.
+        #
+        #  Replaces every previous `max(quantity − total_sold, 0)` with the
+        #  single value computed here.
+        # ============================================================
+        new_remaining = max(current_remaining + (quantity - current_total), 0)
 
         # Determine changes – now case‑sensitive so even case changes trigger the modal
         identity_changed = (
@@ -217,7 +233,8 @@ def update_product(
             abs(old_discount - discount) > 0.001
         )
 
-        print(f"📊 Batch #{batch_id}: Identity: {identity_changed}, Price: {price_changed}, Mode: {update_mode}")
+        print(f"📊 Batch #{batch_id}: Identity: {identity_changed}, Price: {price_changed}, Mode: {update_mode}, "
+              f"rem {current_remaining}→{new_remaining}")
 
         # ============ DECIDE ACTION ============
         if update_mode == 'update':
@@ -239,7 +256,7 @@ def update_product(
                             cost_price = %s, selling_price = %s, discount = %s,
                             date = %s, action = %s, source = %s
                         WHERE id = %s
-                    """, (new_product_id, quantity, max(quantity - total_sold, 0), cost_price, selling_price,
+                    """, (new_product_id, quantity, new_remaining, cost_price, selling_price,
                           discount, datetime.now(), "moved_forced", source, batch_id))
                     update_product_stock(cursor, new_product_id)
                     update_product_stock(cursor, product_id)
@@ -259,7 +276,7 @@ def update_product(
                             cost_price = %s, selling_price = %s, discount = %s,
                             date = %s, action = %s, source = %s
                         WHERE id = %s
-                    """, (quantity, max(quantity - total_sold, 0), cost_price, selling_price, discount,
+                    """, (quantity, new_remaining, cost_price, selling_price, discount,
                           datetime.now(), "updated_forced", source, batch_id))
             else:
                 cursor.execute("""
@@ -268,7 +285,7 @@ def update_product(
                         cost_price = %s, selling_price = %s, discount = %s,
                         date = %s, action = %s, source = %s
                     WHERE id = %s
-                """, (quantity, max(quantity - total_sold, 0), cost_price, selling_price, discount,
+                """, (quantity, new_remaining, cost_price, selling_price, discount,
                       datetime.now(), "updated_forced", source, batch_id))
 
             old_data = {
@@ -284,7 +301,7 @@ def update_product(
             }
             new_data = {
                 "quantity": quantity,
-                "remaining": max(quantity - total_sold, 0),
+                "remaining": new_remaining,
                 "cost_price": cost_price,
                 "selling_price": selling_price,
                 "discount": discount,
@@ -447,7 +464,7 @@ def update_product(
                 cost_price = %s, selling_price = %s, discount = %s,
                 date = %s, action = %s, source = %s
             WHERE id = %s
-        """, (quantity, max(quantity - total_sold, 0), cost_price, selling_price, discount,
+        """, (quantity, new_remaining, cost_price, selling_price, discount,
               datetime.now(), "updated_qty", source, batch_id))
 
         update_product_stock(cursor, product_id)
@@ -599,12 +616,6 @@ def get_all_purchases():
                    COALESCE(b.claimed_quantity, 0) as claimed_quantity,
                    b.original_quantity, b.original_date,
                    b.original_cost_price, b.original_selling_price,
-                   -- ✅ REAL SOLD COUNT from sales_items.
-                   --    Replaces the old `quantity - remaining` arithmetic, which
-                   --    wrongly reported stock-moved batches
-                   --    (action = 'price_updated_original' / 'remaining_moved_to_new_batch' /
-                   --     'depleted_by_update' / 'moved_new' / 'moved_forced')
-                   --    as having sold units even though no sale ever occurred.
                    COALESCE((
                        SELECT SUM(si.quantity)
                        FROM sales_items si
@@ -641,7 +652,7 @@ def get_all_purchases():
                 "original_date": r[15] if len(r) > 15 else r[10],
                 "original_cost_price": r[16] if len(r) > 16 else r[6],
                 "original_selling_price": r[17] if len(r) > 17 else r[8],
-                "sold_quantity": int(r[18] or 0)   # ✅ NEW
+                "sold_quantity": int(r[18] or 0)
             }
             for r in rows
         ]
@@ -685,7 +696,6 @@ def get_purchases_by_date_range(
                    COALESCE(b.claimed_quantity, 0) as claimed_quantity,
                    b.original_quantity, b.original_date,
                    b.original_cost_price, b.original_selling_price,
-                   -- ✅ REAL SOLD COUNT (see get_all_purchases for rationale)
                    COALESCE((
                        SELECT SUM(si.quantity)
                        FROM sales_items si
@@ -730,7 +740,7 @@ def get_purchases_by_date_range(
                 "original_date": r[15] if len(r) > 15 else r[10],
                 "original_cost_price": r[16] if len(r) > 16 else r[6],
                 "original_selling_price": r[17] if len(r) > 17 else r[8],
-                "sold_quantity": int(r[18] or 0)   # ✅ NEW
+                "sold_quantity": int(r[18] or 0)
             }
             for r in rows
         ]
@@ -742,7 +752,7 @@ def get_purchases_by_date_range(
 
 
 # ============================================================
-#  SUGGESTIONS (UPDATED: HIGHER LIMIT FOR "ALL")
+#  SUGGESTIONS
 # ============================================================
 
 def get_product_suggestions(keyword):
@@ -850,18 +860,12 @@ def get_source_suggestions(keyword):
 
 
 # ============================================================
-#  NEW: UNIFIED SEARCH BY NAME OR BRAND (WITH CATEGORY FILTER)
+#  UNIFIED SEARCH BY NAME OR BRAND
 # ============================================================
 
 def search_products_by_name_or_brand(keyword, category=None, exclude_category=None):
     """
     Search products by name or brand (case-insensitive) – returns ALL matching results.
-    Used for the product name / brand autocomplete.
-
-    Parameters:
-        keyword (str): the search term
-        category (str, optional): if provided, filter results by this exact category
-        exclude_category (str, optional): if provided, exclude products with this category
     """
     conn = get_connection()
     cursor = conn.cursor()
@@ -915,7 +919,6 @@ def get_batch_by_id(batch_id):
                    COALESCE(b.claimed_quantity, 0) as claimed_quantity,
                    b.original_quantity, b.original_date,
                    b.original_cost_price, b.original_selling_price,
-                   -- ✅ REAL SOLD COUNT (see get_all_purchases for rationale)
                    COALESCE((
                        SELECT SUM(si.quantity)
                        FROM sales_items si
@@ -952,7 +955,7 @@ def get_batch_by_id(batch_id):
                 "original_date": row[15] if len(row) > 15 else row[10],
                 "original_cost_price": row[16] if len(row) > 16 else row[6],
                 "original_selling_price": row[17] if len(row) > 17 else row[8],
-                "sold_quantity": int(row[18] or 0)   # ✅ NEW
+                "sold_quantity": int(row[18] or 0)
             }
         return None
     except Exception as e:

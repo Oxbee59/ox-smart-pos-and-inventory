@@ -400,15 +400,28 @@
     // Uses the API-provided `sold_quantity` (from sales_items) when present.
     // Falls back to `quantity - remaining` only when the field is missing
     // (older Dexie cache from before the backend change).
-    // The arithmetic fallback wrongly counts stock-moved batches
-    // (action = 'price_updated_original', 'remaining_moved_to_new_batch',
-    // 'depleted_by_update', 'moved_new', 'moved_forced') as sold, so we
-    // prefer the real value whenever the API provides it.
     function getRealSold(p) {
         if (p && typeof p.sold_quantity === 'number') return p.sold_quantity;
         const qty = (p && p.quantity) || 0;
         const rem = (p && p.remaining_quantity) || 0;
         return Math.max(qty - rem, 0);
+    }
+
+    // ---------- Delta-based remaining calculator ----------
+    // Mirrors the server's in-place update rule exactly:
+    //     new_remaining = max(old_remaining + (new_quantity − old_quantity), 0)
+    //
+    // This is the universally-correct formula for an in-place edit. It
+    // preserves the current remaining and only shifts it by however much
+    // the user changed the quantity. Crucially, for batches whose stock
+    // was moved to a successor (remaining = 0 but no real sales), it does
+    // NOT resurrect units — the bug that previously double-counted stock
+    // on batch 1461 against batch 1550.
+    function computeNewRemaining(purchase, newQuantity) {
+        const oldQty = parseInt(purchase.quantity || 0, 10);
+        const oldRem = parseInt(purchase.remaining_quantity || 0, 10);
+        const newQty = parseInt(newQuantity || 0, 10);
+        return Math.max(oldRem + (newQty - oldQty), 0);
     }
 
     // ---------- Offline banner helpers ----------
@@ -1034,8 +1047,6 @@
                             original_cost_price: p.original_cost_price || p.cost_price,
                             original_selling_price: p.original_selling_price || p.selling_price,
                             // ✅ Real sold count from sales_items (backend).
-                            //    Falls back to null so getRealSold() can compute
-                            //    the arithmetic value if the field is missing.
                             sold_quantity: (typeof p.sold_quantity === 'number') ? p.sold_quantity : null
                         }));
                         // Store in Dexie
@@ -1325,19 +1336,20 @@
             if (purchase) {
                 // ✅ REAL sold count for oversell checks
                 const soldQty = getRealSold(purchase);
+                // ✅ New remaining using the delta rule (matches server)
+                const newRemaining = computeNewRemaining(purchase, payload.quantity);
                 const newQty = payload.quantity;
+
                 if (newQty < soldQty) {
                     if (!confirm(`⚠️⚠️ WARNING: This batch has ${soldQty} items already sold.\n\nYou are trying to reduce total quantity to ${newQty}.\nThis will make ${soldQty - newQty} items "oversold".\n\nThe remaining quantity will be set to 0 (zero).\nTotal: ${newQty} | Sold: ${soldQty} | Remaining: 0\n\nContinue?`)) return;
                 }
                 if (newQty < purchase.quantity && newQty >= soldQty) {
                     const reduction = purchase.quantity - newQty;
-                    const newRemaining = newQty - soldQty;
-                    if (!confirm(`⚠️ You are reducing the total quantity by ${reduction} units.\n\nCurrent: ${purchase.quantity}\nNew: ${newQty}\nSold: ${soldQty} (preserved)\nNew Remaining: ${newRemaining}\n\nThis will NOT affect sold items. Continue?`)) return;
+                    if (!confirm(`⚠️ You are reducing the total quantity by ${reduction} units.\n\nCurrent: ${purchase.quantity}\nNew: ${newQty}\nSold: ${soldQty} (preserved)\nCurrent Remaining: ${purchase.remaining_quantity || 0}\nNew Remaining: ${newRemaining}\n\nThis will NOT affect sold items. Continue?`)) return;
                 }
                 if (newQty > purchase.quantity) {
                     const increase = newQty - purchase.quantity;
-                    const newRemaining = newQty - soldQty;
-                    if (!confirm(`ℹ️ You are increasing the total quantity by ${increase} units.\n\nCurrent: ${purchase.quantity}\nNew: ${newQty}\nSold: ${soldQty} (preserved)\nNew Remaining: ${newRemaining}\n\nSold history will be preserved. Continue?`)) return;
+                    if (!confirm(`ℹ️ You are increasing the total quantity by ${increase} units.\n\nCurrent: ${purchase.quantity}\nNew: ${newQty}\nSold: ${soldQty} (preserved)\nCurrent Remaining: ${purchase.remaining_quantity || 0}\nNew Remaining: ${newRemaining}\n\nSold history will be preserved. Continue?`)) return;
                 }
 
                 const costChanged = Math.abs(purchase.cost_price - payload.cost_price) > 0.001;
@@ -1423,14 +1435,19 @@
                 } else if (actionType === 'update' || actionType === 'auto') {
                     const oldBatch = await db.batches.get(batchId);
                     if (!oldBatch) throw new Error('Batch not found locally');
-                    // ✅ Preserve real sold count when adjusting remaining
-                    const soldQty = (typeof oldBatch.sold_quantity === 'number')
-                        ? oldBatch.sold_quantity
-                        : Math.max((oldBatch.quantity || 0) - (oldBatch.remaining_quantity || 0), 0);
-                    const newRemaining = payload.quantity - soldQty;
+
+                    // ✅ Mirror the server's in-place update rule exactly:
+                    //      new_remaining = old_remaining + (new_quantity − old_quantity)
+                    //    NOT `new_quantity − sold`. The delta form preserves the
+                    //    correct remaining for stock-moved batches (which have
+                    //    remaining=0 but no real sales), preventing the previous
+                    //    resurrection bug that double-counted inventory.
+                    const delta = (parseInt(payload.quantity, 10) || 0) - (parseInt(oldBatch.quantity, 10) || 0);
+                    const newRemaining = Math.max((parseInt(oldBatch.remaining_quantity, 10) || 0) + delta, 0);
+
                     await db.batches.update(batchId, {
                         quantity: payload.quantity,
-                        remaining_quantity: Math.max(newRemaining, 0),
+                        remaining_quantity: newRemaining,
                         cost_price: payload.cost_price,
                         selling_price: payload.selling_price,
                         discount: payload.discount,

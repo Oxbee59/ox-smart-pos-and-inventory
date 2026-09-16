@@ -164,7 +164,7 @@
 <!-- PURCHASES LIST (scrollable) -->
 <div class="bg-white rounded-xl shadow-md p-4" style="margin-bottom: 120px;">
     <div id="purchasesList" class="max-h-[500px] overflow-y-auto space-y-3">
-        <!-- Initial loading state — shown before JS runs and while loadPurchases() is fetching -->
+        <!-- Initial loading state -->
         <div class="flex flex-col items-center justify-center py-12">
             <div class="loading-spinner"></div>
             <p class="mt-4 text-gray-500 text-sm">Loading screen purchases…</p>
@@ -190,9 +190,8 @@
         </button>
     </div>
 
-    <!-- Collapsible content – scrollable if content overflows -->
+    <!-- Collapsible content -->
     <div id="summaryContent" class="p-3 md:p-4 text-teal-400 text-center font-bold text-xs md:text-sm overflow-y-auto" style="border-top: 1px solid #374151; max-height: 220px;">
-        <!-- Initial loading state for summary -->
         <div class="flex items-center justify-center gap-2 text-gray-400">
             <span class="loading-spinner-sm"></span>
             <span>Loading summary…</span>
@@ -209,7 +208,7 @@
             <h3 class="text-xl font-bold">⏳ Pending Purchases</h3>
             <button onclick="closePendingModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
         </div>
-        <div id="pendingList" class="flex-1 overflow-y-auto p-4 space-y-3"><!-- dynamically loaded --></div>
+        <div id="pendingList" class="flex-1 overflow-y-auto p-4 space-y-3"></div>
         <div class="flex-shrink-0 p-4 border-t flex justify-between bg-white rounded-b-xl">
             <div>
                 <button onclick="syncAllPending()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">🔄 Sync All</button>
@@ -221,20 +220,15 @@
 </div>
 
 <!-- ============================================================ -->
-<!-- PURCHASE HISTORY MODAL – fixed flex layout, fully scrollable -->
+<!-- PURCHASE HISTORY MODAL                                        -->
 <!-- ============================================================ -->
 <div id="historyModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
-        <!-- Header – always visible -->
         <div class="flex-shrink-0 p-4 border-b flex justify-between items-center bg-white">
             <h3 class="text-xl font-bold" id="historyModalTitle">📋 Batch History</h3>
             <button onclick="closeHistoryModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
         </div>
-        <!-- Scrollable content – with horizontal scroll for wide tables -->
-        <div id="historyContent" class="flex-1 overflow-y-auto overflow-x-auto p-4 space-y-4 min-h-0">
-            <!-- dynamically loaded -->
-        </div>
-        <!-- Footer – always visible -->
+        <div id="historyContent" class="flex-1 overflow-y-auto overflow-x-auto p-4 space-y-4 min-h-0"></div>
         <div class="flex-shrink-0 p-4 border-t text-right bg-white rounded-b-xl">
             <button onclick="closeHistoryModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">Close</button>
         </div>
@@ -293,7 +287,6 @@
 </div>
 
 <style>
-    /* Ensure main content has padding at the bottom so the fixed summary doesn't overlap */
     .main-content {
         padding-bottom: 160px !important;
     }
@@ -303,7 +296,6 @@
         }
     }
 
-    /* Smooth transitions for summary – and allow vertical scroll when expanded */
     #summaryContent {
         transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.25s ease;
         overflow-y: auto;
@@ -318,7 +310,6 @@
         overflow: hidden !important;
     }
 
-    /* Modal body scrollbar styling */
     #historyContent::-webkit-scrollbar,
     #pendingList::-webkit-scrollbar {
         width: 6px;
@@ -338,13 +329,11 @@
         background: #a8a8a8;
     }
 
-    /* Summary grid items */
     #summaryContent .grid .bg-gray-800 {
         background: rgba(31, 41, 55, 0.6);
         backdrop-filter: blur(2px);
     }
 
-    /* Ensure history modal content area can shrink and scroll */
     #historyModal .flex-1 {
         min-height: 0;
     }
@@ -352,14 +341,12 @@
         min-height: 0;
     }
 
-    /* Force modal to respect max-height on small screens */
     @media (max-width: 640px) {
         #historyModal > div {
             max-height: 95vh !important;
         }
     }
 
-    /* ---------- Loading spinners ---------- */
     @keyframes loading-rotate {
         to { transform: rotate(360deg); }
     }
@@ -391,18 +378,27 @@
     }
 
     // ---------- Real-sold helper ----------
-    // Uses the API-provided `sold_quantity` (from sales_items) when present.
-    // Falls back to `quantity - remaining` only when the field is missing
-    // (older Dexie cache from before the backend change).
-    // The arithmetic fallback wrongly counts stock-moved batches
-    // (action = 'price_updated_original', 'remaining_moved_to_new_batch',
-    // 'depleted_by_update', 'moved_new', 'moved_forced') as sold, so we
-    // prefer the real value whenever the API provides it.
     function getRealSold(p) {
         if (p && typeof p.sold_quantity === 'number') return p.sold_quantity;
         const qty = (p && p.quantity) || 0;
         const rem = (p && p.remaining_quantity) || 0;
         return Math.max(qty - rem, 0);
+    }
+
+    // ---------- Delta-based remaining calculator ----------
+    // Mirrors the server's in-place update rule exactly:
+    //     new_remaining = max(old_remaining + (new_quantity − old_quantity), 0)
+    //
+    // This is the universally-correct formula for an in-place edit. It
+    // preserves the current remaining and only shifts it by however much
+    // the user changed the quantity. Crucially, for batches whose stock
+    // was moved to a successor (remaining = 0 but no real sales), it does
+    // NOT resurrect units — the bug that previously double-counted stock.
+    function computeNewRemaining(purchase, newQuantity) {
+        const oldQty = parseInt(purchase.quantity || 0, 10);
+        const oldRem = parseInt(purchase.remaining_quantity || 0, 10);
+        const newQty = parseInt(newQuantity || 0, 10);
+        return Math.max(oldRem + (newQty - oldQty), 0);
     }
 
     // ---------- Offline banner helpers ----------
@@ -636,7 +632,7 @@
         else clearBtn.classList.add('hidden');
     }
 
-    // ---------- PENDING PURCHASES (using Dexie pending_ops) ----------
+    // ---------- PENDING PURCHASES ----------
     async function getPendingPurchases() {
         if (!db) return [];
         try {
@@ -854,7 +850,7 @@
         }
     }
 
-    // ============ VIEW PURCHASE HISTORY (with update history) ============
+    // ============ VIEW PURCHASE HISTORY ============
     async function viewPurchaseHistory(batchId) {
         try {
             const res = await fetch(`/api/purchases/${batchId}/history`);
@@ -994,13 +990,11 @@
         isLoading = true;
         updateOfflineBanner();
 
-        // ✅ Show loading state immediately so the user sees activity
         showLoadingState();
 
         let purchases = [];
         let apiSuccess = false;
 
-        // 1. Try API first (if online)
         if (navigator.onLine && !forceRefresh) {
             try {
                 const res = await fetch('/api/purchases?category=Screen');
@@ -1026,10 +1020,8 @@
                             original_date: p.original_date || p.date,
                             original_cost_price: p.original_cost_price || p.cost_price,
                             original_selling_price: p.original_selling_price || p.selling_price,
-                            // ✅ Real sold count from sales_items (backend).
                             sold_quantity: (typeof p.sold_quantity === 'number') ? p.sold_quantity : null
                         }));
-                        // Store in Dexie
                         await storePurchasesInDexie(apiPurchases);
                         apiSuccess = true;
                         console.log('📦 Loaded screen purchases from API:', purchases.length);
@@ -1040,7 +1032,6 @@
             }
         }
 
-        // 2. If API failed or offline, read from Dexie
         if (!apiSuccess || !navigator.onLine) {
             try {
                 const batches = await db.batches.toArray();
@@ -1069,7 +1060,6 @@
                         original_date: b.original_date || b.date,
                         original_cost_price: b.original_cost_price || b.cost_price,
                         original_selling_price: b.original_selling_price || b.selling_price,
-                        // ✅ From Dexie if the batch carried it; else null.
                         sold_quantity: (typeof b.sold_quantity === 'number') ? b.sold_quantity : null
                     }));
                 console.log('📦 Loaded screen purchases from Dexie:', purchases.length);
@@ -1078,7 +1068,6 @@
             }
         }
 
-        // 3. Render
         currentPurchases = purchases;
         currentFilteredData = purchases;
         if (purchases.length > 0) {
@@ -1125,7 +1114,6 @@
                     selling_price: p.selling_price,
                     discount: p.discount || 0,
                     claimed_quantity: p.claimed_quantity || 0,
-                    // ✅ Persist real sold count so offline reads keep it
                     sold_quantity: (typeof p.sold_quantity === 'number') ? p.sold_quantity : null,
                     date: p.date,
                     action: p.action || 'added',
@@ -1145,7 +1133,7 @@
         }
     }
 
-    // ---------- Render list with enhanced badges ----------
+    // ---------- Render list ----------
     function renderList(purchases) {
         const container = document.getElementById('purchasesList');
         if (!purchases || purchases.length === 0) {
@@ -1159,7 +1147,6 @@
             const profitColor = batchProfit >= 0 ? 'text-teal-600' : 'text-red-600';
             const claimedQty = p.claimed_quantity || 0;
             const goodStock = (p.remaining_quantity || 0) - claimedQty;
-            // ✅ REAL sold count (from sales_items via API)
             const soldQty = getRealSold(p);
             const claimedCost = claimedQty * (p.cost_price || 0);
             const soldBadge = soldQty > 0 ? `<span class="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded ml-2">📊 ${soldQty} Sold</span>` : '';
@@ -1202,7 +1189,7 @@
         updateSummary(purchases);
     }
 
-    // ---------- Summary – CORRECTED TOTAL COST & CAPITAL ----------
+    // ---------- Summary ----------
     function updateSummary(purchases) {
         let totalQty = 0,
             totalRemaining = 0,
@@ -1224,7 +1211,6 @@
                 const itemSelling = p.selling_price || 0;
                 const itemDiscount = p.discount || 0;
                 const claimed = p.claimed_quantity || 0;
-                // ✅ REAL sold count (from sales_items via API)
                 const sold = getRealSold(p);
                 totalQty += itemQty;
                 totalRemaining += remainingQty;
@@ -1272,7 +1258,7 @@
             `;
     }
 
-    // ---------- Save pending purchase (Dexie) ----------
+    // ---------- Save pending purchase ----------
     async function savePendingPurchase(payload, actionType, batchId) {
         if (!db) return;
         try {
@@ -1316,19 +1302,20 @@
             if (purchase) {
                 // ✅ REAL sold count for oversell checks
                 const soldQty = getRealSold(purchase);
+                // ✅ New remaining using the delta rule (matches server)
+                const newRemaining = computeNewRemaining(purchase, payload.quantity);
                 const newQty = payload.quantity;
+
                 if (newQty < soldQty) {
                     if (!confirm(`⚠️⚠️ WARNING: This batch has ${soldQty} items already sold.\n\nYou are trying to reduce total quantity to ${newQty}.\nThis will make ${soldQty - newQty} items "oversold".\n\nThe remaining quantity will be set to 0 (zero).\nTotal: ${newQty} | Sold: ${soldQty} | Remaining: 0\n\nContinue?`)) return;
                 }
                 if (newQty < purchase.quantity && newQty >= soldQty) {
                     const reduction = purchase.quantity - newQty;
-                    const newRemaining = newQty - soldQty;
-                    if (!confirm(`⚠️ You are reducing the total quantity by ${reduction} units.\n\nCurrent: ${purchase.quantity}\nNew: ${newQty}\nSold: ${soldQty} (preserved)\nNew Remaining: ${newRemaining}\n\nThis will NOT affect sold items. Continue?`)) return;
+                    if (!confirm(`⚠️ You are reducing the total quantity by ${reduction} units.\n\nCurrent: ${purchase.quantity}\nNew: ${newQty}\nSold: ${soldQty} (preserved)\nCurrent Remaining: ${purchase.remaining_quantity || 0}\nNew Remaining: ${newRemaining}\n\nThis will NOT affect sold items. Continue?`)) return;
                 }
                 if (newQty > purchase.quantity) {
                     const increase = newQty - purchase.quantity;
-                    const newRemaining = newQty - soldQty;
-                    if (!confirm(`ℹ️ You are increasing the total quantity by ${increase} units.\n\nCurrent: ${purchase.quantity}\nNew: ${newQty}\nSold: ${soldQty} (preserved)\nNew Remaining: ${newRemaining}\n\nSold history will be preserved. Continue?`)) return;
+                    if (!confirm(`ℹ️ You are increasing the total quantity by ${increase} units.\n\nCurrent: ${purchase.quantity}\nNew: ${newQty}\nSold: ${soldQty} (preserved)\nCurrent Remaining: ${purchase.remaining_quantity || 0}\nNew Remaining: ${newRemaining}\n\nSold history will be preserved. Continue?`)) return;
                 }
 
                 const costChanged = Math.abs(purchase.cost_price - payload.cost_price) > 0.001;
@@ -1354,10 +1341,7 @@
 
     // ---------- Core submit logic (Dexie-first) ----------
     async function doSubmitPurchase(payload, actionType, batchId) {
-        // ============================================================
-        // FIX: stamp the user's explicit modal choice onto the payload
-        // BEFORE it is written to pending_ops.
-        // ============================================================
+        // Stamp the user's explicit modal choice onto the payload
         if (actionType === 'update') {
             payload.update_mode = 'update';
         } else if (actionType === 'create') {
@@ -1414,14 +1398,17 @@
                 } else if (actionType === 'update' || actionType === 'auto') {
                     const oldBatch = await db.batches.get(batchId);
                     if (!oldBatch) throw new Error('Batch not found locally');
-                    // ✅ Preserve real sold count when adjusting remaining
-                    const soldQty = (typeof oldBatch.sold_quantity === 'number')
-                        ? oldBatch.sold_quantity
-                        : Math.max((oldBatch.quantity || 0) - (oldBatch.remaining_quantity || 0), 0);
-                    const newRemaining = payload.quantity - soldQty;
+
+                    // ✅ Mirror the server's in-place update rule exactly:
+                    //      new_remaining = old_remaining + (new_quantity − old_quantity)
+                    //    NOT `new_quantity − sold`. The delta form preserves the
+                    //    correct remaining for stock-moved batches.
+                    const delta = (parseInt(payload.quantity, 10) || 0) - (parseInt(oldBatch.quantity, 10) || 0);
+                    const newRemaining = Math.max((parseInt(oldBatch.remaining_quantity, 10) || 0) + delta, 0);
+
                     await db.batches.update(batchId, {
                         quantity: payload.quantity,
-                        remaining_quantity: Math.max(newRemaining, 0),
+                        remaining_quantity: newRemaining,
                         cost_price: payload.cost_price,
                         selling_price: payload.selling_price,
                         discount: payload.discount,
@@ -1544,7 +1531,6 @@
             alert(`❌ Batch #${batchId} not found. It may have been deleted.`);
             return;
         }
-        // ✅ REAL sold count for form title
         const soldQty = getRealSold(purchase);
         document.getElementById('name').value = purchase.name || '';
         document.getElementById('brand').value = purchase.brand || '';
@@ -1683,7 +1669,6 @@
             const itemSelling = p.selling_price || 0;
             const itemDiscount = p.discount || 0;
             const claimed = p.claimed_quantity || 0;
-            // ✅ REAL sold count
             const sold = getRealSold(p);
             totalQty += itemQty;
             totalRemaining += remainingQty;
@@ -1747,7 +1732,7 @@
         }
     }
 
-    // ---------- SUGGESTIONS (with category=Screen) ----------
+    // ---------- SUGGESTIONS ----------
     let nameTimeout, brandTimeout, catTimeout, sourceTimeout;
 
     async function fetchProductSuggestions(inputId, suggestionsId) {
@@ -1860,7 +1845,6 @@
     document.addEventListener('DOMContentLoaded', function() {
         initSummaryToggle();
 
-        // ✅ Kick off the load (loading state already visible in HTML + showLoadingState)
         loadPurchases();
         if (typeof updatePendingBadge === 'function') updatePendingBadge();
 
