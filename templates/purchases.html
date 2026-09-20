@@ -738,11 +738,26 @@
         if (!item) return;
         if (!confirm(`Sync this ${item.type === 'add' ? 'addition' : 'update'} for "${item.data.name}"?`)) return;
         try {
-            let url = '/api/purchases';
-            let method = 'POST';
-            if (item.type === 'update' && item.batchId) {
-                url = `/api/purchases/${item.batchId}`;
+            // ============================================================
+            // ✅ FIX: Route by record_id shape, matching sync.js pushPending().
+            //    A stale op.operation='add' row with a numeric record_id must
+            //    go to PUT, not POST — otherwise the manual Sync button can
+            //    create a duplicate batch.
+            // ============================================================
+            const rawId = String(item.batchId || '');
+            const isNumeric = /^\d+$/.test(rawId);
+            let url, method;
+            if (item.type === 'add' && !isNumeric) {
+                url = '/api/purchases';
+                method = 'POST';
+            } else if (isNumeric) {
+                // Ensure the outgoing body carries the update directive.
+                if (!item.data.update_mode) item.data.update_mode = 'update';
+                if (item.data.batch_id === undefined) item.data.batch_id = parseInt(rawId, 10);
+                url = `/api/purchases/${rawId}`;
                 method = 'PUT';
+            } else {
+                throw new Error('Cannot route pending item: no numeric batch id');
             }
             const res = await fetch(url, {
                 method: method,
@@ -771,11 +786,21 @@
         let successCount = 0, failCount = 0;
         for (const item of pending) {
             try {
-                let url = '/api/purchases';
-                let method = 'POST';
-                if (item.type === 'update' && item.batchId) {
-                    url = `/api/purchases/${item.batchId}`;
+                // ✅ FIX: same record_id-shape routing as syncPendingItem()
+                const rawId = String(item.batchId || '');
+                const isNumeric = /^\d+$/.test(rawId);
+                let url, method;
+                if (item.type === 'add' && !isNumeric) {
+                    url = '/api/purchases';
+                    method = 'POST';
+                } else if (isNumeric) {
+                    if (!item.data.update_mode) item.data.update_mode = 'update';
+                    if (item.data.batch_id === undefined) item.data.batch_id = parseInt(rawId, 10);
+                    url = `/api/purchases/${rawId}`;
                     method = 'PUT';
+                } else {
+                    failCount++;
+                    continue;
                 }
                 const res = await fetch(url, {
                     method: method,
@@ -1370,7 +1395,14 @@
             }
         }
 
-        await doSubmitPurchase(payload, editMode ? 'auto' : 'add', editBatchId);
+        // ============================================================
+        // ✅ FIX: In edit mode, default to 'update' (in-place). The Update
+        //    Mode modal is the ONLY path to 'create'. Previously this
+        //    passed 'auto', which could still hit the server's create
+        //    branch if the price changed and the user somehow bypassed
+        //    the modal.
+        // ============================================================
+        await doSubmitPurchase(payload, editMode ? 'update' : 'add', editBatchId);
     }
 
     // ---------- Core submit logic (Dexie-first) ----------
@@ -1388,6 +1420,16 @@
             }
         } else if (actionType === 'auto' && batchId) {
             payload.update_mode = 'auto';
+        }
+
+        // ============================================================
+        // ✅ FIX: Stamp numeric batch_id as a redundant route hint so
+        //    sync.js's safety net can rescue a mis-routed op even if
+        //    op.operation ever reads as 'add'.
+        // ============================================================
+        if ((actionType === 'update' || actionType === 'auto' || actionType === 'create') &&
+            batchId && /^\d+$/.test(String(batchId))) {
+            payload.batch_id = parseInt(batchId, 10);
         }
 
         // Always attempt to save locally via Dexie + queue
@@ -1512,7 +1554,31 @@
             }
         } catch (error) {
             console.warn('Network error, saving purchase offline:', error);
-            await savePendingPurchase(payload, actionType === 'create' ? 'update' : actionType, batchId);
+
+            // ============================================================
+            // ✅ FIX: Preserve the user's actual choice on offline fallback.
+            //    Previously 'create' was silently downgraded to 'update',
+            //    discarding the user's modal selection. Now we stamp the
+            //    mode AND batch_id so the queued op routes correctly when
+            //    the network returns.
+            // ============================================================
+            if (actionType === 'create') {
+                payload.update_mode = 'create';
+                if (payload.keep_sold_with_old === undefined) payload.keep_sold_with_old = true;
+            } else if (actionType === 'update') {
+                payload.update_mode = 'update';
+            } else if (actionType === 'auto' && batchId) {
+                payload.update_mode = 'auto';
+            }
+            if (batchId && /^\d+$/.test(String(batchId))) {
+                payload.batch_id = parseInt(batchId, 10);
+            }
+
+            // Queue as 'update' op when a numeric batchId exists — sync.js
+            // will then PUT with the correct update_mode. For a brand-new
+            // 'add' with no id, queue as 'add' against a temp id.
+            const queuedOp = (actionType === 'add' && !batchId) ? 'add' : 'update';
+            await savePendingPurchase(payload, queuedOp, batchId);
             updatePendingBadge();
             alert('⚠️ You are offline. Purchase saved locally and will be synced later.');
             resetForm();

@@ -6,6 +6,13 @@
 //  - Handles full sync, retries, and conflict resolution
 // ============================================================
 
+// Maximum push attempts before an op is dead-lettered (synced = -1).
+// Prevents a permanently-rejected op from looping forever.
+const MAX_ATTEMPTS = 5;
+
+// Re-entrancy guard for fullSync() so overlapping calls can't race.
+let _fullSyncRunning = false;
+
 /**
  * Pull all data from the server and upsert into Dexie.
  * Called on app start (if online) and periodically.
@@ -195,7 +202,11 @@ async function pushPending() {
         return;
     }
 
-    const pending = await db.pending_ops.where('synced').equals(0).toArray();
+    // Fetch only live ops. Rows with synced === -1 are dead-lettered and
+    // must be excluded so a permanently-rejected op cannot block the queue.
+    const pending = (await db.pending_ops.where('synced').equals(0).toArray())
+        .filter(op => (op.attempts || 0) < MAX_ATTEMPTS);
+
     if (pending.length === 0) {
         console.log('📭 No pending operations to push.');
         return;
@@ -204,6 +215,7 @@ async function pushPending() {
     console.log(`📤 Pushing ${pending.length} pending operations...`);
     let successCount = 0;
     let failCount = 0;
+    let deadCount = 0;
 
     for (const op of pending) {
         try {
@@ -211,25 +223,83 @@ async function pushPending() {
             let method = '';
             let payload = op.payload;
             let serverId = null;
+            let wasCreate = false;   // true when we issue a POST that creates a new row
 
-            // Map operation to the correct API endpoint
+            // ============================================================
+            //  ✅ FIX: Route by the SHAPE of record_id, not just op.operation.
+            //
+            //  Why this matters:
+            //    A queued "batch" op with a numeric record_id is ALWAYS an
+            //    in-place update — even if op.operation was written as 'add'
+            //    by an older client, or the row is stale. Sending it as POST
+            //    would call add_purchase() and create a brand-new batch
+            //    (the duplicate-creation bug).
+            //
+            //  Rule:
+            //    - op.operation === 'add' AND record_id is a temp_/non-numeric
+            //        → POST /api/purchases (create new batch)
+            //    - record_id is a real numeric batch id
+            //        → PUT /api/purchases/<id>  (update in place)
+            //    - op.operation === 'add' AND record_id is a real numeric id
+            //        → treat as PUT (defensive redirect from a stale row)
+            //
+            //  Additionally, if a PUT is being sent and the payload lacks an
+            //  explicit update_mode, we stamp 'update' on the outgoing body
+            //  so the server's update_product() NEVER falls into the 'auto'
+            //  branch that would create a new batch.
+            // ============================================================
             switch (op.table) {
-                case 'batches':
-                    if (op.operation === 'add') {
+                case 'batches': {
+                    const rawId = String(op.record_id || '');
+                    const isTemp = rawId.startsWith('temp_') || !/^\d+$/.test(rawId);
+
+                    // Sanity: is a stray batch_id present on the payload?
+                    const payloadBatchId = payload && payload.batch_id;
+                    let hintedId = null;
+                    if (payloadBatchId !== undefined && payloadBatchId !== null) {
+                        const n = parseInt(payloadBatchId, 10);
+                        if (Number.isFinite(n) && n > 0) hintedId = n;
+                    }
+
+                    if (op.operation === 'add' && isTemp && !hintedId) {
+                        // True creation — brand-new batch
                         url = '/api/purchases';
                         method = 'POST';
-                    } else if (op.operation === 'update') {
-                        url = `/api/purchases/${op.record_id}`;
-                        method = 'PUT';
+                        wasCreate = true;
                     } else {
-                        throw new Error(`Unsupported operation for batches: ${op.operation}`);
+                        // Update in place. Prefer the explicit numeric id from
+                        // the record, fall back to the payload hint.
+                        const numericId = /^\d+$/.test(rawId) ? parseInt(rawId, 10) : hintedId;
+                        if (!numericId) {
+                            throw new Error(
+                                `Cannot route batch op: record_id="${op.record_id}" is not a real batch id`
+                            );
+                        }
+                        url = `/api/purchases/${numericId}`;
+                        method = 'PUT';
+
+                        // Ensure the payload carries the update directive.
+                        if (!payload || typeof payload !== 'object') {
+                            payload = {};
+                        }
+                        if (!payload.update_mode) {
+                            payload = Object.assign({}, payload, { update_mode: 'update' });
+                        }
+                        // Also make sure batch_id is available on the body
+                        // so the server-side safety net in api_add_purchase
+                        // can rescue a mis-routed request if it ever happens.
+                        if (payload.batch_id === undefined) {
+                            payload = Object.assign({}, payload, { batch_id: numericId });
+                        }
                     }
                     break;
+                }
 
                 case 'sales':
                     if (op.operation === 'add') {
                         url = '/api/sales/complete';
                         method = 'POST';
+                        wasCreate = true;
                     } else {
                         throw new Error(`Unsupported operation for sales: ${op.operation}`);
                     }
@@ -239,6 +309,7 @@ async function pushPending() {
                     if (op.operation === 'add') {
                         url = '/api/claims';
                         method = 'POST';
+                        wasCreate = true;
                     } else if (op.operation === 'update') {
                         url = `/api/claims/${op.record_id}`;
                         method = 'PUT';
@@ -293,34 +364,51 @@ async function pushPending() {
                 throw new Error(result.error || 'Unknown error from server');
             }
 
-            // If the server returned a new ID, update the local record if needed
-            if (result.batch_id && op.table === 'batches' && op.operation === 'add') {
-                // The batch was created on server; we should update the local batch ID.
-                // However, we already have a temporary ID in record_id, so we can update it.
-                // For simplicity, we'll just mark as synced and keep the local ID.
-                // If you need to update the local record with the server ID, you can do it here.
-                // For now, we assume the local ID is fine.
-                serverId = result.batch_id;
-            } else if (result.claim_id && op.table === 'claims' && op.operation === 'add') {
+            // ============================================================
+            //  ✅ FIX (minor): note the server-assigned id regardless of
+            //  which verb actually ran. A stale op.operation='add' row that
+            //  was routed to PUT will return `new_batch_id`, not `batch_id`.
+            // ============================================================
+            if (op.table === 'batches' && (result.batch_id || result.new_batch_id)) {
+                serverId = result.batch_id || result.new_batch_id;
+            } else if (op.table === 'claims' && result.claim_id) {
                 serverId = result.claim_id;
-            } else if (result.sale_id && op.table === 'sales' && op.operation === 'add') {
+            } else if (op.table === 'sales' && result.sale_id) {
                 serverId = result.sale_id;
             }
 
-            // Mark as synced
-            await db.pending_ops.update(op.id, { synced: 1 });
+            // ============================================================
+            //  ✅ FIX: DELETE on success instead of marking synced=1.
+            //
+            //  Rationale: leaving the row around with synced=1 lets it be
+            //  replayed if anything ever flips the flag back (or if two
+            //  clients race). Deleting the row makes each queued op a
+            //  one-shot — replay is structurally impossible.
+            // ============================================================
+            await db.pending_ops.delete(op.id);
             successCount++;
 
-            // Optionally, if we got a server ID, we might want to update the local record
-            // This is advanced; for now we just mark it synced.
-
-            console.log(`✅ Synced op ${op.id} (${op.table} ${op.operation})`);
+            console.log(`✅ Synced op ${op.id} (${op.table} ${op.operation}${wasCreate ? ' [create]' : ' [update]'})`);
+            if (serverId) {
+                console.log(`   ↳ server assigned id ${serverId}`);
+            }
 
         } catch (err) {
-            // Increment attempts and keep for retry
-            await db.pending_ops.update(op.id, { attempts: (op.attempts || 0) + 1 });
-            console.warn(`❌ Push failed for op ${op.id}:`, err.message);
-            failCount++;
+            // ============================================================
+            //  ✅ FIX (minor): cap retries. After MAX_ATTEMPTS failures,
+            //  dead-letter the row (synced = -1) so it can never loop
+            //  forever and block the rest of the queue.
+            // ============================================================
+            const attempts = (op.attempts || 0) + 1;
+            if (attempts >= MAX_ATTEMPTS) {
+                await db.pending_ops.update(op.id, { attempts, synced: -1 });
+                console.error(`💀 Op ${op.id} failed ${attempts} times — dead-lettered:`, err.message);
+                deadCount++;
+            } else {
+                await db.pending_ops.update(op.id, { attempts });
+                console.warn(`❌ Push failed for op ${op.id} (attempt ${attempts}/${MAX_ATTEMPTS}):`, err.message);
+                failCount++;
+            }
         }
     }
 
@@ -329,31 +417,44 @@ async function pushPending() {
         updatePendingBadge();
     }
 
-    console.log(`📤 Push completed: ${successCount} succeeded, ${failCount} failed.`);
+    console.log(`📤 Push completed: ${successCount} succeeded, ${failCount} failed, ${deadCount} dead-lettered.`);
 }
 
 /**
  * Full sync: pull latest data from server, then push pending operations.
  * This should be called on app startup (if online) and periodically.
+ *
+ * Guarded against re-entrancy so two overlapping calls can't race.
  */
 async function fullSync() {
-    console.log('🔄 Starting full sync...');
-    // First, pull new data from server (to get latest IDs, updates from others)
-    await pullData();
-    // Then push any local changes
-    await pushPending();
-    console.log('✅ Full sync completed.');
+    if (_fullSyncRunning) {
+        console.warn('⚠️ fullSync already running — skipping this call.');
+        return;
+    }
+    _fullSyncRunning = true;
+    try {
+        console.log('🔄 Starting full sync...');
+        // First, pull new data from server (to get latest IDs, updates from others)
+        await pullData();
+        // Then push any local changes
+        await pushPending();
+        console.log('✅ Full sync completed.');
+    } finally {
+        _fullSyncRunning = false;
+    }
 }
 
 /**
  * Clear all pending operations (careful – use with caution).
  * Typically used for debugging or after a full reset.
+ * Also clears dead-lettered rows.
  */
 async function clearAllPending() {
     if (!db) return;
     if (!confirm('Clear all pending operations?')) return;
     await db.pending_ops.where('synced').equals(0).delete();
-    console.log('🗑️ All pending operations cleared.');
+    await db.pending_ops.where('synced').equals(-1).delete();
+    console.log('🗑️ All pending operations cleared (live + dead-lettered).');
     if (typeof updatePendingBadge === 'function') {
         updatePendingBadge();
     }
@@ -361,6 +462,7 @@ async function clearAllPending() {
 
 /**
  * Get the count of pending operations.
+ * Dead-lettered rows (synced = -1) are excluded from the badge count.
  */
 async function getPendingCount() {
     if (!db) return 0;

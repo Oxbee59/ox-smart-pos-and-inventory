@@ -1285,6 +1285,49 @@ def api_purchase_history(batch_id):
 @login_required
 def api_add_purchase():
     data = request.json
+
+    # ============================================================
+    #  ✅ HARD GUARD: a POST must never touch an existing batch.
+    #
+    #  Background: the client's sync engine is supposed to route
+    #  "update same batch" through PUT /api/purchases/<id>. But if
+    #  a stale queued op ever reaches this endpoint with a numeric
+    #  batch_id on the payload, calling add_purchase() would insert
+    #  a brand-new batch and duplicate inventory.
+    #
+    #  This guard catches that case and re-routes the request
+    #  through the update handler, forcing in-place semantics.
+    #  Even the update_mode='auto' default is safe here because
+    #  'update' forces the in-place branch unconditionally.
+    # ============================================================
+    incoming_batch_id = data.get('batch_id')
+    if incoming_batch_id not in (None, '', 0, '0'):
+        try:
+            incoming_batch_id = int(incoming_batch_id)
+        except (TypeError, ValueError):
+            incoming_batch_id = None
+
+        if incoming_batch_id:
+            conn = get_connection()
+            try:
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT 1 FROM purchase_batches WHERE id = %s",
+                    (incoming_batch_id,)
+                )
+                exists = cur.fetchone() is not None
+            finally:
+                conn.close()
+
+            if exists:
+                # Force in-place update regardless of what the client sent.
+                # We reuse the PUT handler so behaviour stays consistent
+                # (it already validates fields and reads update_mode).
+                data['update_mode'] = 'update'
+                # keep_sold_with_old is irrelevant for update mode but be explicit
+                data['keep_sold_with_old'] = data.get('keep_sold_with_old', True)
+                return api_update_purchase(incoming_batch_id)
+
     try:
         batch_id = add_purchase(
             name=data['name'],
@@ -1299,41 +1342,7 @@ def api_add_purchase():
         return jsonify({'success': True, 'batch_id': batch_id})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 400
-
-@app.route('/api/purchases/<int:batch_id>', methods=['PUT'])
-@login_required
-def api_update_purchase(batch_id):
-    data = request.json
-    try:
-        print(f"🔄 Updating batch #{batch_id}: {data}")
-
-        # Extract update_mode (default 'auto')
-        update_mode = data.get('update_mode', 'auto')
-        # Extract keep_sold_with_old (default True)
-        keep_sold_with_old = data.get('keep_sold_with_old', True)
-
-        new_batch_id = update_product(
-            batch_id=batch_id,
-            name=data['name'],
-            brand=data['brand'],
-            category=data['category'],
-            quantity=int(data['quantity']),
-            cost_price=float(data['cost_price']),
-            discount=float(data.get('discount', 0)),
-            selling_price=float(data['selling_price']),
-            source=data.get('source', 'Unknown'),
-            update_mode=update_mode,
-            keep_sold_with_old=keep_sold_with_old
-        )
-        return jsonify({'success': True, 'new_batch_id': new_batch_id})
-    except ValueError as e:
-        return jsonify({'success': False, 'error': str(e)}), 400
-    except Exception as e:
-        print(f"❌ Error updating batch #{batch_id}: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)}), 500
-@app.route('/api/purchases/suggestions/source', methods=['GET'])
+@app.route('/api/purchases/suggestions/source', methods=['GET']) 
 @login_required
 def api_suggest_source():
     q = request.args.get('q', '')
@@ -1462,6 +1471,36 @@ def api_get_products():
 @login_required
 def api_add_product():
     data = request.json
+
+    # Same guard as api_add_purchase — refuse to POST when the payload
+    # carries a real batch id; redirect to in-place update.
+    incoming_batch_id = data.get('batch_id')
+    if incoming_batch_id not in (None, '', 0, '0'):
+        try:
+            incoming_batch_id = int(incoming_batch_id)
+        except (TypeError, ValueError):
+            incoming_batch_id = None
+
+        if incoming_batch_id:
+            conn = get_connection()
+            try:
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT 1 FROM purchase_batches WHERE id = %s",
+                    (incoming_batch_id,)
+                )
+                exists = cur.fetchone() is not None
+            finally:
+                conn.close()
+
+            if exists:
+                data['update_mode'] = 'update'
+                data['keep_sold_with_old'] = data.get('keep_sold_with_old', True)
+                # category may be missing on /api/products payloads
+                data.setdefault('category', 'Accessory')
+                data.setdefault('source', 'Unknown')
+                return api_update_purchase(incoming_batch_id)
+
     try:
         batch_id = add_purchase(
             name=data['name'],
