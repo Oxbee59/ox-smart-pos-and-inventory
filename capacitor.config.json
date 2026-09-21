@@ -3,7 +3,7 @@
   "appName": "OX Smart POS",
   "webDir": "www",
   "server": {
-    "url": "https://ox-smart-pos-web-sfgk.onrender.com",
+    "url": "https://ox-smart-pos-and-inventory.onrender.com",
     "cleartext": true
   }
 }
