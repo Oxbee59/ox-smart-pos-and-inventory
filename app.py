@@ -1281,6 +1281,61 @@ def api_purchase_history(batch_id):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+# ===================== UPDATE PURCHASE (PUT) =====================
+@app.route('/api/purchases/<int:batch_id>', methods=['PUT'])
+@login_required
+def api_update_purchase(batch_id):
+    """
+    In-place update of an existing purchase batch.
+
+    Body:
+      - name, brand, category, quantity, cost_price, discount,
+        selling_price, source
+      - update_mode: 'update' | 'create' | 'auto'  (default 'auto')
+      - keep_sold_with_old: bool (default True)
+
+    Modes:
+      - 'update'  → force in-place edit (no new batch, ever)
+      - 'create'  → force new batch creation if price/identity changed
+      - 'auto'    → original behaviour (may create a new batch)
+    """
+    data = request.json or {}
+
+    try:
+        print(f"🔄 Updating batch #{batch_id}: {data}")
+
+        update_mode = data.get('update_mode', 'auto')
+        keep_sold_with_old = data.get('keep_sold_with_old', True)
+
+        new_batch_id = update_product(
+            batch_id=batch_id,
+            name=data['name'],
+            brand=data['brand'],
+            category=data.get('category', 'Accessory'),
+            quantity=int(data['quantity']),
+            cost_price=float(data['cost_price']),
+            discount=float(data.get('discount', 0) or 0),
+            selling_price=float(data['selling_price']),
+            source=data.get('source', 'Unknown'),
+            update_mode=update_mode,
+            keep_sold_with_old=keep_sold_with_old
+        )
+
+        return jsonify({'success': True, 'new_batch_id': new_batch_id})
+
+    except ValueError as e:
+        # legitimate "batch not found" / guard-rail errors → 400
+        print(f"❌ Validation error updating batch #{batch_id}: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 400
+    except KeyError as e:
+        print(f"❌ Missing field in request: {e}")
+        return jsonify({'success': False, 'error': f'Missing field: {e}'}), 400
+    except Exception as e:
+        print(f"❌ Unexpected error updating batch #{batch_id}: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/api/purchases', methods=['POST'])
 @login_required
 def api_add_purchase():
