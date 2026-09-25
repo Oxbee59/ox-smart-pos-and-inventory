@@ -11,6 +11,14 @@
     <h1 class="text-3xl font-bold text-gray-800 ml-4">✏️ Edit User</h1>
 </div>
 
+<!-- Self-edit banner -->
+{% if is_self %}
+<div class="mb-4 max-w-2xl bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded-lg text-sm">
+    👤 <strong>You are editing your own account.</strong>
+    You can change your password, but you cannot change your own role or delete yourself.
+</div>
+{% endif %}
+
 <div class="bg-white rounded-lg shadow p-6 max-w-2xl">
     <!-- User Info -->
     <div id="userInfo" class="mb-6">
@@ -21,43 +29,54 @@
             {% if is_oxbee %}
             <span class="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">🔒 System Protected</span>
             {% endif %}
+            {% if is_self %}
+            <span class="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">👤 You</span>
+            {% endif %}
         </div>
         <p class="text-sm text-gray-500">Joined: <span id="userCreated"></span></p>
         <p class="text-sm text-gray-500">User ID: <span id="userIdDisplay"></span></p>
     </div>
 
     <!-- Role Change -->
+    {% set role_locked = is_oxbee or is_self %}
     <div class="border-t pt-4 mt-4">
         <h3 class="font-semibold text-gray-700 mb-3">👤 Change Role</h3>
         <div class="flex flex-wrap gap-3 items-center">
-            <select id="roleSelect" class="border rounded-lg px-3 py-2 bg-white" {% if is_oxbee %}disabled{% endif %}>
+            <select id="roleSelect" class="border rounded-lg px-3 py-2 bg-white" {% if role_locked %}disabled{% endif %}>
                 <option value="user">User</option>
                 <option value="admin">Admin</option>
             </select>
-            <button id="updateRoleBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition {% if is_oxbee %}opacity-50 cursor-not-allowed{% endif %}" 
-                    {% if is_oxbee %}disabled{% endif %}>
+            <button id="updateRoleBtn"
+                    class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition {% if role_locked %}opacity-50 cursor-not-allowed{% endif %}"
+                    {% if role_locked %}disabled{% endif %}>
                 Update Role
             </button>
-            {% if is_oxbee %}
+            {% if is_self %}
+            <span class="text-blue-500 text-sm">👤 You cannot change your own role</span>
+            {% elif is_oxbee %}
             <span class="text-red-500 text-sm">🔒 Cannot modify system administrator</span>
             {% endif %}
         </div>
     </div>
 
     <!-- Password Reset -->
+    {% set password_locked = is_oxbee and not is_self %}
     <div class="border-t pt-4 mt-4">
         <h3 class="font-semibold text-gray-700 mb-3">🔑 Reset Password</h3>
         <div class="flex flex-wrap gap-3 items-end">
             <div class="flex-1 min-w-[200px]">
                 <label class="block text-sm text-gray-600 mb-1">New Password</label>
-                <input type="password" id="newPassword" class="w-full border rounded-lg px-3 py-2" 
-                       placeholder="Enter new password" {% if is_oxbee %}disabled{% endif %}>
+                <input type="password" id="newPassword" class="w-full border rounded-lg px-3 py-2"
+                       placeholder="Enter new password" {% if password_locked %}disabled{% endif %}>
             </div>
-            <button id="resetPasswordBtn" class="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg transition {% if is_oxbee %}opacity-50 cursor-not-allowed{% endif %}"
-                    {% if is_oxbee %}disabled{% endif %}>
-                Reset Password
+            <button id="resetPasswordBtn"
+                    class="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg transition {% if password_locked %}opacity-50 cursor-not-allowed{% endif %}"
+                    {% if password_locked %}disabled{% endif %}>
+                {% if is_self %}Reset My Password{% else %}Reset Password{% endif %}
             </button>
-            {% if is_oxbee %}
+            {% if is_self %}
+            <span class="text-blue-500 text-sm">✓ You can change your own password</span>
+            {% elif is_oxbee %}
             <span class="text-red-500 text-sm">🔒 Cannot modify system administrator</span>
             {% endif %}
         </div>
@@ -76,14 +95,18 @@
     </div>
 
     <!-- Danger Zone -->
+    {% set delete_locked = is_oxbee or is_self %}
     <div class="border-t pt-4 mt-4 border-red-200">
         <h3 class="font-semibold text-red-600 mb-3">⚠️ Danger Zone</h3>
         <div class="flex flex-wrap gap-3 items-center">
-            <button id="deleteUserBtn" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition {% if is_oxbee %}opacity-50 cursor-not-allowed{% endif %}"
-                    {% if is_oxbee %}disabled{% endif %}>
+            <button id="deleteUserBtn"
+                    class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition {% if delete_locked %}opacity-50 cursor-not-allowed{% endif %}"
+                    {% if delete_locked %}disabled{% endif %}>
                 🗑️ Delete User
             </button>
-            {% if is_oxbee %}
+            {% if is_self %}
+            <span class="text-blue-500 text-sm">👤 You cannot delete your own account</span>
+            {% elif is_oxbee %}
             <span class="text-red-500 text-sm">🔒 Cannot delete system administrator</span>
             {% endif %}
         </div>
@@ -114,9 +137,10 @@
 </div>
 
 <!-- Data attributes for JavaScript -->
-<div id="editUserData" 
-     data-user-id="{{ user_id }}" 
-     data-is-oxbee="{{ 'true' if is_oxbee else 'false' }}">
+<div id="editUserData"
+     data-user-id="{{ user_id }}"
+     data-is-oxbee="{{ 'true' if is_oxbee else 'false' }}"
+     data-is-self="{{ 'true' if is_self else 'false' }}">
 </div>
 
 <script>
@@ -131,19 +155,30 @@
             } else {
                 banner.classList.add('hidden');
             }
-            // Disable action buttons when offline
-            const actions = ['updateRoleBtn', 'resetPasswordBtn', 'deleteUserBtn'];
-            actions.forEach(id => {
+            // Disable action buttons when offline — but keep the intrinsic
+            // disabled state (is_oxbee / is_self) untouched. Only flip the
+            // buttons that are NOT intrinsically locked.
+            const selfIsOxbee = isOxbee;
+            const canRole   = !(selfIsOxbee || isSelf);
+            const canPwd    = !(selfIsOxbee && !isSelf);
+            const canDelete = !(selfIsOxbee || isSelf);
+
+            const buttons = [
+                { id: 'updateRoleBtn',    allowed: canRole },
+                { id: 'resetPasswordBtn', allowed: canPwd },
+                { id: 'deleteUserBtn',    allowed: canDelete },
+            ];
+            buttons.forEach(({ id, allowed }) => {
                 const btn = document.getElementById(id);
-                if (btn) {
-                    if (!navigator.onLine) {
-                        btn.disabled = true;
-                        btn.classList.add('opacity-50', 'cursor-not-allowed');
-                    } else {
-                        btn.disabled = false;
-                        btn.classList.remove('opacity-50', 'cursor-not-allowed');
-                    }
+                if (!btn) return;
+                if (!navigator.onLine && allowed) {
+                    btn.disabled = true;
+                    btn.classList.add('opacity-50', 'cursor-not-allowed');
+                } else if (allowed) {
+                    btn.disabled = false;
+                    btn.classList.remove('opacity-50', 'cursor-not-allowed');
                 }
+                // If not allowed, leave whatever the server rendered.
             });
         }
         window.addEventListener('online', updateOfflineBanner);
@@ -154,7 +189,6 @@
 
         async function getCacheEntry(key) {
             if (!db) {
-                // Fallback to localStorage
                 try {
                     const raw = localStorage.getItem(key);
                     if (!raw) return null;
@@ -174,7 +208,6 @@
                     if (age < CACHE_MAX_AGE_MS) {
                         return entry.value;
                     } else {
-                        // Stale – remove
                         await cacheTable.delete(key);
                         return null;
                     }
@@ -197,7 +230,6 @@
 
         async function putCacheEntry(key, value) {
             if (!db) {
-                // localStorage fallback
                 try {
                     localStorage.setItem(key, JSON.stringify({ data: value, timestamp: Date.now() }));
                 } catch(e) {}
@@ -216,8 +248,9 @@
         }
 
         // Get data from data attributes
-        const userId = parseInt(document.getElementById('editUserData').dataset.userId);
+        const userId  = parseInt(document.getElementById('editUserData').dataset.userId);
         const isOxbee = document.getElementById('editUserData').dataset.isOxbee === 'true';
+        const isSelf  = document.getElementById('editUserData').dataset.isSelf  === 'true';
         const USER_CACHE_KEY = `edit_user_${userId}`;
 
         // ---------- Error Modal ----------
@@ -250,7 +283,6 @@
             let user = null;
             let fromCache = false;
 
-            // Try network first (if online)
             if (navigator.onLine) {
                 try {
                     const res = await fetch(`/api/admin/users/${userId}`);
@@ -266,12 +298,10 @@
                 }
             }
 
-            // If no user from network, try cache
             if (!user) {
                 user = await getCacheEntry(USER_CACHE_KEY);
                 if (user) {
                     fromCache = true;
-                    // Show note that we're using cached data
                     const msg = document.getElementById('actionMessage');
                     msg.textContent = '📦 Showing cached user data (offline)';
                     msg.className = 'text-sm text-orange-500 mt-4';
@@ -280,7 +310,6 @@
             }
 
             if (!user) {
-                // No data at all
                 document.getElementById('userName').textContent = 'User not found';
                 document.getElementById('userIdDisplay').textContent = userId;
                 document.getElementById('userCreated').textContent = 'N/A';
@@ -289,7 +318,6 @@
                 return;
             }
 
-            // Display user data
             document.getElementById('userName').textContent = user.username;
             document.getElementById('userIdDisplay').textContent = user.id;
             document.getElementById('userCreated').textContent = user.created_at ? new Date(user.created_at).toLocaleString() : 'N/A';
@@ -305,7 +333,6 @@
             document.getElementById('roleSelect').value = user.role;
 
             if (fromCache) {
-                // Add a small note in the user info area
                 const note = document.createElement('p');
                 note.className = 'text-xs text-orange-400 mt-1';
                 note.textContent = '⚠️ Data may be outdated (offline)';
@@ -323,6 +350,10 @@
 
         // ---------- Update role ----------
         document.getElementById('updateRoleBtn').addEventListener('click', async function() {
+            if (isSelf) {
+                showMessage('You cannot change your own role.', 'red');
+                return;
+            }
             if (isOxbee) {
                 showMessage('Cannot modify the system administrator!', 'red');
                 return;
@@ -344,8 +375,8 @@
                 const data = await res.json();
                 if (data.success) {
                     showMessage('✅ Role updated successfully!', 'green');
-                    // Invalidate cache
-                    await putCacheEntry(USER_CACHE_KEY, { ...(await getCacheEntry(USER_CACHE_KEY)), role: newRole });
+                    const cached = await getCacheEntry(USER_CACHE_KEY);
+                    await putCacheEntry(USER_CACHE_KEY, { ...(cached || {}), role: newRole });
                     loadUser();
                 } else {
                     showMessage('❌ Error: ' + data.error, 'red');
@@ -357,7 +388,9 @@
 
         // ---------- Reset password ----------
         document.getElementById('resetPasswordBtn').addEventListener('click', async function() {
-            if (isOxbee) {
+            // Block only when editing oxbee from someone else's session.
+            // Self-editing (including oxbee editing self) is allowed.
+            if (isOxbee && !isSelf) {
                 showMessage('Cannot modify the system administrator!', 'red');
                 return;
             }
@@ -372,7 +405,10 @@
                 return;
             }
 
-            if (!confirm(`Reset password for this user to "${newPassword}"?`)) return;
+            const confirmMsg = isSelf
+                ? `Change YOUR OWN password to "${newPassword}"?`
+                : `Reset password for this user to "${newPassword}"?`;
+            if (!confirm(confirmMsg)) return;
 
             try {
                 const res = await fetch(`/api/admin/users/${userId}/password`, {
@@ -382,7 +418,12 @@
                 });
                 const data = await res.json();
                 if (data.success) {
-                    showMessage('✅ Password reset successfully!', 'green');
+                    showMessage(
+                        isSelf
+                            ? '✅ Your password has been changed. Use it on your next login.'
+                            : '✅ Password reset successfully!',
+                        'green'
+                    );
                     document.getElementById('newPassword').value = '';
                 } else {
                     showMessage('❌ Error: ' + data.error, 'red');
@@ -404,7 +445,6 @@
                     const res = await fetch(`/api/admin/users/${userId}`);
                     const data = await res.json();
                     if (data.success) {
-                        // For security, we don't expose the hash directly
                         display.textContent = '🔒 Password hash is not exposed for security reasons.';
                         display.classList.remove('hidden');
                     }
@@ -418,6 +458,10 @@
 
         // ---------- Delete user ----------
         document.getElementById('deleteUserBtn').addEventListener('click', async function() {
+            if (isSelf) {
+                showMessage('You cannot delete your own account.', 'red');
+                return;
+            }
             if (isOxbee) {
                 showMessage('Cannot delete the system administrator!', 'red');
                 return;
@@ -435,7 +479,6 @@
                 const data = await res.json();
                 if (data.success) {
                     showMessage('✅ User deleted successfully!', 'green');
-                    // Remove from cache
                     await putCacheEntry(USER_CACHE_KEY, null);
                     setTimeout(() => {
                         window.location.href = '/admin/users';

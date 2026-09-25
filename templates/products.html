@@ -99,28 +99,28 @@
         <div class="bg-white rounded-xl shadow-md p-3 text-center border border-gray-100"
              title="Every accessory product record in the database. Only in-stock products appear on the sales terminal.">
             <p class="text-xs text-gray-500">📦 Products</p>
-            <p id="totalProductsCount" class="text-xl md:text-2xl font-bold text-indigo-600">0</p>
+            <p id="totalProductsCount" class="text-xl md:text-2xl font-bold text-indigo-600">—</p>
             <p id="productsInStockNote" class="text-[10px] text-gray-400 mt-0.5"></p>
         </div>
         <div class="bg-white rounded-xl shadow-md p-3 text-center border border-gray-100">
             <p class="text-xs text-gray-500">📦 Batches</p>
-            <p id="totalBatchesCount" class="text-xl md:text-2xl font-bold text-blue-600">0</p>
+            <p id="totalBatchesCount" class="text-xl md:text-2xl font-bold text-blue-600">—</p>
         </div>
         <div class="bg-white rounded-xl shadow-md p-3 text-center border border-gray-100">
             <p class="text-xs text-gray-500">📦 Total Qty</p>
-            <p id="totalQuantityCount" class="text-xl md:text-2xl font-bold text-teal-600">0</p>
+            <p id="totalQuantityCount" class="text-xl md:text-2xl font-bold text-teal-600">—</p>
         </div>
         <div class="bg-white rounded-xl shadow-md p-3 text-center border border-gray-100">
             <p class="text-xs text-gray-500">⚠️ Claimed</p>
-            <p id="totalClaimedCount" class="text-xl md:text-2xl font-bold text-red-600">0</p>
+            <p id="totalClaimedCount" class="text-xl md:text-2xl font-bold text-red-600">—</p>
         </div>
         <div class="bg-white rounded-xl shadow-md p-3 text-center border border-gray-100">
             <p class="text-xs text-gray-500">✅ Good Stock</p>
-            <p id="totalGoodCount" class="text-xl md:text-2xl font-bold text-green-600">0</p>
+            <p id="totalGoodCount" class="text-xl md:text-2xl font-bold text-green-600">—</p>
         </div>
         <div class="bg-white rounded-xl shadow-md p-3 text-center border border-gray-100">
             <p class="text-xs text-gray-500">⚠️ Low Stock Items</p>
-            <p id="lowStockCount" class="text-xl md:text-2xl font-bold text-red-600">0</p>
+            <p id="lowStockCount" class="text-xl md:text-2xl font-bold text-red-600">—</p>
         </div>
     </div>
     <div id="cacheStatus" class="text-xs text-gray-400 mt-2 text-center hidden"></div>
@@ -132,7 +132,11 @@
 
 <!-- Products List (cards) -->
 <div id="productsList" class="space-y-4">
-    <!-- dynamic content -->
+    <!-- Initial loading state — shown before JS runs and while loadProducts() is fetching -->
+    <div class="flex flex-col items-center justify-center py-12">
+        <div class="loading-spinner"></div>
+        <p class="mt-4 text-gray-500 text-sm">Loading products…</p>
+    </div>
 </div>
 
 <!-- Modal: View Batches (BULLETPROOF v3 — CSS GRID LAYOUT) -->
@@ -224,6 +228,50 @@
         border: 3px solid #f59e0b !important;
         background-color: #fffbeb !important;
         transition: all 0.3s ease;
+    }
+
+    /* ============================================================
+       LOADING SPINNER
+       ============================================================ */
+    @keyframes loading-rotate {
+        to { transform: rotate(360deg); }
+    }
+    .loading-spinner {
+        width: 48px;
+        height: 48px;
+        border: 4px solid #e5e7eb;
+        border-top-color: #14b8a6;
+        border-radius: 50%;
+        animation: loading-rotate 0.8s linear infinite;
+    }
+    .loading-spinner-sm {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border: 2px solid rgba(148, 163, 184, 0.4);
+        border-top-color: #14b8a6;
+        border-radius: 50%;
+        animation: loading-rotate 0.8s linear infinite;
+        vertical-align: -2px;
+    }
+
+    /* Subtle pulse for loading summary numbers */
+    @keyframes loading-pulse {
+        0%, 100% { opacity: 0.4; }
+        50% { opacity: 0.9; }
+    }
+    .loading-pulse {
+        animation: loading-pulse 1.4s ease-in-out infinite;
+    }
+
+    /* Dark theme — spinner border should adapt */
+    body.dark-theme .loading-spinner {
+        border-color: #334155;
+        border-top-color: #00CFCF;
+    }
+    body.dark-theme .loading-spinner-sm {
+        border-color: rgba(100, 116, 139, 0.4);
+        border-top-color: #00CFCF;
     }
 
     /* ============================================================
@@ -584,6 +632,43 @@
             case 'category': return p.category || '';
             default: return [p.name||'', p.brand||'', p.category||''].join(' ');
         }
+    }
+
+    // ============================================================
+    //  LOADING STATE
+    //  Shows a spinner in the products list and pulse on summary
+    //  counters while loadProducts() runs. Called at the top of
+    //  loadProducts() and never again after first render.
+    // ============================================================
+    function showLoadingState() {
+        const list = document.getElementById('productsList');
+        if (list) {
+            list.innerHTML = `
+                <div class="flex flex-col items-center justify-center py-12">
+                    <div class="loading-spinner"></div>
+                    <p class="mt-4 text-gray-500 text-sm">Loading products…</p>
+                </div>
+            `;
+        }
+        // Pulse the summary counters so they don't look frozen at "—"
+        const summaryIds = ['totalProductsCount','totalBatchesCount','totalQuantityCount','totalClaimedCount','totalGoodCount','lowStockCount'];
+        summaryIds.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.textContent = '—';
+                el.classList.add('loading-pulse');
+            }
+        });
+        const noteEl = document.getElementById('productsInStockNote');
+        if (noteEl) noteEl.textContent = '';
+    }
+
+    function clearLoadingPulse() {
+        const summaryIds = ['totalProductsCount','totalBatchesCount','totalQuantityCount','totalClaimedCount','totalGoodCount','lowStockCount'];
+        summaryIds.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.classList.remove('loading-pulse');
+        });
     }
 
     // ---------- Render products ----------
@@ -961,6 +1046,9 @@
         isLoading = true;
         updateOfflineBanner();
 
+        // ✅ Show loading state immediately so the user sees activity
+        showLoadingState();
+
         let productsData = [];
         let apiSuccess = false;
 
@@ -993,6 +1081,10 @@
         }
 
         currentProducts = productsData;
+
+        // ✅ Clear the pulse before writing the real numbers
+        clearLoadingPulse();
+
         await updateSummary(productsData);
         applyAdvancedSearch();
         await loadLowStockCount();

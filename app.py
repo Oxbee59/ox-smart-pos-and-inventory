@@ -652,14 +652,20 @@ def api_auth_admin_count():
 @admin_required
 def admin_edit_user(user_id):
     from services.auth_service import get_user_by_id, is_protected_user
-    
+
     user = get_user_by_id(user_id)
     if not user:
         return render_template("error.html", message="User not found"), 404
-    
+
     is_oxbee = is_protected_user(user_id)
-    
-    return render_template("edit_user.html", user_id=user_id, is_oxbee=is_oxbee)
+    is_self  = (session.get('user_id') == user_id)
+
+    return render_template(
+        "edit_user.html",
+        user_id=user_id,
+        is_oxbee=is_oxbee,
+        is_self=is_self,
+    )
 
 # ===================== USER LOGS API (OXBEE ONLY) =====================
 # ===================== USER LOGS API (UPDATED - Hides oxbee logs from other admins) =====================
@@ -815,22 +821,32 @@ def api_admin_get_user(user_id):
     user = get_user_by_id(user_id)
     if not user:
         return jsonify({'success': False, 'error': 'User not found'}), 404
-    
+
     return jsonify({'success': True, 'user': user})
 
 # ===================== UPDATE USER PASSWORD (Admin) =====================
+# Self-password-change is allowed even for protected accounts (oxbee).
+# Everyone else is blocked from touching protected accounts.
 @app.route('/api/admin/users/<int:user_id>/password', methods=['PUT'])
 @admin_required
 def api_admin_update_user_password(user_id):
-    if is_protected_user(user_id):
-        return jsonify({'success': False, 'error': 'Cannot modify the system administrator (oxbee)'}), 403
-    
-    data = request.json
+    is_self = (session.get('user_id') == user_id)
+
+    if is_protected_user(user_id) and not is_self:
+        return jsonify({
+            'success': False,
+            'error': 'Cannot modify the system administrator (oxbee)'
+        }), 403
+
+    data = request.json or {}
     new_password = data.get('password')
-    
+
     if not new_password or len(new_password) < 4:
-        return jsonify({'success': False, 'error': 'Password must be at least 4 characters'}), 400
-    
+        return jsonify({
+            'success': False,
+            'error': 'Password must be at least 4 characters'
+        }), 400
+
     success = update_user_password(user_id, new_password)
     if success:
         return jsonify({'success': True})
@@ -847,7 +863,7 @@ def api_admin_get_users():
 @app.route('/api/admin/users', methods=['POST'])
 @admin_required
 def api_admin_create_user():
-    data = request.json
+    data = request.json or {}
     username = data.get('username')
     password = data.get('password')
     role = data.get('role', 'user')
@@ -862,33 +878,53 @@ def api_admin_create_user():
 @app.route('/api/admin/users/<int:user_id>', methods=['DELETE'])
 @admin_required
 def api_admin_delete_user(user_id):
+    # Block deleting yourself
     if user_id == session.get('user_id'):
-        return jsonify({'success': False, 'error': 'Cannot delete your own account.'}), 400
-    
+        return jsonify({
+            'success': False,
+            'error': 'Cannot delete your own account.'
+        }), 400
+
+    # Block deleting protected accounts (oxbee) — no exceptions
     if is_protected_user(user_id):
-        return jsonify({'success': False, 'error': 'Cannot delete the system administrator (oxbee).'}), 400
+        return jsonify({
+            'success': False,
+            'error': 'Cannot delete the system administrator (oxbee).'
+        }), 400
 
     result = delete_user(user_id)
     if result['success']:
         return jsonify({'success': True})
     else:
         return jsonify({'success': False, 'error': result['error']}), 400
+
 @app.route('/api/admin/users/<int:user_id>/role', methods=['PUT'])
 @admin_required
 def api_admin_update_role(user_id):
+    # Block changing your own role
+    if user_id == session.get('user_id'):
+        return jsonify({
+            'success': False,
+            'error': 'Cannot change your own role.'
+        }), 400
+
+    # Block changing oxbee's role — no exceptions
     if is_protected_user(user_id):
-        return jsonify({'success': False, 'error': 'Cannot modify the system administrator (oxbee)'}), 400
-    
-    data = request.json
+        return jsonify({
+            'success': False,
+            'error': 'Cannot modify the system administrator (oxbee).'
+        }), 400
+
+    data = request.json or {}
     new_role = data.get('role')
     if new_role not in ['admin', 'user']:
         return jsonify({'success': False, 'error': 'Invalid role'}), 400
+
     success = update_user_role(user_id, new_role)
     if success:
         return jsonify({'success': True})
     else:
         return jsonify({'success': False, 'error': 'Update failed'}), 400
-
 # ===================== DASHBOARD API =====================
 @app.route('/api/dashboard/summary', methods=['GET'])
 @login_required

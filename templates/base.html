@@ -1,9 +1,37 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ settings.language if settings else 'en' }}" data-theme="{{ settings.theme if settings else 'light' }}">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>OX Smart POS</title>
+
+    <!-- ===== EARLY THEME (prevents white flash on dark theme) ===== -->
+    <style>
+        html[data-theme="dark"] { background: #0f172a; }
+    </style>
+    <script>
+        // Global settings + theme helper. Must run before any CSS paints.
+        window.APP_SETTINGS = {
+            theme:          '{{ (settings.theme if settings else "light")|e }}',
+            currencySymbol: '{{ (settings.currency_symbol if settings else "₵")|e }}',
+            currencyCode:   '{{ (settings.currency_code if settings else "GHS")|e }}',
+            dateFormat:     '{{ (settings.date_format if settings else "DD/MM/YYYY")|e }}',
+            language:       '{{ (settings.language if settings else "en")|e }}'
+        };
+        window.applyAppTheme = function (theme) {
+            document.documentElement.setAttribute('data-theme', theme);
+            if (theme === 'dark') {
+                document.body.classList.add('dark-theme');
+                document.body.classList.remove('light-theme');
+            } else {
+                document.body.classList.add('light-theme');
+                document.body.classList.remove('dark-theme');
+            }
+        };
+        document.addEventListener('DOMContentLoaded', function () {
+            window.applyAppTheme(window.APP_SETTINGS.theme);
+        });
+    </script>
 
     <!-- ===== PWA MANIFEST & THEME ===== -->
     <link rel="manifest" href="/static/manifest.json">
@@ -18,14 +46,12 @@
     <!-- Your custom CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 
-    <!-- ===== OFFLINE DATABASE (Dexie) & SYNC ENGINE ===== -->
-    <!-- Dexie -->
+    <!-- ===== OFFLINE DATABASE & SYNC ENGINE ===== -->
     <script src="https://cdn.jsdelivr.net/npm/dexie@3.2.4/dist/dexie.min.js"></script>
-    <!-- Your DB and sync scripts – loaded always, but only used in app mode -->
     <script src="{{ url_for('static', filename='js/db.js') }}"></script>
     <script src="{{ url_for('static', filename='js/sync.js') }}"></script>
 
-    <!-- ===== SERVICE WORKER WITH CACHE-BUSTING ===== -->
+    <!-- ===== SERVICE WORKER ===== -->
     <script>
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('/sw.js?v=9')
@@ -42,14 +68,13 @@
             background: #f3f4f6;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             overflow: hidden;
+            transition: background 0.2s ease, color 0.2s ease;
         }
-
-        /* Custom scrollbar */
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 8px; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
 
-        /* === SIDEBAR STYLES === */
+        /* === SIDEBAR === */
         .nav-link { transition: all 0.2s ease; }
         .nav-link:hover { background-color: #334155; }
         .nav-link.active { background-color: #00CFCF; color: #0f172a; }
@@ -60,78 +85,46 @@
         .dropdown-menu.open { max-height: 500px; }
         .dropdown-menu a { padding-left: 2.5rem; }
 
-        /* Badges */
         .protected-badge {
-            background-color: #ef4444;
-            color: white;
-            font-size: 0.6rem;
-            padding: 1px 6px;
-            border-radius: 10px;
-            margin-left: 4px;
+            background-color: #ef4444; color: white; font-size: 0.6rem;
+            padding: 1px 6px; border-radius: 10px; margin-left: 4px;
         }
         .sysadmin-badge {
             background: linear-gradient(135deg, #f59e0b, #d97706);
-            color: white;
-            font-size: 0.55rem;
-            padding: 1px 8px;
-            border-radius: 10px;
-            margin-left: 4px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
+            color: white; font-size: 0.55rem; padding: 1px 8px;
+            border-radius: 10px; margin-left: 4px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.5px;
             border: 1px solid #fbbf24;
         }
 
-        /* === MAIN LAYOUT === */
-        .app-container {
-            display: flex;
-            height: 100vh;
-            width: 100vw;
-            overflow: hidden;
-        }
+        /* === LAYOUT === */
+        .app-container { display: flex; height: 100vh; width: 100vw; overflow: hidden; }
         .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 40; }
         .sidebar-overlay.active { display: block; }
         .sidebar {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 240px;
-            height: 100vh;
-            z-index: 50;
-            background: #1E293B;
+            position: fixed; top: 0; left: 0; width: 240px; height: 100vh;
+            z-index: 50; background: #1E293B;
             box-shadow: 4px 0 15px rgba(0,0,0,0.2);
-            overflow-y: auto;
-            flex-shrink: 0;
-            transition: transform 0.3s ease;
-            transform: translateX(-100%);
+            overflow-y: auto; flex-shrink: 0;
+            transition: transform 0.3s ease; transform: translateX(-100%);
         }
         .sidebar.open { transform: translateX(0); }
 
-        /* Desktop layout */
         @media (min-width: 768px) {
             .sidebar {
-                position: relative;
-                transform: translateX(0) !important;
-                width: 224px;
-                min-height: 100vh;
-                height: 100%;
-                border-radius: 0 1.5rem 1.5rem 0;
-                flex-shrink: 0;
+                position: relative; transform: translateX(0) !important;
+                width: 224px; min-height: 100vh; height: 100%;
+                border-radius: 0 1.5rem 1.5rem 0; flex-shrink: 0;
             }
             .sidebar-overlay { display: none !important; }
-            .hamburger-btn, .sidebar-close-btn { display: none !important; }
+            .sidebar-close-btn { display: none !important; }
             .app-container { flex-direction: row; }
             .main-content-wrapper { flex: 1; }
             .main-content { padding: 1.5rem; }
         }
-
-        /* Mobile layout */
         @media (max-width: 767px) {
             .app-container { flex-direction: column; }
-            .sidebar {
-                transform: translateX(-100%);
-                width: 280px;
-            }
+            .sidebar { transform: translateX(-100%); width: 280px; }
             .sidebar.open { transform: translateX(0); }
             .sidebar-close-btn { display: block !important; }
             .hamburger-btn { display: block !important; }
@@ -146,264 +139,386 @@
         .sidebar-close-btn {
             position: absolute; top: 12px; right: 12px;
             background: none; border: none; color: #94a3b8; font-size: 1.5rem;
-            cursor: pointer; padding: 4px 8px; border-radius: 8px; display: none;
-            z-index: 10;
+            cursor: pointer; padding: 4px 8px; border-radius: 8px; display: none; z-index: 10;
         }
         .sidebar-close-btn:hover { color: white; background: #334155; }
 
-        .mobile-header {
-            display: none;
-            background: white;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        /* ===== TOP BAR (always visible) ===== */
+        .topbar {
+            display: flex; align-items: center; gap: 10px;
+            padding: 8px 12px;
+            background: #ffffff;
+            border-bottom: 1px solid #e5e7eb;
             position: sticky; top: 0; z-index: 30;
-            padding: 8px 12px; align-items: center; gap: 10px;
             flex-shrink: 0;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+            transition: background 0.2s ease, border-color 0.2s ease;
         }
-        @media (max-width: 767px) { .mobile-header { display: flex !important; } }
+        .topbar-brand { flex: 1; min-width: 0; }
+        .topbar-brand h1 {
+            font-size: 1.05rem; font-weight: 700; color: #4f46e5;
+            margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .topbar-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+        @media (min-width: 768px) {
+            .topbar { padding: 8px 20px; }
+            .hamburger-btn { display: none !important; }
+        }
 
+        /* ===== NOTIFICATION BELL ===== */
+        .notif-wrapper { position: relative; }
+        .notif-bell {
+            position: relative;
+            background: #f1f5f9; border: 0;
+            width: 40px; height: 40px; border-radius: 10px;
+            cursor: pointer; color: #475569; font-size: 17px;
+            transition: background 0.15s, color 0.15s;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .notif-bell:hover { background: #e2e8f0; color: #0f172a; }
+        .notif-bell.active { background: #e0f2fe; color: #0369a1; }
+        .notif-bell.ring { animation: bell-ring 0.7s ease-in-out; }
+        @keyframes bell-ring {
+            0%, 100% { transform: rotate(0); }
+            15%, 45% { transform: rotate(-14deg); }
+            30%, 60% { transform: rotate(14deg); }
+            75% { transform: rotate(-6deg); }
+        }
+        .notif-badge {
+            position: absolute; top: -4px; right: -4px;
+            background: #ef4444; color: white;
+            font-size: 10px; font-weight: 700;
+            min-width: 18px; height: 18px; border-radius: 9px;
+            display: none; align-items: center; justify-content: center;
+            padding: 0 4px; border: 2px solid #ffffff; line-height: 1;
+        }
+
+        /* ===== NOTIFICATION DROPDOWN ===== */
+        .notif-dropdown {
+            position: absolute; top: calc(100% + 8px); right: 0;
+            width: 380px; max-width: calc(100vw - 24px);
+            background: white; border-radius: 14px;
+            box-shadow: 0 12px 40px rgba(15, 23, 42, 0.15), 0 2px 8px rgba(15, 23, 42, 0.06);
+            border: 1px solid #e5e7eb;
+            opacity: 0; visibility: hidden;
+            transform: translateY(-8px);
+            transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s;
+            z-index: 100; overflow: hidden;
+            display: flex; flex-direction: column;
+            max-height: min(80vh, 560px);
+        }
+        .notif-dropdown.open { opacity: 1; visibility: visible; transform: translateY(0); }
+        .notif-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 14px 16px; border-bottom: 1px solid #f1f5f9;
+            background: #ffffff; flex-shrink: 0;
+        }
+        .notif-header-title {
+            font-weight: 700; font-size: 0.9rem; color: #0f172a;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .notif-header-title .count {
+            background: #e0f2fe; color: #0369a1;
+            font-size: 0.7rem; padding: 1px 7px; border-radius: 8px; font-weight: 600;
+        }
+        .notif-clear {
+            background: none; border: 0; color: #64748b;
+            font-size: 0.75rem; cursor: pointer;
+            padding: 4px 8px; border-radius: 6px;
+            transition: background 0.15s, color 0.15s; font-weight: 500;
+        }
+        .notif-clear:hover { background: #f1f5f9; color: #0f172a; }
+
+        .notif-list { flex: 1; overflow-y: auto; min-height: 0; }
+        .notif-empty {
+            padding: 48px 24px; text-align: center; color: #94a3b8;
+            font-size: 0.85rem; display: flex; flex-direction: column;
+            align-items: center; gap: 10px;
+        }
+        .notif-empty i { font-size: 2.4rem; color: #cbd5e1; }
+
+        .notif-item {
+            display: flex; gap: 12px;
+            padding: 12px 40px 12px 14px;
+            border-bottom: 1px solid #f8fafc;
+            position: relative; transition: background 0.15s;
+        }
+        .notif-item:hover { background: #f8fafc; }
+        .notif-item:last-child { border-bottom: 0; }
+        .notif-item.unread { background: #f0f9ff; }
+        .notif-item.unread:hover { background: #e0f2fe; }
+        .notif-item.unread::before {
+            content: ''; position: absolute; left: 0; top: 12px; bottom: 12px;
+            width: 3px; background: #00CFCF; border-radius: 0 3px 3px 0;
+        }
+
+        .notif-icon {
+            flex-shrink: 0; width: 36px; height: 36px;
+            border-radius: 50%; display: flex;
+            align-items: center; justify-content: center;
+            font-size: 16px; background: #f1f5f9; line-height: 1;
+        }
+        .notif-item.notif-success  .notif-icon { background: #dcfce7; }
+        .notif-item.notif-warning  .notif-icon { background: #fef3c7; }
+        .notif-item.notif-error    .notif-icon { background: #fee2e2; }
+        .notif-item.notif-progress .notif-icon { background: #dbeafe; }
+        .notif-item.notif-progress .notif-icon i { animation: spin-icon 1.1s linear infinite; }
+        @keyframes spin-icon { to { transform: rotate(360deg); } }
+
+        .notif-body { flex: 1; min-width: 0; }
+        .notif-title {
+            font-size: 0.85rem; font-weight: 600; color: #0f172a;
+            margin-bottom: 2px; line-height: 1.3;
+        }
+        .notif-msg {
+            font-size: 0.8rem; color: #475569; line-height: 1.4;
+            word-wrap: break-word;
+        }
+        .notif-time { font-size: 0.68rem; color: #94a3b8; margin-top: 5px; }
+        .notif-progress {
+            margin-top: 8px; height: 4px;
+            background: #e2e8f0; border-radius: 2px; overflow: hidden;
+        }
+        .notif-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00CFCF, #0ea5e9);
+            border-radius: 2px; transition: width 0.5s ease; width: 0;
+        }
+
+        .notif-close {
+            position: absolute; top: 8px; right: 8px;
+            background: none; border: 0; color: #cbd5e1;
+            font-size: 18px; cursor: pointer; line-height: 1;
+            padding: 2px 6px; border-radius: 4px;
+            opacity: 0; transition: background 0.15s, color 0.15s, opacity 0.15s;
+            font-family: Arial, sans-serif;
+        }
+        .notif-item:hover .notif-close { opacity: 1; }
+        .notif-close:hover { background: #f1f5f9; color: #475569; }
+        @media (max-width: 480px) {
+            .notif-dropdown { width: calc(100vw - 16px); right: -4px; }
+        }
+
+        /* ===== USER CHIP (clickable) ===== */
+        .user-chip {
+            display: flex; align-items: center; gap: 6px;
+            padding: 6px 10px; background: #f1f5f9;
+            border-radius: 10px; font-size: 0.8rem;
+            color: #334155; font-weight: 500; white-space: nowrap;
+            text-decoration: none;
+            cursor: pointer;
+            transition: background 0.15s, color 0.15s, transform 0.1s;
+        }
+        .user-chip:hover  { background: #e2e8f0; color: #0f172a; }
+        .user-chip:active { transform: scale(0.97); }
+        .user-chip i { color: #00CFCF; font-size: 1.1rem; }
+        @media (max-width: 480px) {
+            .user-chip span { display: none; }
+            .user-chip { padding: 6px 8px; }
+        }
+
+        /* === CONTENT WRAPPER === */
         .main-content-wrapper {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-            width: 100%;
-            min-width: 0;
-            overflow: hidden;
+            flex: 1; display: flex; flex-direction: column;
+            height: 100vh; width: 100%; min-width: 0; overflow: hidden;
         }
         .main-content {
-            flex: 1;
-            padding: 1rem;
-            overflow-y: auto;
-            overflow-x: hidden;
-            min-height: 0;
-            width: 100%;
+            flex: 1; padding: 1rem;
+            overflow-y: auto; overflow-x: hidden;
+            min-height: 0; width: 100%;
         }
 
-        /* Footer */
+        /* === FOOTER === */
         footer {
-            background: #1E293B;
-            color: #9ca3af;
-            text-align: center;
-            padding: 4px 8px;
-            font-size: 0.55rem;
-            flex-shrink: 0;
+            background: #1E293B; color: #9ca3af;
+            text-align: center; padding: 4px 8px;
+            font-size: 0.55rem; flex-shrink: 0;
             border-top: 1px solid #334155;
-            line-height: 1.4;
-            font-weight: 500;
-            z-index: 5;
+            line-height: 1.4; font-weight: 500; z-index: 5;
         }
         footer a { color: #6b8cae; text-decoration: underline; font-weight: 600; }
         footer a:hover { color: #ffffff; }
 
-        /* Settings link */
         .settings-link { border-left: 3px solid transparent; transition: all 0.3s ease; }
         .settings-link:hover { border-left-color: #f59e0b; }
         .settings-link i { color: #f59e0b; }
         .settings-link .settings-badge {
             background: linear-gradient(135deg, #f59e0b, #d97706);
-            color: white;
-            font-size: 0.5rem;
-            padding: 1px 6px;
-            border-radius: 8px;
-            margin-left: auto;
-            font-weight: 700;
-            text-transform: uppercase;
+            color: white; font-size: 0.5rem; padding: 1px 6px;
+            border-radius: 8px; margin-left: auto;
+            font-weight: 700; text-transform: uppercase;
         }
 
         /* ===== INSTALL PASSWORD MODAL ===== */
         #installPasswordModal {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.6);
-            z-index: 1000;
-            align-items: center;
-            justify-content: center;
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.6); z-index: 1000;
+            align-items: center; justify-content: center; padding: 16px;
         }
         #installPasswordModal.active { display: flex; }
         .install-modal-box {
-            background: white;
-            border-radius: 1rem;
-            padding: 2rem;
-            max-width: 400px;
-            width: 90%;
+            background: white; border-radius: 1rem;
+            padding: 2rem; max-width: 400px; width: 100%;
             box-shadow: 0 20px 60px rgba(0,0,0,0.3);
         }
         .install-modal-box input {
-            width: 100%;
-            padding: 0.75rem;
-            border: 1px solid #ccc;
-            border-radius: 0.5rem;
-            margin: 1rem 0;
+            width: 100%; padding: 0.75rem;
+            border: 1px solid #ccc; border-radius: 0.5rem; margin: 1rem 0;
         }
-        .install-modal-box .btn-row {
-            display: flex;
-            gap: 1rem;
-            justify-content: flex-end;
-        }
+        .install-modal-box .btn-row { display: flex; gap: 1rem; justify-content: flex-end; }
         .install-modal-box .btn-row button {
-            padding: 0.5rem 1.5rem;
-            border: none;
-            border-radius: 0.5rem;
-            cursor: pointer;
-            font-weight: 600;
+            padding: 0.5rem 1.5rem; border: none;
+            border-radius: 0.5rem; cursor: pointer; font-weight: 600;
         }
-        .install-modal-box .btn-row .cancel-btn {
-            background: #e5e7eb;
-            color: #1f2937;
-        }
-        .install-modal-box .btn-row .confirm-btn {
-            background: #00CFCF;
-            color: white;
-        }
+        .install-modal-box .btn-row .cancel-btn { background: #e5e7eb; color: #1f2937; }
+        .install-modal-box .btn-row .confirm-btn { background: #00CFCF; color: white; }
         .install-modal-box .error-msg {
-            color: #ef4444;
-            font-size: 0.875rem;
-            margin-top: -0.5rem;
-            display: none;
+            color: #ef4444; font-size: 0.875rem;
+            margin-top: -0.5rem; display: none;
         }
         .install-modal-box .error-msg.show { display: block; }
 
-        /* ===== PIN LOCK SCREEN ===== */
+        /* ===== PIN LOCK ===== */
         #pinLockScreen {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.85);
-            z-index: 2000;
-            align-items: center;
-            justify-content: center;
-            flex-direction: column;
-            color: white;
-            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.85); z-index: 2000;
+            align-items: center; justify-content: center;
+            flex-direction: column; color: white;
         }
-        #pinLockScreen.active {
-            display: flex;
-        }
+        #pinLockScreen.active { display: flex; }
         .pin-lock-box {
-            background: white;
-            border-radius: 1.5rem;
-            padding: 2rem 1.5rem;
-            max-width: 360px;
-            width: 90%;
-            text-align: center;
-            color: #1f2937;
+            background: white; border-radius: 1.5rem;
+            padding: 2rem 1.5rem; max-width: 360px; width: 90%;
+            text-align: center; color: #1f2937;
             box-shadow: 0 30px 80px rgba(0,0,0,0.5);
         }
-        .pin-lock-box h2 {
-            font-size: 1.5rem;
-            font-weight: 700;
-            margin-bottom: 0.5rem;
-            color: #00CFCF;
-        }
-        .pin-lock-box p {
-            color: #6b7280;
-            font-size: 0.9rem;
-            margin-bottom: 1.5rem;
-        }
-        .pin-dots {
-            display: flex;
-            gap: 0.75rem;
-            justify-content: center;
-            margin: 1.5rem 0;
-        }
+        .pin-lock-box h2 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem; color: #00CFCF; }
+        .pin-lock-box p { color: #6b7280; font-size: 0.9rem; margin-bottom: 1.5rem; }
+        .pin-dots { display: flex; gap: 0.75rem; justify-content: center; margin: 1.5rem 0; }
         .pin-dot {
-            width: 16px;
-            height: 16px;
-            border-radius: 50%;
-            border: 2px solid #d1d5db;
-            background: white;
-            transition: all 0.2s;
+            width: 16px; height: 16px; border-radius: 50%;
+            border: 2px solid #d1d5db; background: white; transition: all 0.2s;
         }
-        .pin-dot.filled {
-            background: #00CFCF;
-            border-color: #00CFCF;
-        }
-        .pin-input {
-            width: 100%;
-            padding: 0.75rem;
-            border: 2px solid #e5e7eb;
-            border-radius: 0.75rem;
-            font-size: 1.25rem;
-            text-align: center;
-            letter-spacing: 0.5rem;
-            margin-bottom: 1rem;
-            outline: none;
-        }
-        .pin-input:focus {
-            border-color: #00CFCF;
-        }
-        .pin-error {
-            color: #ef4444;
-            font-size: 0.875rem;
-            min-height: 1.5rem;
-            margin-bottom: 0.5rem;
-        }
-        .pin-keypad {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 0.75rem;
-            margin-top: 1rem;
-        }
+        .pin-dot.filled { background: #00CFCF; border-color: #00CFCF; }
+        .pin-error { color: #ef4444; font-size: 0.875rem; min-height: 1.5rem; margin-bottom: 0.5rem; }
+        .pin-keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-top: 1rem; }
         .pin-key {
-            padding: 1rem;
-            background: #f3f4f6;
-            border: none;
-            border-radius: 0.75rem;
-            font-size: 1.5rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background 0.15s;
-            color: #1f2937;
+            padding: 1rem; background: #f3f4f6; border: none;
+            border-radius: 0.75rem; font-size: 1.5rem; font-weight: 600;
+            cursor: pointer; transition: background 0.15s; color: #1f2937;
         }
-        .pin-key:hover {
-            background: #e5e7eb;
+        .pin-key:hover  { background: #e5e7eb; }
+        .pin-key:active { background: #d1d5db; }
+        .pin-key.clear  { background: #fef2f2; color: #ef4444; }
+        .pin-key.clear:hover { background: #fee2e2; }
+        .pin-key.empty  { background: transparent; pointer-events: none; }
+
+        /* ============================================================
+           DARK THEME OVERRIDES
+           Applied when <body class="dark-theme"> (set by applyAppTheme)
+           ============================================================ */
+        body.dark-theme { background: #0f172a !important; color: #e2e8f0 !important; }
+
+        body.dark-theme .topbar {
+            background: #1e293b !important;
+            border-color: #334155 !important;
         }
-        .pin-key:active {
-            background: #d1d5db;
+        body.dark-theme .topbar-brand h1 { color: #a5b4fc !important; }
+        body.dark-theme .hamburger-btn   { color: #e2e8f0 !important; }
+
+        body.dark-theme .notif-bell {
+            background: #334155 !important;
+            color: #cbd5e1 !important;
         }
-        .pin-key.clear {
-            background: #fef2f2;
-            color: #ef4444;
+        body.dark-theme .notif-bell:hover  { background: #475569 !important; color: #f8fafc !important; }
+        body.dark-theme .notif-bell.active { background: #0c4a6e !important; color: #bae6fd !important; }
+
+        body.dark-theme .notif-dropdown {
+            background: #1e293b !important;
+            border-color: #334155 !important;
         }
-        .pin-key.clear:hover {
-            background: #fee2e2;
+        body.dark-theme .notif-header {
+            background: #1e293b !important;
+            border-color: #334155 !important;
         }
-        .pin-key.empty {
-            background: transparent;
-            pointer-events: none;
+        body.dark-theme .notif-header-title { color: #e2e8f0 !important; }
+        body.dark-theme .notif-header-title .count { background: #0c4a6e !important; color: #bae6fd !important; }
+        body.dark-theme .notif-clear { color: #94a3b8 !important; }
+        body.dark-theme .notif-clear:hover { background: #334155 !important; color: #e2e8f0 !important; }
+        body.dark-theme .notif-item        { border-color: #1e293b !important; }
+        body.dark-theme .notif-item:hover  { background: #0f172a !important; }
+        body.dark-theme .notif-item.unread { background: #0c2340 !important; }
+        body.dark-theme .notif-title       { color: #e2e8f0 !important; }
+        body.dark-theme .notif-msg         { color: #94a3b8 !important; }
+        body.dark-theme .notif-time        { color: #64748b !important; }
+        body.dark-theme .notif-icon        { background: #334155 !important; }
+        body.dark-theme .notif-progress    { background: #334155 !important; }
+        body.dark-theme .notif-close       { color: #64748b !important; }
+        body.dark-theme .notif-close:hover { background: #334155 !important; color: #e2e8f0 !important; }
+        body.dark-theme .notif-empty       { color: #64748b !important; }
+        body.dark-theme .notif-empty i     { color: #475569 !important; }
+
+        body.dark-theme .user-chip {
+            background: #334155 !important; color: #cbd5e1 !important;
+        }
+        body.dark-theme .user-chip:hover {
+            background: #475569 !important; color: #f8fafc !important;
+        }
+        body.dark-theme .user-chip i { color: #67e8f9 !important; }
+
+        body.dark-theme .main-content { background: #0f172a !important; }
+        body.dark-theme .mobile-header,
+        body.dark-theme footer { background: #0b1220 !important; }
+
+        /* Cards & panels */
+        body.dark-theme .bg-white,
+        body.dark-theme .bg-gray-50,
+        body.dark-theme .bg-gray-100 { background-color: #1e293b !important; color: #e2e8f0 !important; }
+
+        /* Text */
+        body.dark-theme .text-gray-800,
+        body.dark-theme .text-gray-700 { color: #e2e8f0 !important; }
+        body.dark-theme .text-gray-600,
+        body.dark-theme .text-gray-500 { color: #94a3b8 !important; }
+        body.dark-theme .text-gray-400 { color: #64748b !important; }
+        body.dark-theme .text-indigo-600,
+        body.dark-theme .text-indigo-700 { color: #a5b4fc !important; }
+        body.dark-theme .text-amber-600,
+        body.dark-theme .text-amber-500 { color: #fcd34d !important; }
+
+        /* Borders */
+        body.dark-theme .border,
+        body.dark-theme .border-gray-100,
+        body.dark-theme .border-gray-200,
+        body.dark-theme .border-gray-300 { border-color: #334155 !important; }
+
+        /* Inputs */
+        body.dark-theme input,
+        body.dark-theme select,
+        body.dark-theme textarea {
+            background-color: #1e293b !important;
+            color: #e2e8f0 !important;
+            border-color: #334155 !important;
+        }
+        body.dark-theme input::placeholder { color: #64748b !important; }
+
+        /* Tables */
+        body.dark-theme table,
+        body.dark-theme th,
+        body.dark-theme td {
+            color: #e2e8f0 !important;
+            border-color: #334155 !important;
         }
 
-        /* ===== SYNC OVERLAY ===== */
-        #syncOverlay {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.7);
-            z-index: 9999;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 1.2rem;
-            flex-direction: column;
-        }
-        #syncOverlay.active {
-            display: flex;
-        }
-        #syncOverlay .sync-progress-bar {
-            width: 200px;
-            height: 4px;
-            background: #555;
-            border-radius: 2px;
-            overflow: hidden;
-            margin-top: 1rem;
-        }
-        #syncOverlay .sync-progress-bar .fill {
-            width: 0%;
-            height: 100%;
-            background: #00CFCF;
-            transition: width 0.3s ease;
-        }
+        /* Shadows softened on dark background */
+        body.dark-theme .shadow,
+        body.dark-theme .shadow-sm,
+        body.dark-theme .shadow-md,
+        body.dark-theme .shadow-lg,
+        body.dark-theme .shadow-xl { box-shadow: 0 2px 12px rgba(0,0,0,0.55) !important; }
+
+        /* Sidebar stays dark in both themes */
+        body.dark-theme .sidebar { background: #0b1220 !important; }
     </style>
 </head>
 <body>
@@ -440,24 +555,12 @@
 </div>
 
 <!-- ============================================================ -->
-<!-- SYNC OVERLAY (initially hidden)                              -->
-<!-- ============================================================ -->
-<div id="syncOverlay">
-    <div id="syncMessage">⏳ Syncing data…</div>
-    <div class="sync-progress-bar">
-        <div id="syncProgressFill" class="fill" style="width:0%;"></div>
-    </div>
-</div>
-
-<!-- ============================================================ -->
 <!-- MAIN APP                                                     -->
 <!-- ============================================================ -->
 <div class="app-container">
 
-    <!-- SIDEBAR OVERLAY -->
     <div id="sidebarOverlay" class="sidebar-overlay" onclick="closeSidebar()"></div>
 
-    <!-- SIDEBAR -->
     <div id="sidebar" class="sidebar">
         <button onclick="closeSidebar()" class="sidebar-close-btn" aria-label="Close sidebar">
             <i class="fas fa-times"></i>
@@ -485,29 +588,22 @@
         {% endif %}
 
         <nav class="flex-1 px-2 space-y-1 overflow-y-auto pb-4">
-            <!-- Dashboard (admin only) -->
             {% if current_user and current_user.role == 'admin' %}
             <a href="/" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                 <i class="fas fa-tachometer-alt w-5"></i> Dashboard
             </a>
             {% endif %}
 
-            <!-- Sales (Accessories) -->
             <a href="/sales" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                 <i class="fas fa-cash-register w-5"></i> Sales (Accessories)
             </a>
-
-            <!-- Products (Accessories) -->
             <a href="/products" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                 <i class="fas fa-boxes w-5"></i> Products (Accessories)
             </a>
-
-            <!-- Today's Sales (Accessories) -->
             <a href="/today-sales" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                 <i class="fas fa-chart-line w-5"></i> Today's Sales (Accessories)
             </a>
 
-            <!-- Analytics & Archive (admin only) -->
             {% if current_user and current_user.role == 'admin' %}
             <a href="/analytics" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                 <i class="fas fa-chart-pie w-5"></i> Analytics
@@ -517,7 +613,6 @@
             </a>
             {% endif %}
 
-            <!-- Screens submenu -->
             <div class="mt-2">
                 <div class="dropdown-toggle flex items-center justify-between px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm" onclick="toggleDropdown(this)">
                     <span class="flex items-center gap-3">
@@ -538,13 +633,11 @@
                 </div>
             </div>
 
-            <!-- Admin section (only for admins) -->
             {% if current_user and current_user.role == 'admin' %}
             <div class="border-t border-gray-700 my-2"></div>
             <div class="text-xs text-gray-500 uppercase px-3 py-1">Admin</div>
             {% endif %}
 
-            <!-- Claims (all users) -->
             {% if current_user %}
             <a href="/claims" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                 <i class="fas fa-clipboard-list w-5"></i> Claims
@@ -552,7 +645,6 @@
             </a>
             {% endif %}
 
-            <!-- Admin-only links -->
             {% if current_user and current_user.role == 'admin' %}
             <a href="/logs" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                 <i class="fas fa-history w-5"></i> User Logs
@@ -572,7 +664,6 @@
             </a>
             {% endif %}
 
-            <!-- Settings & Activities (oxbee only) -->
             {% if current_user and current_user.username.lower() == 'oxbee' %}
             <div class="border-t border-gray-700 my-2"></div>
             <div class="text-xs text-amber-500 uppercase px-3 py-1 font-bold">
@@ -588,7 +679,6 @@
             </a>
             {% endif %}
 
-            <!-- Bottom section: Offline sync, install, logout -->
             {% if current_user %}
             <div class="mt-4 flex flex-col gap-2 px-3 py-1">
                 <div class="flex items-center gap-2">
@@ -598,7 +688,6 @@
                     </button>
                 </div>
 
-                <!-- Install button – only visible to oxbee -->
                 {% if current_user and current_user.username.lower() == 'oxbee' %}
                 <button id="installAppBtn" class="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-md transition hidden">
                     <i class="fas fa-download mr-1"></i> Install App
@@ -621,29 +710,62 @@
 
     <!-- MAIN CONTENT -->
     <div class="main-content-wrapper">
-        <div class="mobile-header">
+
+        <!-- ===== TOP BAR ===== -->
+        <div class="topbar">
             <button onclick="toggleSidebar()" class="hamburger-btn" aria-label="Toggle sidebar">
                 <i class="fas fa-bars text-2xl"></i>
             </button>
-            <div class="flex-1">
-                <h1 class="text-lg font-bold text-indigo-600">OX Smart POS</h1>
+
+            <div class="topbar-brand">
+                <h1>OX Smart POS</h1>
             </div>
-            {% if current_user %}
-            <div class="flex items-center gap-2 text-sm">
-                <i class="fas fa-user-circle text-indigo-600 text-xl"></i>
-                <span class="text-gray-700 truncate max-w-[80px]">{{ current_user.username }}</span>
-                {% if current_user.username.lower() == 'oxbee' %}
-                <span class="sysadmin-badge" style="font-size:0.5rem;padding:1px 4px;">⭐</span>
+
+            <div class="topbar-actions">
+                <!-- Notifications -->
+                <div class="notif-wrapper">
+                    <button class="notif-bell" id="notifBell" aria-label="Notifications" onclick="toggleNotifications(event)">
+                        <i class="fas fa-bell"></i>
+                        <span class="notif-badge" id="notifBadge">0</span>
+                    </button>
+                    <div class="notif-dropdown" id="notifDropdown" role="menu">
+                        <div class="notif-header">
+                            <div class="notif-header-title">
+                                <i class="fas fa-bell text-cyan-500"></i>
+                                Notifications
+                                <span class="count" id="notifCount">0</span>
+                            </div>
+                            <button class="notif-clear" onclick="Notifications.clearAll()">Clear all</button>
+                        </div>
+                        <div class="notif-list" id="notifList">
+                            <div class="notif-empty">
+                                <i class="fas fa-bell-slash"></i>
+                                <div>No notifications yet</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- User chip — clickable: admins → edit their own user page; regular users → settings -->
+                {% if current_user %}
+                {% set _is_admin_user = (current_user.role == 'admin' or current_user.username.lower() == 'oxbee') %}
+                <a href="{{ ('/admin/users/' ~ session.user_id ~ '/edit') if _is_admin_user else '/settings' }}"
+                   class="user-chip"
+                   title="{{ 'Edit my profile' if _is_admin_user else 'Open settings' }}">
+                    <i class="fas fa-user-circle"></i>
+                    <span>{{ current_user.username }}</span>
+                    {% if current_user.username.lower() == 'oxbee' %}
+                    <span class="sysadmin-badge" style="font-size:0.5rem;padding:1px 4px;">⭐</span>
+                    {% endif %}
+                </a>
                 {% endif %}
             </div>
-            {% endif %}
         </div>
 
         <div class="main-content">
             {% block content %}{% endblock %}
         </div>
 
-        <!-- FOOTER -->
         <footer>
             <div class="px-2">
                 TOMFRIMP MOBICOM SOLUTIONS | HOME OF COMPUTER, PHONES, AND ACCESSORIES
@@ -662,7 +784,7 @@
 </div>
 
 <!-- ===== INSTALL PASSWORD MODAL ===== -->
-<div id="installPasswordModal" class="install-password-modal">
+<div id="installPasswordModal">
     <div class="install-modal-box">
         <h3 class="text-xl font-bold text-gray-800">🔐 Install App</h3>
         <p class="text-sm text-gray-600 mt-1">Enter the installation password to proceed.</p>
@@ -675,28 +797,211 @@
     </div>
 </div>
 
-<!-- ============================================================ -->
-<!-- SCRIPTS                                                       -->
-<!-- ============================================================ -->
 <script src="{{ url_for('static', filename='js/offline.js') }}"></script>
 <script>
     // ============================================================
-    //  APP MODE DETECTION – all offline features are gated by this
+    //  APP MODE DETECTION
     // ============================================================
     function isAppMode() {
         return window.matchMedia('(display-mode: standalone)').matches;
     }
 
     // ============================================================
-    //  VERSION & PASSWORD – CHANGE TO FORCE REINSTALL
+    //  NOTIFICATION SYSTEM
+    // ============================================================
+    const Notifications = (function () {
+        const items = [];
+        let nextId = 1;
+        let unreadCount = 0;
+
+        function _esc(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, m => ({
+                '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+            }[m]));
+        }
+        function _icon(type) {
+            switch (type) {
+                case 'success':  return '<i class="fas fa-check-circle" style="color:#16a34a"></i>';
+                case 'warning':  return '<i class="fas fa-exclamation-triangle" style="color:#f59e0b"></i>';
+                case 'error':    return '<i class="fas fa-times-circle" style="color:#dc2626"></i>';
+                case 'progress': return '<i class="fas fa-sync-alt" style="color:#0ea5e9"></i>';
+                case 'offline':  return '<i class="fas fa-wifi" style="color:#94a3b8"></i>';
+                case 'online':   return '<i class="fas fa-wifi" style="color:#16a34a"></i>';
+                default:         return '<i class="fas fa-info-circle" style="color:#0284c7"></i>';
+            }
+        }
+        function _timeAgo(ts) {
+            const s = Math.floor((Date.now() - ts) / 1000);
+            if (s < 10) return 'just now';
+            if (s < 60) return s + 's ago';
+            const m = Math.floor(s / 60);
+            if (m < 60) return m + 'm ago';
+            const h = Math.floor(m / 60);
+            if (h < 24) return h + 'h ago';
+            return Math.floor(h / 24) + 'd ago';
+        }
+        function _renderBadge() {
+            const badge = document.getElementById('notifBadge');
+            const countEl = document.getElementById('notifCount');
+            if (badge) {
+                if (unreadCount > 0) {
+                    badge.textContent = unreadCount > 99 ? '99+' : unreadCount;
+                    badge.style.display = 'flex';
+                } else {
+                    badge.style.display = 'none';
+                }
+            }
+            if (countEl) countEl.textContent = items.length;
+        }
+        function _renderList() {
+            const list = document.getElementById('notifList');
+            if (!list) return;
+            if (items.length === 0) {
+                list.innerHTML = `
+                    <div class="notif-empty">
+                        <i class="fas fa-bell-slash"></i>
+                        <div>No notifications yet</div>
+                    </div>`;
+                return;
+            }
+            list.innerHTML = items.map(n => {
+                const progressBar = (n.progress !== null && n.progress !== undefined)
+                    ? `<div class="notif-progress"><div class="notif-progress-fill" style="width:${Math.max(0, Math.min(100, n.progress))}%"></div></div>`
+                    : '';
+                return `
+                    <div class="notif-item ${n.read ? '' : 'unread'} notif-${n.type}" data-id="${n.id}">
+                        <div class="notif-icon">${_icon(n.type)}</div>
+                        <div class="notif-body">
+                            ${n.title ? `<div class="notif-title">${_esc(n.title)}</div>` : ''}
+                            ${n.message ? `<div class="notif-msg">${_esc(n.message)}</div>` : ''}
+                            ${progressBar}
+                            <div class="notif-time">${_timeAgo(n.timestamp)}</div>
+                        </div>
+                        <button class="notif-close" aria-label="Dismiss" onclick="event.stopPropagation(); Notifications.remove('${n.id}')">&times;</button>
+                    </div>`;
+            }).join('');
+        }
+        function _refresh() { _renderList(); _renderBadge(); }
+
+        function add(opts) {
+            const { type = 'info', title = '', message = '', duration = 0, id = null, progress = null } = opts || {};
+            if (id) {
+                const existing = items.find(i => i.id === id);
+                if (existing) return update(id, { type, title, message, progress });
+            }
+            const notif = {
+                id: id || ('n_' + (nextId++) + '_' + Date.now()),
+                type, title, message, progress,
+                timestamp: Date.now(), read: false, _timer: null
+            };
+            items.unshift(notif);
+            unreadCount++;
+            if (type === 'success' || type === 'error' || type === 'warning') ringBell();
+            _refresh();
+            if (duration > 0 && type !== 'progress') {
+                notif._timer = setTimeout(() => remove(notif.id), duration);
+            }
+            return notif.id;
+        }
+        function update(id, patch) {
+            const n = items.find(i => i.id === id);
+            if (!n) return;
+            Object.assign(n, patch || {});
+            n.timestamp = Date.now();
+            _refresh();
+        }
+        function remove(id) {
+            const idx = items.findIndex(i => i.id === id);
+            if (idx < 0) return;
+            if (items[idx]._timer) clearTimeout(items[idx]._timer);
+            items.splice(idx, 1);
+            _refresh();
+        }
+        function clearAll() {
+            items.forEach(i => { if (i._timer) clearTimeout(i._timer); });
+            items.length = 0;
+            unreadCount = 0;
+            _refresh();
+        }
+        function markAllRead() {
+            items.forEach(i => i.read = true);
+            unreadCount = 0;
+            _renderBadge();
+            _renderList();
+        }
+        function ringBell() {
+            const bell = document.getElementById('notifBell');
+            if (!bell) return;
+            bell.classList.remove('ring');
+            void bell.offsetWidth;
+            bell.classList.add('ring');
+            setTimeout(() => bell.classList.remove('ring'), 800);
+        }
+        function info(t, m, d)    { return add({ type: 'info',    title: t, message: m, duration: d || 5000 }); }
+        function success(t, m, d) { return add({ type: 'success', title: t, message: m, duration: d || 6000 }); }
+        function warning(t, m, d) { return add({ type: 'warning', title: t, message: m, duration: d || 8000 }); }
+        function error(t, m, d)   { return add({ type: 'error',   title: t, message: m, duration: d || 0 }); }
+
+        return { add, update, remove, clearAll, markAllRead, info, success, warning, error,
+                 get items() { return items; }, get unreadCount() { return unreadCount; } };
+    })();
+    window.Notifications = Notifications;
+
+    // ============================================================
+    //  NOTIFICATION DROPDOWN
+    // ============================================================
+    function toggleNotifications(e) {
+        if (e) e.stopPropagation();
+        const dd = document.getElementById('notifDropdown');
+        const bell = document.getElementById('notifBell');
+        if (!dd || !bell) return;
+        const isOpen = dd.classList.toggle('open');
+        bell.classList.toggle('active', isOpen);
+        if (isOpen) setTimeout(() => Notifications.markAllRead(), 800);
+    }
+    window.toggleNotifications = toggleNotifications;
+
+    document.addEventListener('click', function (e) {
+        const dd = document.getElementById('notifDropdown');
+        const wrapper = document.querySelector('.notif-wrapper');
+        if (!dd || !wrapper) return;
+        if (!wrapper.contains(e.target)) {
+            dd.classList.remove('open');
+            const bell = document.getElementById('notifBell');
+            if (bell) bell.classList.remove('active');
+        }
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+            const dd = document.getElementById('notifDropdown');
+            const bell = document.getElementById('notifBell');
+            if (dd && dd.classList.contains('open')) {
+                dd.classList.remove('open');
+                if (bell) bell.classList.remove('active');
+            }
+        }
+    });
+
+    // ============================================================
+    //  DEPRECATED SHIMS
+    // ============================================================
+    window.showSyncOverlay = function (message, progress) {
+        Notifications.add({ id: 'sync-shim', type: 'progress', title: 'Syncing', message: message || 'Working…', progress: progress || 0 });
+    };
+    window.updateSyncProgress = function (message, progress) {
+        Notifications.update('sync-shim', { message, progress });
+    };
+    window.hideSyncOverlay = function () {
+        Notifications.remove('sync-shim');
+    };
+
+    // ============================================================
+    //  VERSION & PASSWORDS
     // ============================================================
     const APP_VERSION = 'v4';
     const INSTALL_PASSWORD = 'oxsmart2050';
     const PIN_CODE = '2050';
 
-    // ============================================================
-    //  LIST OF PROTECTED ROUTES TO CACHE FOR OFFLINE USE
-    // ============================================================
     const PROTECTED_ROUTES = [
         '/', '/products', '/products/screens',
         '/sales', '/sales/screens',
@@ -707,62 +1012,17 @@
         '/activities'
     ];
 
-    // ============================================================
-    //  CACHE ALL PAGES FOR OFFLINE USE (BOTH BROWSER & APP MODE)
-    // ============================================================
     async function cacheAllPages() {
         if (!('serviceWorker' in navigator)) return;
         try {
             const registration = await navigator.serviceWorker.ready;
             if (!registration.active) return;
-            registration.active.postMessage({
-                type: 'CACHE_ALL_PAGES',
-                urls: PROTECTED_ROUTES
-            });
+            registration.active.postMessage({ type: 'CACHE_ALL_PAGES', urls: PROTECTED_ROUTES });
         } catch (e) { /* ignore */ }
     }
 
     // ============================================================
-    //  ✅ NEW: CLEAR ALL BROWSER DATA HELPER
-    // ============================================================
-    async function clearAllBrowserData() {
-        console.log('🧹 Clearing all browser data...');
-        
-        // 1. Clear localStorage
-        try {
-            Object.keys(localStorage).forEach(key => localStorage.removeItem(key));
-            console.log('✅ localStorage cleared');
-        } catch(e) { console.warn('localStorage clear failed:', e); }
-        
-        // 2. Clear sessionStorage
-        try {
-            sessionStorage.clear();
-            console.log('✅ sessionStorage cleared');
-        } catch(e) { console.warn('sessionStorage clear failed:', e); }
-        
-        // 3. Delete IndexedDB databases
-        const dbNames = [
-            'OxSmartOfflineDB', 'OfflineSalesDB', 'SalesDB',
-            'offlineDB', 'PendingDB', 'ImportQueueDB', 'DexieDB'
-        ];
-        for (const dbName of dbNames) {
-            try { indexedDB.deleteDatabase(dbName); } catch(e) {}
-        }
-        
-        // 4. Clear browser caches
-        if ('caches' in window) {
-            try {
-                const cacheNames = await caches.keys();
-                await Promise.all(cacheNames.map(name => caches.delete(name)));
-                console.log(`🗑️ Cleared ${cacheNames.length} caches`);
-            } catch(e) {}
-        }
-        
-        console.log('🎉 All browser data cleared');
-    }
-
-    // ============================================================
-    //  VERSION CHECK – ONLY FOR STANDALONE, SKIP PUBLIC PAGES
+    //  VERSION CHECK
     // ============================================================
     (function checkVersion() {
         if (!isAppMode()) return;
@@ -773,23 +1033,15 @@
         const storedVersion = localStorage.getItem('app_version');
         if (storedVersion !== APP_VERSION) {
             localStorage.removeItem('app_version');
-            const toast = document.createElement('div');
-            toast.textContent = '📱 This version is outdated. Please uninstall the old app and reinstall from the web.';
-            toast.style.cssText = `
-                position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
-                background: #EF4444; color: white; padding: 16px 24px;
-                border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-                z-index: 9999; font-size: 14px; max-width: 90vw;
-                text-align: center;
-                font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-            `;
-            document.body.appendChild(toast);
-            setTimeout(() => { window.location.href = '/login?reinstall=true'; }, 2000);
+            setTimeout(() => {
+                Notifications.warning('App update available',
+                    'Please uninstall the old app and reinstall from the web.', 12000);
+            }, 1500);
         }
     })();
 
     // ============================================================
-    //  PIN LOCK – 24‑HOUR EXPIRY (PWA ONLY)
+    //  PIN LOCK
     // ============================================================
     let pinAttempt = '';
     const MAX_PIN_LENGTH = 4;
@@ -798,11 +1050,8 @@
     const pinError = document.getElementById('pinError');
 
     function updatePinDots() {
-        pinDots.forEach((dot, i) => {
-            dot.classList.toggle('filled', i < pinAttempt.length);
-        });
+        pinDots.forEach((dot, i) => dot.classList.toggle('filled', i < pinAttempt.length));
     }
-
     function handlePinInput(value) {
         if (value === 'clear') {
             pinAttempt = pinAttempt.slice(0, -1);
@@ -835,41 +1084,24 @@
             updatePinDots();
         }
     }
-
     document.querySelectorAll('.pin-key').forEach(btn => {
-        btn.addEventListener('click', () => {
-            handlePinInput(btn.dataset.value);
-        });
+        btn.addEventListener('click', () => handlePinInput(btn.dataset.value));
     });
-
     document.addEventListener('keydown', (e) => {
         if (!pinLockScreen.classList.contains('active')) return;
-        if (e.key >= '0' && e.key <= '9') {
-            handlePinInput(e.key);
-            e.preventDefault();
-        } else if (e.key === 'Backspace') {
-            handlePinInput('clear');
-            e.preventDefault();
-        } else if (e.key === 'Enter') {
-            handlePinInput('enter');
-            e.preventDefault();
-        }
+        if (e.key >= '0' && e.key <= '9') { handlePinInput(e.key); e.preventDefault(); }
+        else if (e.key === 'Backspace') { handlePinInput('clear'); e.preventDefault(); }
+        else if (e.key === 'Enter') { handlePinInput('enter'); e.preventDefault(); }
     });
-
     function checkPinLock() {
         if (!isAppMode()) return true;
         const unlockData = localStorage.getItem('pin_unlocked');
         if (unlockData) {
             try {
                 const { timestamp } = JSON.parse(unlockData);
-                if (Date.now() - timestamp < 24 * 60 * 60 * 1000) {
-                    return true;
-                } else {
-                    localStorage.removeItem('pin_unlocked');
-                }
-            } catch(e) {
+                if (Date.now() - timestamp < 24 * 60 * 60 * 1000) return true;
                 localStorage.removeItem('pin_unlocked');
-            }
+            } catch (e) { localStorage.removeItem('pin_unlocked'); }
         }
         pinLockScreen.classList.add('active');
         pinAttempt = '';
@@ -879,136 +1111,109 @@
     }
 
     // ============================================================
-    //  SESSION MANAGEMENT – KEEP SESSION FOR 7 DAYS OFFLINE
+    //  SESSION
     // ============================================================
     const SESSION_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
-
     function getStoredSession() {
         const stored = localStorage.getItem('ox_user');
         if (!stored) return null;
         try { return JSON.parse(stored); } catch { return null; }
     }
-
     function setStoredSession(user) {
-        const session = {
-            username: user.username,
-            role: user.role,
-            id: user.id,
+        localStorage.setItem('ox_user', JSON.stringify({
+            username: user.username, role: user.role, id: user.id,
             expiresAt: Date.now() + SESSION_EXPIRY_MS
-        };
-        localStorage.setItem('ox_user', JSON.stringify(session));
+        }));
     }
-
     function clearSession() {
         localStorage.removeItem('ox_user');
         localStorage.removeItem('pin_unlocked');
     }
-
     function isSessionValid(session) {
         if (!session) return false;
         return Date.now() < session.expiresAt;
     }
 
     // ============================================================
-    //  SYNC CONTROLS – avoid duplicate full syncs
+    //  SYNC CONTROLS
     // ============================================================
-    const STALE_DATA_MS = 15 * 60 * 1000; // 15 minutes
-
+    const STALE_DATA_MS = 15 * 60 * 1000;
     function getLastSync() {
         const stored = localStorage.getItem('lastSyncTime');
         return stored ? parseInt(stored, 10) : 0;
     }
-
     function setLastSync() {
         localStorage.setItem('lastSyncTime', Date.now().toString());
     }
 
     // ============================================================
-    //  SYNC OVERLAY CONTROLS
-    // ============================================================
-    function showSyncOverlay(message = '⏳ Syncing data…', progress = 0) {
-        const overlay = document.getElementById('syncOverlay');
-        document.getElementById('syncMessage').textContent = message;
-        document.getElementById('syncProgressFill').style.width = Math.min(progress, 100) + '%';
-        overlay.classList.add('active');
-    }
-
-    function updateSyncProgress(message, progress) {
-        document.getElementById('syncMessage').textContent = message;
-        document.getElementById('syncProgressFill').style.width = Math.min(progress, 100) + '%';
-    }
-
-    function hideSyncOverlay() {
-        document.getElementById('syncOverlay').classList.remove('active');
-        document.getElementById('syncProgressFill').style.width = '0%';
-    }
-
-    // ============================================================
-    //  FULL DATA SYNC (wrapper using new sync.js functions)
+    //  NON-BLOCKING FULL SYNC
     // ============================================================
     async function performFullSync(showProgress = true) {
         if (!navigator.onLine) {
-            console.warn('⚠️ Offline – sync skipped');
-            return;
+            if (showProgress) Notifications.warning('Offline', 'Sync skipped — no connection.');
+            return false;
         }
-        if (!db) {
-            console.warn('⚠️ Dexie not available');
-            return;
+        if (typeof db === 'undefined' || !db) return false;
+
+        if (sessionStorage.getItem('oxSyncInProgress') === 'true') return false;
+        sessionStorage.setItem('oxSyncInProgress', 'true');
+
+        const SYNC_ID = 'oxSync';
+        if (showProgress) {
+            Notifications.add({
+                id: SYNC_ID, type: 'progress', title: 'Syncing data',
+                message: 'Fetching latest from server…', progress: 10
+            });
         }
 
-        if (showProgress) {
-            showSyncOverlay('📥 Pulling latest data…', 10);
-        }
         try {
             await pullData();
-            if (showProgress) updateSyncProgress('📤 Pushing pending changes…', 60);
+            if (showProgress) Notifications.update(SYNC_ID, { message: 'Uploading local changes…', progress: 60 });
             await pushPending();
-            if (showProgress) updateSyncProgress('✅ Sync completed!', 100);
+            if (showProgress) Notifications.update(SYNC_ID, { message: 'Finishing up…', progress: 92 });
             if (typeof updatePendingBadge === 'function') updatePendingBadge();
-            if (showProgress) {
-                setTimeout(() => hideSyncOverlay(), 800);
-            }
-            console.log('✅ Full sync completed.');
             setLastSync();
+            if (showProgress) {
+                Notifications.update(SYNC_ID, {
+                    type: 'success', title: 'Sync complete',
+                    message: 'All data is up to date.', progress: 100
+                });
+                setTimeout(() => Notifications.remove(SYNC_ID), 6000);
+            }
+            return true;
         } catch (err) {
             console.error('❌ Full sync error:', err);
             if (showProgress) {
-                updateSyncProgress('❌ Sync failed – some data may be outdated.', 100);
-                setTimeout(() => hideSyncOverlay(), 2000);
+                Notifications.update(SYNC_ID, {
+                    type: 'error', title: 'Sync failed',
+                    message: (err && err.message) || 'Could not sync with server.'
+                });
             }
+            return false;
+        } finally {
+            sessionStorage.removeItem('oxSyncInProgress');
         }
     }
 
-    // ============================================================
-    //  UNIFIED SYNC (called from the sidebar button)
-    // ============================================================
-    window.syncAllPending = async function() {
-        if (!isAppMode()) {
-            console.log('🌐 Browser mode – sync is not needed.');
-            return;
-        }
+    window.syncAllPending = async function () {
         if (!navigator.onLine) {
-            alert('You are offline. Please connect to the internet to sync.');
+            Notifications.warning('Offline', 'Connect to the internet to sync.');
             return;
         }
         await performFullSync(true);
     };
 
-    // ============================================================
-    //  BACKGROUND SYNC – only if data is stale
-    // ============================================================
     async function backgroundSyncIfNeeded() {
-        if (!navigator.onLine || !db) return;
+        if (!navigator.onLine || typeof db === 'undefined' || !db) return;
         const lastSync = getLastSync();
-        const now = Date.now();
-        if (lastSync === 0 || (now - lastSync) > STALE_DATA_MS) {
-            console.log('🔁 Data stale – background refresh triggered');
-            await performFullSync(false);
+        if (lastSync === 0 || (Date.now() - lastSync) > STALE_DATA_MS) {
+            await performFullSync(true);
         }
     }
 
     // ============================================================
-    //  INSTALL PASSWORD LOGIC (only if the button exists)
+    //  INSTALL PROMPT
     // ============================================================
     let deferredPrompt = null;
     const installButton = document.getElementById('installAppBtn');
@@ -1018,12 +1223,10 @@
             e.preventDefault();
             deferredPrompt = e;
             installButton.classList.remove('hidden');
-            console.log('📲 Install prompt captured');
         });
-
         installButton.addEventListener('click', () => {
             if (!deferredPrompt) {
-                alert('Installation is not available. Please try again later.');
+                Notifications.info('Install not available', 'Use your browser menu → "Install app".');
                 return;
             }
             const passwordModal = document.getElementById('installPasswordModal');
@@ -1034,12 +1237,10 @@
             errorMsg.classList.remove('show');
             passwordInput.focus();
         });
-
         document.getElementById('installCancelBtn').addEventListener('click', () => {
             document.getElementById('installPasswordModal').classList.remove('active');
             document.getElementById('installErrorMsg').classList.remove('show');
         });
-
         document.getElementById('installConfirmBtn').addEventListener('click', async () => {
             const entered = document.getElementById('installPasswordInput').value.trim();
             if (entered === INSTALL_PASSWORD) {
@@ -1048,9 +1249,8 @@
                 if (deferredPrompt) {
                     deferredPrompt.prompt();
                     const result = await deferredPrompt.userChoice;
-                    console.log('User choice:', result.outcome);
                     if (result.outcome === 'accepted') {
-                        console.log('✅ App installed.');
+                        Notifications.success('App installed', 'Open OX Smart POS from your home screen.');
                         localStorage.setItem('app_version', APP_VERSION);
                         installButton.classList.add('hidden');
                     }
@@ -1062,34 +1262,26 @@
                 document.getElementById('installPasswordInput').focus();
             }
         });
-
         document.getElementById('installPasswordInput').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                document.getElementById('installConfirmBtn').click();
-            }
+            if (e.key === 'Enter') document.getElementById('installConfirmBtn').click();
         });
-
         document.getElementById('installPasswordModal').addEventListener('click', (e) => {
             if (e.target === document.getElementById('installPasswordModal')) {
                 document.getElementById('installPasswordModal').classList.remove('active');
                 document.getElementById('installErrorMsg').classList.remove('show');
             }
         });
-
         window.addEventListener('appinstalled', () => {
-            console.log('✅ App installed event.');
+            Notifications.success('App installed', 'Open OX Smart POS from your home screen.');
             localStorage.setItem('app_version', APP_VERSION);
             installButton.classList.add('hidden');
             deferredPrompt = null;
         });
-
-        if (isAppMode()) {
-            installButton.classList.add('hidden');
-        }
+        if (isAppMode()) installButton.classList.add('hidden');
     }
 
     // ============================================================
-    //  SIDEBAR / DROPDOWN FUNCTIONS
+    //  SIDEBAR / DROPDOWN
     // ============================================================
     function toggleSidebar() {
         const sidebar = document.getElementById('sidebar');
@@ -1098,7 +1290,6 @@
         overlay.classList.toggle('active');
         document.body.style.overflow = sidebar.classList.contains('open') ? 'hidden' : '';
     }
-
     function closeSidebar() {
         const sidebar = document.getElementById('sidebar');
         const overlay = document.getElementById('sidebarOverlay');
@@ -1106,19 +1297,20 @@
         overlay.classList.remove('active');
         document.body.style.overflow = '';
     }
+    window.toggleSidebar = toggleSidebar;
+    window.closeSidebar = closeSidebar;
 
-    document.addEventListener('keydown', function(e) {
+    document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape') closeSidebar();
     });
-
     function toggleDropdown(element) {
         const parent = element.closest('.dropdown-toggle');
         const menu = parent.nextElementSibling;
         parent.classList.toggle('open');
         menu.classList.toggle('open');
     }
-
-    document.addEventListener('click', function(e) {
+    window.toggleDropdown = toggleDropdown;
+    document.addEventListener('click', function (e) {
         if (!e.target.closest('.dropdown-toggle')) {
             document.querySelectorAll('.dropdown-toggle.open').forEach(el => {
                 el.classList.remove('open');
@@ -1128,127 +1320,71 @@
     });
 
     // ============================================================
-    //  ✅ FIXED: LOGOUT – clears ALL browser data (localStorage, IndexedDB, caches)
+    //  LOGOUT
     // ============================================================
     async function logout() {
-        console.log('🚪 Logging out – clearing all browser data...');
-        
-        // 1. Clear stored session
         clearSession();
-        
-        // 2. Clear sessionStorage
-        try { sessionStorage.clear(); } catch(e) {}
-        
-        // 3. Delete IndexedDB databases
+        try { sessionStorage.clear(); } catch (e) {}
         const dbNames = [
             'OxSmartOfflineDB', 'OfflineSalesDB', 'SalesDB',
             'offlineDB', 'PendingDB', 'ImportQueueDB', 'DexieDB'
         ];
-        for (const dbName of dbNames) {
-            try { indexedDB.deleteDatabase(dbName); } catch(e) {}
-        }
-        
-        // 4. Clear browser caches
+        for (const dbName of dbNames) { try { indexedDB.deleteDatabase(dbName); } catch (e) {} }
         if ('caches' in window) {
             try {
                 const cacheNames = await caches.keys();
                 await Promise.all(cacheNames.map(name => caches.delete(name)));
-                console.log(`🗑️ Cleared ${cacheNames.length} caches`);
-            } catch(e) {}
-        }
-        
-        // 5. Clear server session
-        if (navigator.onLine) {
-            try {
-                await fetch('/api/auth/logout', { 
-                    method: 'POST',
-                    credentials: 'include'
-                });
             } catch (e) {}
         }
-        
-        // 6. Force full page reload with cache-buster
+        if (navigator.onLine) {
+            try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }); } catch (e) {}
+        }
         window.location.href = '/login?_t=' + Date.now();
     }
+    window.logout = logout;
 
     // ============================================================
-    //  CLEAR OFFLINE DATA (including Dexie)
+    //  CLEAR OFFLINE DATA
     // ============================================================
     function clearOfflineData() {
-        if (!confirm('⚠️ This will clear all pending offline sales, purchases, and local database. Proceed?')) return;
-        const keysToRemove = ['pendingCount', 'pendingSales', 'offlineQueue', 'importPending', 'pendingImports', 'offlineSales', 'pendingJobId', 'pendingJobStatus', 'pendingPurchases'];
-        keysToRemove.forEach(key => { localStorage.removeItem(key); sessionStorage.removeItem(key); });
-        if (isAppMode() && db) {
-            db.delete().then(() => {
-                console.log('🗑️ Dexie database deleted');
-                setTimeout(() => { location.reload(); }, 600);
-            }).catch(err => console.warn('Error deleting Dexie:', err));
+        if (!confirm('⚠️ Clear all pending offline data and local database?')) return;
+        const keys = ['pendingCount','pendingSales','offlineQueue','importPending','pendingImports','offlineSales','pendingJobId','pendingJobStatus','pendingPurchases'];
+        keys.forEach(k => { localStorage.removeItem(k); sessionStorage.removeItem(k); });
+        if (isAppMode() && typeof db !== 'undefined' && db) {
+            db.delete().then(() => location.reload()).catch(() => location.reload());
         } else {
-            const dbNames = ['OfflineSalesDB', 'SalesDB', 'offlineDB', 'PendingDB', 'ImportQueueDB', 'OxSmartOfflineDB'];
-            dbNames.forEach(name => {
-                try { indexedDB.deleteDatabase(name); } catch(e) {}
-            });
-            setTimeout(() => { location.reload(); }, 600);
+            ['OfflineSalesDB', 'SalesDB', 'offlineDB', 'PendingDB', 'ImportQueueDB', 'OxSmartOfflineDB']
+                .forEach(name => { try { indexedDB.deleteDatabase(name); } catch (e) {} });
+            setTimeout(() => location.reload(), 500);
         }
         const badge = document.getElementById('pending-badge');
         if (badge) { badge.style.display = 'none'; badge.textContent = ''; }
     }
+    window.clearOfflineData = clearOfflineData;
 
     // ============================================================
-    //  SYNC REMINDER (only in app mode)
+    //  SYNC REMINDER
     // ============================================================
     const REMINDER_INTERVAL = 6 * 60 * 60 * 1000;
-
     function showSyncReminder() {
         if (!isAppMode()) return;
         const lastSync = getLastSync();
-        const now = Date.now();
-        if (lastSync === 0 || (now - lastSync) > REMINDER_INTERVAL) {
+        if (lastSync === 0 || (Date.now() - lastSync) > REMINDER_INTERVAL) {
             if (document.getElementById('syncReminderToast')) return;
-            const toast = document.createElement('div');
-            toast.id = 'syncReminderToast';
-            const isOnline = navigator.onLine;
-            const message = isOnline
-                ? '⚠️ Your offline data is over 6 hours old.'
-                : '📡 You are offline – data may be stale. Please connect to the internet to sync.';
-            const buttonText = isOnline ? 'Sync Now' : 'Go Online';
-            toast.innerHTML = `
-                <span>${message}</span>
-                <button id="reminderActionBtn" class="ml-2 bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm font-semibold">
-                    ${buttonText}
-                </button>
-                <button id="reminderDismissBtn" class="ml-2 text-gray-400 hover:text-gray-600 text-sm">✕</button>
-            `;
-            toast.style.cssText = `
-                position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
-                background: #FEF3C7; color: #92400E; padding: 12px 20px;
-                border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-                z-index: 9999; font-size: 14px; max-width: 90vw;
-                display: flex; align-items: center; gap: 12px;
-                border: 1px solid #F59E0B;
-                font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-            `;
-            document.body.appendChild(toast);
-
-            document.getElementById('reminderActionBtn').addEventListener('click', function() {
-                if (navigator.onLine) {
-                    toast.remove();
-                    window.syncAllPending();
-                } else {
-                    alert('You are offline. Please connect to the internet and try again.');
-                }
-            });
-
-            document.getElementById('reminderDismissBtn').addEventListener('click', function() {
-                toast.remove();
-            });
+            Notifications.warning(
+                'Data may be stale',
+                navigator.onLine
+                    ? 'Your offline data is over 6 hours old. Tap Sync Offline to refresh.'
+                    : 'You are offline. Connect to the internet to sync.',
+                15000
+            );
         }
     }
 
     // ============================================================
-    //  INITIALIZATION – SINGLE SYNC PER SESSION
+    //  INIT
     // ============================================================
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', function () {
         const yearSpan = document.getElementById('footerYear');
         if (yearSpan) yearSpan.textContent = new Date().getFullYear();
 
@@ -1273,170 +1409,121 @@
 
         async function initializeApp() {
             const currentPath = window.location.pathname;
-            const publicPaths = ['/login', '/signup'];
-            if (publicPaths.includes(currentPath)) return;
+            if (['/login', '/signup'].includes(currentPath)) return;
 
-            // 1. Check stored session
             const storedSession = getStoredSession();
             const sessionValid = isSessionValid(storedSession);
-
             let isLoggedIn = sessionValid;
 
             if (navigator.onLine) {
                 try {
-                    // ✅ FIX: Send credentials to ensure cookie is included
                     const res = await fetch('/api/auth/check', { credentials: 'include' });
                     const data = await res.json();
                     if (data.logged_in) {
-                        // ✅ Server confirms logged in – update stored session with fresh data
                         setStoredSession({ username: data.username, role: data.role, id: data.id });
                         isLoggedIn = true;
-                        console.log('✅ Server session valid for:', data.username);
                     } else {
-                        // ❌ Server says NOT logged in – clear everything
-                        console.log('🔑 Server says NOT logged in – clearing session');
                         clearSession();
                         isLoggedIn = false;
                     }
                 } catch (e) {
-                    console.log('🌐 Network error during session check – using stored session');
-                    // Only trust stored session if it's still valid AND we're offline/network-error
                     isLoggedIn = sessionValid;
                 }
             }
-
             if (!isLoggedIn) {
                 clearSession();
                 window.location.href = '/login';
                 return;
             }
 
-            // Pre‑cache protected pages (service worker)
             cacheAllPages();
 
-            // ===== SYNC LOGIC =====
             const initialSyncDone = sessionStorage.getItem('initialSyncDone') === 'true';
-
             if (!initialSyncDone && navigator.onLine) {
-                // First load after login – full sync with overlay
-                await performFullSync(true);
-                sessionStorage.setItem('initialSyncDone', 'true');
+                performFullSync(true).then(ok => {
+                    if (ok) sessionStorage.setItem('initialSyncDone', 'true');
+                });
             } else if (navigator.onLine) {
-                // Subsequent loads – only background refresh if stale
-                await backgroundSyncIfNeeded();
+                backgroundSyncIfNeeded();
             }
 
-            // Start offline prompt timer (if app mode)
-            if (isAppMode()) {
-                // Show sync reminder after 2 seconds if offline
-                if (!navigator.onLine) {
-                    setTimeout(showSyncReminder, 2000);
-                }
+            if (isAppMode() && !navigator.onLine) {
+                setTimeout(showSyncReminder, 2000);
             }
 
-            // App‑mode reinstall notice
             if (isAppMode()) {
                 const urlParams = new URLSearchParams(window.location.search);
                 if (urlParams.get('reinstall') === 'true') {
-                    const toast = document.createElement('div');
-                    toast.textContent = '📱 Please uninstall the old app from your device, then tap "Install App" to reinstall.';
-                    toast.style.cssText = `
-                        position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%);
-                        background: #FEF3C7; color: #92400E; padding: 16px 24px;
-                        border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-                        z-index: 9999; font-size: 14px; max-width: 90vw;
-                        border: 1px solid #F59E0B;
-                        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-                        text-align: center;
-                    `;
-                    document.body.appendChild(toast);
-                    setTimeout(() => toast.remove(), 10000);
+                    Notifications.warning(
+                        'Reinstall required',
+                        'Please uninstall the old app, then tap "Install App" from the sidebar.',
+                        15000
+                    );
                 }
             }
         }
     });
 
     // ============================================================
-    //  ONLINE EVENT – refresh on reconnect
+    //  ONLINE / OFFLINE
     // ============================================================
-    window.addEventListener('online', function() {
-        if (!isAppMode()) return;
-        console.log('🌐 Connection restored – refreshing data...');
+    window.addEventListener('online', function () {
+        Notifications.add({ type: 'online', title: 'Back online', message: 'Refreshing data…', duration: 4000 });
         performFullSync(true);
-        const reminder = document.getElementById('syncReminderToast');
-        if (reminder) reminder.remove();
         cacheAllPages();
     });
-
-    window.addEventListener('resize', function() {
+    window.addEventListener('offline', function () {
+        Notifications.add({
+            type: 'offline', title: 'You are offline',
+            message: 'Changes will be saved locally and synced when you reconnect.',
+            duration: 0
+        });
+    });
+    window.addEventListener('resize', function () {
         if (window.innerWidth >= 768) closeSidebar();
     });
 
     // ============================================================
-    //  UPDATE PENDING BADGE (using db.pending_ops)
+    //  PENDING BADGE
     // ============================================================
     async function updatePendingBadge() {
         if (!isAppMode()) {
             const badge = document.getElementById('pending-badge');
-            if (badge) { badge.style.display = 'none'; }
+            if (badge) badge.style.display = 'none';
             return;
         }
-        if (!db) return;
+        if (typeof db === 'undefined' || !db) return;
         try {
             const count = await db.pending_ops.where('synced').equals(0).count();
             const badge = document.getElementById('pending-badge');
             if (badge) {
-                if (count > 0) {
-                    badge.style.display = 'inline-block';
-                    badge.textContent = count + ' pending';
-                } else {
-                    badge.style.display = 'none';
-                    badge.textContent = '';
-                }
+                if (count > 0) { badge.style.display = 'inline-block'; badge.textContent = count + ' pending'; }
+                else { badge.style.display = 'none'; badge.textContent = ''; }
             }
-        } catch (e) {
-            console.warn('Error updating pending badge:', e);
-        }
+        } catch (e) {}
     }
-
     window.updatePendingBadge = updatePendingBadge;
-    window.fetchAndStoreAllData = async function() {
-        console.warn('⚠️ fetchAndStoreAllData is deprecated – use fullSync() instead.');
-        if (typeof pullData === 'function') {
-            await pullData();
-        }
-    };
 
     // ============================================================
-    //  ✅ NEW: GLOBAL 401 HANDLER – redirect to login if session expired
+    //  GLOBAL 401 HANDLER
     // ============================================================
     (function installGlobal401Handler() {
         const originalFetch = window.fetch;
-        window.fetch = async function(...args) {
+        window.fetch = async function (...args) {
             const response = await originalFetch.apply(this, args);
-            
-            // Ignore auth check/login endpoints (they legitimately return logged_in: false)
-            const url = typeof args[0] === 'string' ? args[0] : (args[0]?.url || '');
+            const url = typeof args[0] === 'string' ? args[0] : (args[0] && args[0].url) || '';
             const isAuthEndpoint = url.includes('/api/auth/check') || url.includes('/api/auth/login');
-            
             if (response.status === 401 && !isAuthEndpoint) {
-                console.warn('🚫 Got 401 Unauthorized – clearing session and redirecting to login');
-                
-                // Clear session
                 try {
                     localStorage.removeItem('ox_user');
                     localStorage.removeItem('pin_unlocked');
-                } catch(e) {}
-                
-                // Don't redirect if already on login page
+                } catch (e) {}
                 if (!window.location.pathname.includes('/login')) {
                     window.location.href = '/login?expired=true&_t=' + Date.now();
                 }
             }
-            
             return response;
         };
-        console.log('✅ Global 401 handler installed');
     })();
 </script>
 </body>
