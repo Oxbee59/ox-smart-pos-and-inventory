@@ -227,21 +227,67 @@
     .batch-row.selected { background: #ecfdf5 !important; }
 
     /* ============================================================
-       Batch modal — mobile-friendly
-       Keeps the 8-col grid but the wrapper scrolls horizontally on
-       narrow screens instead of squashing columns.
+       Batch modal — layout (Tailwind-independent)
+
+       Guarantees:
+         • Modal fits in 90vh, never exceeds viewport
+         • Header (title + toggle) stays pinned at top
+         • Footer (Assign/Confirm/Cancel) stays pinned at bottom
+         • Only the middle batch list scrolls
+         • 8-col grid keeps its width via min-width on #batchList
+
+       Does NOT depend on any Tailwind arbitrary-value class being
+       present in the compiled bundle.
+       ============================================================ */
+    #batchModal:not(.hidden) {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        padding: 1rem;
+        box-sizing: border-box;
+    }
+    #batchModalInner {
+        height: 90vh !important;
+        max-height: 90vh !important;
+        width: 100% !important;
+        max-width: 56rem !important;
+        display: flex !important;
+        flex-direction: column !important;
+        overflow: hidden !important;
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
+        box-sizing: border-box;
+    }
+    /* Header and footer are direct children marked .flex-shrink-0 */
+    #batchModalInner > .flex-shrink-0 {
+        flex: 0 0 auto !important;
+    }
+    /* Middle scrolls */
+    #batchListWrap {
+        flex: 1 1 0 !important;
+        min-height: 0 !important;
+        overflow-y: auto !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    #batchList {
+        min-width: 640px !important;
+        padding: 16px !important;
+        box-sizing: border-box;
+    }
+
+    /* ============================================================
+       Mobile — full-screen modal (overrides the desktop 90vh cap)
        ============================================================ */
     @media (max-width: 768px) {
-        #batchModal { padding: 0; }
+        #batchModal { padding: 0 !important; }
         #batchModalInner {
             width: 100% !important;
             max-width: 100% !important;
-            max-height: 100vh !important;
             height: 100vh !important;
+            max-height: 100vh !important;
             border-radius: 0 !important;
-        }
-        #batchListWrap {
-            -webkit-overflow-scrolling: touch;
         }
         #batchList {
             min-width: 620px !important;
