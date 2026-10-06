@@ -139,7 +139,7 @@
     </div>
 </div>
 
-<!-- Modal: View Batches (GROUPED BY PRICE — v4) -->
+<!-- Modal: View Batches (GROUPED BY PRICE — v5) -->
 <div id="batchModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-60" style="align-items:center; justify-content:center; padding:1rem;">
     <!-- Inner shell: inline styles so it doesn't depend on Tailwind -->
     <div id="batchModalInner">
@@ -277,7 +277,7 @@
     }
 
     /* ============================================================
-       BATCH MODAL — BULLETPROOF v4 (CSS GRID + PRICE GROUPS)
+       BATCH MODAL — BULLETPROOF v5 (flex-shrink fix + compact header)
        Layout does not depend on Tailwind. Unique class names (bmi-*
        / batch-*) so nothing in style.css can clash.
        ============================================================ */
@@ -354,13 +354,13 @@
         padding: 16px !important;
         display: flex !important;
         flex-direction: column !important;
-        gap: 12px !important;
+        gap: 10px !important;
         box-sizing: border-box !important;
         width: 100% !important;
     }
 
     /* ============================================================
-       PRICE GROUP
+       PRICE GROUP — flex-shrink: 0 prevents collapse squishing
        ============================================================ */
     .batch-group {
         border: 1px solid #e5e7eb;
@@ -369,33 +369,41 @@
         overflow: hidden;
         box-sizing: border-box;
         width: 100%;
+        flex-shrink: 0;              /* ← critical fix */
     }
+
     .batch-group-header {
-        display: flex !important;
-        flex-wrap: wrap !important;
-        align-items: center !important;
-        justify-content: space-between !important;
-        gap: 8px !important;
-        padding: 12px 14px !important;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
         background: #f8fafc;
         cursor: pointer;
         user-select: none;
-        border-bottom: 1px solid #e5e7eb;
+        min-height: 44px;
+        box-sizing: border-box;
+        flex-wrap: wrap;
     }
     .batch-group-header:hover { background: #f1f5f9; }
+    .batch-group:not(.is-collapsed) .batch-group-header { border-bottom: 1px solid #e5e7eb; }
 
-    .batch-group-title {
-        display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
-        min-width: 0;
-    }
-    .batch-group-title strong { color: #4f46e5; font-size: 0.95rem; }
     .batch-group-chevron {
         display: inline-block;
-        width: 16px;
+        width: 14px;
         text-align: center;
         color: #64748b;
         font-size: 0.85rem;
-        transition: transform 0.2s ease;
+        flex-shrink: 0;
+    }
+    .batch-group-title-text {
+        color: #4f46e5;
+        font-size: 0.9rem;
+        font-weight: 600;
+        flex-shrink: 1;
+        min-width: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
     .batch-group-count {
         display: inline-block;
@@ -405,30 +413,32 @@
         padding: 2px 8px;
         border-radius: 10px;
         font-weight: 600;
-    }
-    .batch-group-actions {
-        display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
         flex-shrink: 0;
     }
-
-    .batch-group-stats {
-        display: grid !important;
-        grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
-        gap: 4px !important;
-        padding: 8px 14px 10px 14px;
-        background: #f8fafc;
-        border-bottom: 1px solid #e5e7eb;
-    }
+    .batch-group-spacer { flex: 1 1 auto; min-width: 4px; }
 
     .batch-group-body {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
+        display: block;
         padding: 10px;
         background: #fbfdff;
         box-sizing: border-box;
+        flex-shrink: 0;              /* ← critical fix */
     }
     .batch-group-body.collapsed { display: none !important; }
+
+    .batch-group-stats {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 4px;
+        margin-bottom: 10px;
+    }
+
+    .batch-group-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .batch-group-list > .batch-item { flex-shrink: 0; }
 
     /* ============================================================
        BATCH ITEM (inside a group body)
@@ -587,7 +597,10 @@
     .bmi-footer-btn-gray:hover   { background: #6b7280; }
 
     @media (max-width: 640px) {
-        .batch-group-stats { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+        .batch-group-header { padding: 8px 10px; gap: 6px; }
+        .batch-group-title-text { font-size: 0.82rem; }
+        .batch-group-count { font-size: 0.65rem; padding: 1px 6px; }
+        .batch-group-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
         .batch-item-stats { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
         .batch-item-prices { grid-template-columns: 1fr !important; }
     }
@@ -881,42 +894,41 @@
             const chevron = forceExpand ? '▾' : '▸';
 
             html += `
-                <div class="batch-group" data-group-key="${domId}">
+                <div class="batch-group ${forceExpand ? '' : 'is-collapsed'}" data-group-key="${domId}">
                     <div class="batch-group-header" onclick="toggleBatchGroup('${domId}')">
-                        <div class="batch-group-title">
-                            <span class="batch-group-chevron" id="chev-${domId}">${chevron}</span>
-                            <strong>Cost ₵${safeToFixed(group.cost_price)} / Selling ₵${safeToFixed(group.selling_price)}</strong>
-                            <span class="batch-group-count">${group.batches.length} batch${group.batches.length !== 1 ? 'es' : ''}</span>
-                            ${groupBadge}
-                        </div>
-                        <div class="batch-group-actions">
-                            <span class="batch-status-pill" style="color:${anyInStock ? '#16a34a' : '#dc2626'};">${anyInStock ? '● In Stock' : '● Depleted'}</span>
-                        </div>
-                    </div>
-                    <div class="batch-group-stats">
-                        <div class="batch-stat">
-                            <span class="batch-stat-label">Total</span>
-                            <span class="batch-stat-value">${group.totals.quantity}</span>
-                        </div>
-                        <div class="batch-stat sold">
-                            <span class="batch-stat-label">Sold</span>
-                            <span class="batch-stat-value">${group.totals.sold}</span>
-                        </div>
-                        <div class="batch-stat">
-                            <span class="batch-stat-label">Remaining</span>
-                            <span class="batch-stat-value">${group.totals.remaining}</span>
-                        </div>
-                        <div class="batch-stat claimed">
-                            <span class="batch-stat-label">Claimed</span>
-                            <span class="batch-stat-value">${group.totals.claimed}</span>
-                        </div>
-                        <div class="batch-stat good">
-                            <span class="batch-stat-label">✅ Good</span>
-                            <span class="batch-stat-value">${group.totals.good}</span>
-                        </div>
+                        <span class="batch-group-chevron" id="chev-${domId}">${chevron}</span>
+                        <span class="batch-group-title-text">Cost ₵${safeToFixed(group.cost_price)} / Selling ₵${safeToFixed(group.selling_price)}</span>
+                        <span class="batch-group-count">${group.batches.length} batch${group.batches.length !== 1 ? 'es' : ''}</span>
+                        ${groupBadge}
+                        <span class="batch-group-spacer"></span>
+                        <span class="batch-status-pill" style="color:${anyInStock ? '#16a34a' : '#dc2626'};">${anyInStock ? '● In Stock' : '● Depleted'}</span>
                     </div>
                     <div class="batch-group-body ${collapsedClass}" id="body-${domId}">
-                        ${group.batches.map(b => renderSingleBatchHtml(b)).join('')}
+                        <div class="batch-group-stats">
+                            <div class="batch-stat">
+                                <span class="batch-stat-label">Total</span>
+                                <span class="batch-stat-value">${group.totals.quantity}</span>
+                            </div>
+                            <div class="batch-stat sold">
+                                <span class="batch-stat-label">Sold</span>
+                                <span class="batch-stat-value">${group.totals.sold}</span>
+                            </div>
+                            <div class="batch-stat">
+                                <span class="batch-stat-label">Remaining</span>
+                                <span class="batch-stat-value">${group.totals.remaining}</span>
+                            </div>
+                            <div class="batch-stat claimed">
+                                <span class="batch-stat-label">Claimed</span>
+                                <span class="batch-stat-value">${group.totals.claimed}</span>
+                            </div>
+                            <div class="batch-stat good">
+                                <span class="batch-stat-label">✅ Good</span>
+                                <span class="batch-stat-value">${group.totals.good}</span>
+                            </div>
+                        </div>
+                        <div class="batch-group-list">
+                            ${group.batches.map(b => renderSingleBatchHtml(b)).join('')}
+                        </div>
                     </div>
                 </div>
             `;
@@ -1013,13 +1025,17 @@
         if (!body) return;
         const nowCollapsed = body.classList.toggle('collapsed');
         if (chev) chev.textContent = nowCollapsed ? '▸' : '▾';
+        const group = body.closest('.batch-group');
+        if (group) group.classList.toggle('is-collapsed', nowCollapsed);
     }
     function expandAllGroups() {
         document.querySelectorAll('#batchList .batch-group-body').forEach(el => el.classList.remove('collapsed'));
+        document.querySelectorAll('#batchList .batch-group').forEach(el => el.classList.remove('is-collapsed'));
         document.querySelectorAll('#batchList .batch-group-chevron').forEach(el => el.textContent = '▾');
     }
     function collapseAllGroups() {
         document.querySelectorAll('#batchList .batch-group-body').forEach(el => el.classList.add('collapsed'));
+        document.querySelectorAll('#batchList .batch-group').forEach(el => el.classList.add('is-collapsed'));
         document.querySelectorAll('#batchList .batch-group-chevron').forEach(el => el.textContent = '▸');
     }
     function expandGroupContainingBatch(batchId) {
@@ -1030,8 +1046,9 @@
         if (body.classList.contains('collapsed')) {
             body.classList.remove('collapsed');
             const group = body.closest('.batch-group');
-            const domId = group ? group.dataset.groupKey : null;
-            if (domId) {
+            if (group) {
+                group.classList.remove('is-collapsed');
+                const domId = group.dataset.groupKey;
                 const chev = document.getElementById('chev-' + domId);
                 if (chev) chev.textContent = '▾';
             }

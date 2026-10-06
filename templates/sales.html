@@ -118,8 +118,9 @@
 
 <!-- Batch / Tier Selection Modal -->
 <div id="batchModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
-    <div class="bg-white rounded-xl shadow-xl w-11/12 max-w-4xl max-h-[90vh] overflow-y-auto">
-        <div class="sticky top-0 bg-white border-b z-10">
+    <div id="batchModalInner" class="bg-white rounded-xl shadow-xl w-11/12 max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+        <!-- Header -->
+        <div class="flex-shrink-0 border-b bg-white">
             <div class="p-4 flex justify-between items-center">
                 <h3 class="text-xl font-bold" id="batchModalTitle">Select Price Tiers</h3>
                 <button onclick="closeBatchModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
@@ -132,17 +133,23 @@
                 <span id="modeHint" class="text-gray-500 italic">FIFO applies automatically</span>
             </div>
         </div>
-        <div id="batchList" class="p-4 space-y-3"></div>
-        <div class="sticky bottom-0 bg-white p-4 border-t flex justify-between">
-            <div>
-                <button onclick="selectAllBatches()" class="bg-blue-500 text-white px-3 py-1 rounded mr-2">Select All</button>
-                <button onclick="deselectAllBatches()" class="bg-orange-500 text-white px-3 py-1 rounded">Deselect All</button>
+
+        <!-- Horizontally-scrollable wrapper for the 8-col grid -->
+        <div id="batchListWrap" class="flex-1 overflow-y-auto overflow-x-auto min-h-0">
+            <div id="batchList" class="p-4 space-y-3 min-w-[640px]"></div>
+        </div>
+
+        <!-- Footer -->
+        <div class="flex-shrink-0 bg-white p-4 border-t flex flex-wrap justify-between gap-3">
+            <div class="flex flex-wrap gap-2">
+                <button onclick="selectAllBatches()" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm">Select All</button>
+                <button onclick="deselectAllBatches()" class="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1 rounded text-sm">Deselect All</button>
             </div>
-            <div>
-                <span id="assignedQty" class="mr-4 text-sm font-bold">Assigned: 0</span>
-                <span id="remainingQty" class="mr-4 text-sm font-bold">Remaining: 0</span>
-                <button onclick="confirmBatchSelection()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">✓ Confirm</button>
-                <button onclick="closeBatchModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded ml-2">Cancel</button>
+            <div class="flex flex-wrap items-center gap-3">
+                <span id="assignedQty" class="text-sm font-bold">Assigned: 0</span>
+                <span id="remainingQty" class="text-sm font-bold">Remaining: 0</span>
+                <button onclick="confirmBatchSelection()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded text-sm">✓ Confirm</button>
+                <button onclick="closeBatchModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">Cancel</button>
             </div>
         </div>
     </div>
@@ -230,6 +237,40 @@
 
     /* Selected row emphasis */
     .batch-row.selected { background: #ecfdf5 !important; }
+
+    /* ============================================================
+       Batch modal — mobile-friendly
+       Keeps the 8-col grid but the wrapper scrolls horizontally on
+       narrow screens instead of squashing columns.
+       ============================================================ */
+    @media (max-width: 768px) {
+        #batchModal { padding: 0; }
+        #batchModalInner {
+            width: 100% !important;
+            max-width: 100% !important;
+            max-height: 100vh !important;
+            height: 100vh !important;
+            border-radius: 0 !important;
+        }
+        #batchListWrap {
+            -webkit-overflow-scrolling: touch;
+        }
+        #batchList {
+            min-width: 620px !important;
+        }
+        #batchList input[type="number"] {
+            width: 52px !important;
+            padding: 3px 4px !important;
+            font-size: 0.78rem;
+        }
+    }
+
+    @media (max-width: 480px) {
+        #batchList {
+            min-width: 560px !important;
+        }
+        #batchModalTitle { font-size: 1rem !important; }
+    }
 </style>
 
 <script>
@@ -238,14 +279,14 @@
     let currentProduct = null;
     let cart = [];
     let lastSale = null;
-    let currentBatches = [];           // filtered batches for the currently-open product
+    let currentBatches = [];
     let currentProductForBatch = null;
     let neededQty = 0;
 
-    // ── Selection state (one is used at a time, depending on mode) ──
-    let individualBatchMode = false;   // false = grouped tiers (FIFO), true = per-batch picking
-    let groupSelection = [];           // populated when individualBatchMode === false
-    let batchSelection = [];           // populated when individualBatchMode === true
+    // ── Selection state ──
+    let individualBatchMode = false;
+    let groupSelection = [];
+    let batchSelection = [];
 
     let selectedPaymentMethod = null;
     let selectedChequeNumber = null;
@@ -385,7 +426,6 @@
         let prods = [];
         let apiSuccess = false;
         let sourceLabel = '';
-        let batchCount = 0;
 
         if (navigator.onLine) {
             try {
@@ -685,7 +725,6 @@
 
         currentBatches = filteredBatches;
 
-        // Reset to grouped mode (default) each time the modal opens
         individualBatchMode = false;
         const toggle = document.getElementById('individualBatchToggle');
         if (toggle) toggle.checked = false;
@@ -710,7 +749,7 @@
         }
     };
 
-    // ---------- Dispatcher: render grouped OR individual ----------
+    // ---------- Dispatcher ----------
     function renderBatchModal() {
         const container = document.getElementById('batchList');
         container.innerHTML = '';
@@ -723,7 +762,6 @@
             renderGroupedTiers(currentBatches);
         }
 
-        // Reset running totals
         const assignedEl = document.getElementById('assignedQty');
         if (assignedEl) assignedEl.innerText = 'Assigned: 0';
         const remainingEl = document.getElementById('remainingQty');
@@ -740,7 +778,6 @@
         const groups = window.groupBatchesByPrice(batches);
         const container = document.getElementById('batchList');
 
-        // Header
         const header = document.createElement('div');
         header.className = 'grid grid-cols-8 gap-2 bg-gray-100 p-2 font-bold sticky top-0 border-b-2 border-gray-300 text-xs';
         header.innerHTML = `
@@ -865,17 +902,14 @@
 
     // =============================================================
     //  RENDER MODE B — INDIVIDUAL BATCHES (no FIFO)
-    //  Oldest first so the visual order matches intuitive stock age.
     // =============================================================
     function renderIndividualBatches(batches) {
         const container = document.getElementById('batchList');
 
-        // Sort oldest first for display
         const ordered = [...batches].sort(
             (a, b) => new Date(a.date || 0) - new Date(b.date || 0)
         );
 
-        // Header
         const header = document.createElement('div');
         header.className = 'grid grid-cols-8 gap-2 bg-gray-100 p-2 font-bold sticky top-0 border-b-2 border-gray-300 text-xs';
         header.innerHTML = `
@@ -1004,7 +1038,7 @@
             `Select individual batches for <strong>${currentProductForBatch.name}</strong> (need ${neededQty} units, ${totalAvailableStock} available, ${totalGoodStock} good) ${faultyCount > 0 ? '⚠️ Contains faulty batches' : ''}`;
     }
 
-    // ---------- Active selection array helper ----------
+    // ---------- Active selection array ----------
     function activeSelectionArray() {
         return individualBatchMode ? batchSelection : groupSelection;
     }
@@ -1078,8 +1112,6 @@
 
     // =============================================================
     //  CONFIRM — mode-aware
-    //   • grouped mode  → FIFO-expand each tier's qty
-    //   • individual mode → use exactly the batches the user ticked
     // =============================================================
     window.confirmBatchSelection = function() {
         let assigned = 0;
@@ -1088,7 +1120,6 @@
         let totalCost = 0;
 
         if (individualBatchMode) {
-            // ---- Manual batch picking: use exact batch_ids + qty ----
             for (const sel of batchSelection) {
                 if (!sel.checkbox.checked) continue;
                 const qty = parseInt(sel.qtyInput.value) || 0;
@@ -1114,7 +1145,6 @@
                 totalCost += qty * (batch.cost_price || 0);
             }
         } else {
-            // ---- Grouped mode: FIFO-expand each selected tier ----
             for (const sel of groupSelection) {
                 if (!sel.checkbox.checked) continue;
                 const qty = parseInt(sel.qtyInput.value) || 0;
@@ -1214,7 +1244,6 @@
             const faultyWarning = item.hasFaulty ? 
                 '<span class="text-red-500 text-xs font-bold ml-2">⚠️ FAULTY</span>' : '';
 
-            // Compact display — group by tier, list specific batch IDs
             const tierMap = new Map();
             item.selectedBatches.forEach(b => {
                 const cost = Math.round((b.batch.cost_price || 0) * 100) / 100;
