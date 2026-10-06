@@ -116,12 +116,21 @@
     </div>
 </div>
 
-<!-- Batch Selection Modal -->
+<!-- Batch / Tier Selection Modal -->
 <div id="batchModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
     <div class="bg-white rounded-xl shadow-xl w-11/12 max-w-4xl max-h-[90vh] overflow-y-auto">
-        <div class="sticky top-0 bg-white p-4 border-b flex justify-between items-center">
-            <h3 class="text-xl font-bold" id="batchModalTitle">Select Batches</h3>
-            <button onclick="closeBatchModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+        <div class="sticky top-0 bg-white border-b z-10">
+            <div class="p-4 flex justify-between items-center">
+                <h3 class="text-xl font-bold" id="batchModalTitle">Select Price Tiers</h3>
+                <button onclick="closeBatchModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+            </div>
+            <div class="px-4 pb-3 flex items-center justify-between text-xs flex-wrap gap-2">
+                <label class="flex items-center gap-2 cursor-pointer select-none">
+                    <input type="checkbox" id="individualBatchToggle" onchange="toggleIndividualBatchMode(this.checked)" class="w-4 h-4">
+                    <span>🔍 Show individual batches (skip FIFO)</span>
+                </label>
+                <span id="modeHint" class="text-gray-500 italic">FIFO applies automatically</span>
+            </div>
         </div>
         <div id="batchList" class="p-4 space-y-3"></div>
         <div class="sticky bottom-0 bg-white p-4 border-t flex justify-between">
@@ -214,6 +223,13 @@
         white-space: nowrap;
         border: 0;
     }
+
+    /* Price-tier row highlight for groups containing faulty batches */
+    .tier-faulty { background: #fef2f2 !important; }
+    .tier-good { background: #f0fdf4 !important; }
+
+    /* Selected row emphasis */
+    .batch-row.selected { background: #ecfdf5 !important; }
 </style>
 
 <script>
@@ -222,10 +238,14 @@
     let currentProduct = null;
     let cart = [];
     let lastSale = null;
-    let currentBatches = [];
+    let currentBatches = [];           // filtered batches for the currently-open product
     let currentProductForBatch = null;
     let neededQty = 0;
-    let batchSelection = [];
+
+    // ── Selection state (one is used at a time, depending on mode) ──
+    let individualBatchMode = false;   // false = grouped tiers (FIFO), true = per-batch picking
+    let groupSelection = [];           // populated when individualBatchMode === false
+    let batchSelection = [];           // populated when individualBatchMode === true
 
     let selectedPaymentMethod = null;
     let selectedChequeNumber = null;
@@ -236,7 +256,7 @@
     }
 
     // =============================================================
-    //  ✅ NEW: Loading prompt helpers
+    //  ✅ Loading prompt helpers
     // =============================================================
     let loadingTimerInterval = null;
     let loadingStartTime = null;
@@ -249,7 +269,6 @@
         
         if (!prompt) return;
         
-        // Hide success prompt if visible
         if (successPrompt) successPrompt.classList.add('hidden');
         
         prompt.classList.remove('hidden');
@@ -258,7 +277,6 @@
         loadingStartTime = Date.now();
         if (elapsedEl) elapsedEl.textContent = '0.0s';
         
-        // Update elapsed time every 100ms
         if (loadingTimerInterval) clearInterval(loadingTimerInterval);
         loadingTimerInterval = setInterval(() => {
             if (loadingStartTime && elapsedEl) {
@@ -288,14 +306,12 @@
         const detailEl = document.getElementById('loadingSuccessDetail');
         if (!successPrompt) return;
         
-        // Hide loading prompt
         hideLoadingPrompt();
         
         if (titleEl) titleEl.textContent = title;
         if (detailEl) detailEl.textContent = detail;
         successPrompt.classList.remove('hidden');
         
-        // Auto-hide after 4 seconds
         setTimeout(() => {
             successPrompt.classList.add('hidden');
         }, 4000);
@@ -332,7 +348,6 @@
                 console.log('🗑️ Cleared:', key);
             } catch(e) {}
         });
-        // Remove any leftover batch caches (legacy)
         const allKeys = Object.keys(localStorage);
         allKeys.forEach(key => {
             if (key.startsWith('batches_')) {
@@ -340,7 +355,6 @@
                 console.log('🗑️ Cleared batch cache:', key);
             }
         });
-        // Clear Dexie products/batches
         if (db) {
             db.products.clear();
             db.batches.clear();
@@ -355,7 +369,6 @@
 
     // =============================================================
     //  API-FIRST PRODUCT LOADING
-    //  ✅ With loading prompt, elapsed timer, and product count
     // =============================================================
     async function loadProducts() {
         updateOfflineBanner();
@@ -367,7 +380,6 @@
             return;
         }
 
-        // ✅ Show loading prompt
         showLoadingPrompt('Connecting to server...');
 
         let prods = [];
@@ -375,7 +387,6 @@
         let sourceLabel = '';
         let batchCount = 0;
 
-        // 1. Try API first (if online)
         if (navigator.onLine) {
             try {
                 updateLoadingMessage('Fetching accessories from server...');
@@ -384,10 +395,8 @@
                     updateLoadingMessage('Parsing product data...');
                     const apiProds = await res.json();
                     if (apiProds.length > 0) {
-                        // Store in Dexie
                         updateLoadingMessage(`Caching ${apiProds.length} products locally...`);
                         await storeProductsInDexie(apiProds);
-                        // Build product list from API data directly
                         prods = apiProds.map(p => ({
                             ...p,
                             stock: p.batches ? p.batches.reduce((s, b) => s + b.remaining_quantity, 0) : 0,
@@ -406,7 +415,6 @@
             updateLoadingMessage('Offline – loading cached accessories...');
         }
 
-        // 2. If API failed or offline, read from Dexie
         if (!apiSuccess || !navigator.onLine) {
             try {
                 updateLoadingMessage('Reading from local cache...');
@@ -426,11 +434,9 @@
             }
         }
 
-        // 3. Render
         updateLoadingMessage('Rendering product list...');
 
         if (prods.length > 0) {
-            // Group products by name+brand (deduplicate)
             const grouped = {};
             prods.forEach(p => {
                 const key = `${p.name}|${p.brand}`;
@@ -449,19 +455,16 @@
             products = Object.values(grouped);
             renderProductList(products);
 
-            // ✅ Count unique products and total batches
             const totalProducts = products.length;
             const totalBatches = products.reduce((sum, p) => sum + (p.batches ? p.batches.length : 0), 0);
             const totalStock = products.reduce((sum, p) => sum + (p.stock || 0), 0);
 
-            // Update product count badge in header
             const badge = document.getElementById('productCountBadge');
             if (badge) {
                 badge.textContent = `${totalProducts} products`;
                 badge.classList.remove('hidden');
             }
 
-            // ✅ Show success prompt with details
             const elapsed = ((Date.now() - loadingStartTime) / 1000).toFixed(1);
             const sourceText = sourceLabel === 'server' 
                 ? 'from server' 
@@ -471,7 +474,6 @@
             const detailText = `${totalProducts} product${totalProducts !== 1 ? 's' : ''} · ${totalBatches} batch${totalBatches !== 1 ? 'es' : ''} · ${totalStock} units ${sourceText} in ${elapsed}s`;
             showSuccessPrompt('✅ Accessories loaded', detailText);
         } else {
-            // No products found
             hideLoadingPrompt();
             document.getElementById('productList').innerHTML = '';
             noProductsBanner.classList.remove('hidden');
@@ -479,7 +481,6 @@
                 document.getElementById('productList').innerHTML = 
                     '<div class="text-gray-500 p-2">No cached accessories – connect to refresh</div>';
             }
-            // Hide product count badge
             const badge = document.getElementById('productCountBadge');
             if (badge) badge.classList.add('hidden');
             products = [];
@@ -515,6 +516,7 @@
                             selling_price: b.selling_price,
                             discount: b.discount || 0,
                             claimed_quantity: b.claimed_quantity || 0,
+                            sold_quantity: b.sold_quantity || 0,
                             date: b.date,
                             action: b.action || '',
                             source: b.source || '',
@@ -635,21 +637,21 @@
         renderProductList(filtered);
     });
 
-    // ========== BATCH SELECTOR – NO FALLBACK, FIXED BATCH ID ==========
+    // =============================================================
+    //  OPEN BATCH / TIER SELECTOR
+    // =============================================================
     async function openBatchSelector(product, qty) {
         currentProductForBatch = product;
         neededQty = qty;
         let batches = [];
 
-        console.log('🔍 Opening batch selector for:', product.name);
+        console.log('🔍 Opening selector for:', product.name);
         console.log('📦 Product stock:', product.stock);
 
-        // 1. Attempt to get batches from the product object (already attached)
         if (product.batches && product.batches.length > 0) {
             batches = product.batches;
             console.log('📦 Using batches from product object:', batches.length);
         } else {
-            // 2. If not attached, read from Dexie directly
             if (db) {
                 try {
                     const cachedBatches = await db.batches.where('product_id').equals(product.id).toArray();
@@ -663,14 +665,12 @@
             }
         }
 
-        // ✅ No fallback – if no batches, show error and abort
         if (batches.length === 0) {
             alert(`❌ No stock batches available for "${product.name}".\n\nPlease add a purchase for this product first.`);
             return false;
         }
 
-        // Filter only batches with remaining stock
-        let filteredBatches = batches.filter(b => b.remaining_quantity > 0);
+        let filteredBatches = batches.filter(b => (b.remaining_quantity || 0) > 0);
         console.log(`📊 ${filteredBatches.length} batches with stock available`);
 
         if (filteredBatches.length === 0) {
@@ -678,14 +678,204 @@
             return false;
         }
 
+        if (typeof window.groupBatchesByPrice !== 'function') {
+            alert('❌ Grouping helper failed to load. Please refresh the page.');
+            return false;
+        }
+
         currentBatches = filteredBatches;
 
-        // Build the batch selection UI with stock breakdown
+        // Reset to grouped mode (default) each time the modal opens
+        individualBatchMode = false;
+        const toggle = document.getElementById('individualBatchToggle');
+        if (toggle) toggle.checked = false;
+
+        renderBatchModal();
+
+        document.getElementById('batchModal').classList.remove('hidden');
+        return true;
+    }
+
+    // ---------- Toggle individual-batch mode ----------
+    window.toggleIndividualBatchMode = function(enabled) {
+        individualBatchMode = !!enabled;
+        const hint = document.getElementById('modeHint');
+        if (hint) {
+            hint.textContent = individualBatchMode
+                ? 'Pick specific batches manually — no FIFO'
+                : 'FIFO applies automatically';
+        }
+        if (currentProductForBatch && neededQty > 0) {
+            renderBatchModal();
+        }
+    };
+
+    // ---------- Dispatcher: render grouped OR individual ----------
+    function renderBatchModal() {
         const container = document.getElementById('batchList');
         container.innerHTML = '';
+        groupSelection = [];
         batchSelection = [];
-        
-        // Header row
+
+        if (individualBatchMode) {
+            renderIndividualBatches(currentBatches);
+        } else {
+            renderGroupedTiers(currentBatches);
+        }
+
+        // Reset running totals
+        const assignedEl = document.getElementById('assignedQty');
+        if (assignedEl) assignedEl.innerText = 'Assigned: 0';
+        const remainingEl = document.getElementById('remainingQty');
+        if (remainingEl) {
+            remainingEl.innerText = `Remaining: ${neededQty}`;
+            remainingEl.classList.remove('text-red-600', 'text-green-600');
+        }
+    }
+
+    // =============================================================
+    //  RENDER MODE A — GROUPED BY PRICE TIER (FIFO)
+    // =============================================================
+    function renderGroupedTiers(batches) {
+        const groups = window.groupBatchesByPrice(batches);
+        const container = document.getElementById('batchList');
+
+        // Header
+        const header = document.createElement('div');
+        header.className = 'grid grid-cols-8 gap-2 bg-gray-100 p-2 font-bold sticky top-0 border-b-2 border-gray-300 text-xs';
+        header.innerHTML = `
+            <div>Select</div>
+            <div>Price Tier</div>
+            <div>Stock</div>
+            <div>Sold</div>
+            <div>Claimed</div>
+            <div>Good</div>
+            <div>Batches</div>
+            <div>Qty to Sell</div>
+        `;
+        container.appendChild(header);
+
+        let totalAvailableStock = 0;
+        let totalGoodStock = 0;
+
+        for (const group of groups) {
+            const groupRemaining = group.totals.remaining;
+            const groupClaimed = group.totals.claimed;
+            const groupSold = group.totals.sold;
+            const groupGood = group.totals.good;
+            const isFaulty = groupClaimed > 0 ||
+                             group.batches.some(b => b.is_faulty || (b.claimed_quantity || 0) > 0);
+
+            totalAvailableStock += groupRemaining;
+            totalGoodStock += groupGood;
+
+            const row = document.createElement('div');
+            row.className = `grid grid-cols-8 gap-2 items-center border-b py-2 hover:bg-gray-50 ${isFaulty ? 'batch-faulty' : 'batch-good'}`;
+
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.className = 'w-5 h-5 cursor-pointer';
+
+            const tierSpan = document.createElement('span');
+            tierSpan.className = 'text-sm font-semibold';
+            tierSpan.innerHTML = `₵${group.cost_price.toFixed(2)} → ₵${group.selling_price.toFixed(2)}`;
+
+            const stockSpan = document.createElement('span');
+            stockSpan.innerText = groupRemaining;
+            stockSpan.className = 'font-medium';
+
+            const soldSpan = document.createElement('span');
+            soldSpan.innerText = groupSold;
+            soldSpan.className = 'text-blue-600';
+
+            const claimedSpan = document.createElement('span');
+            claimedSpan.innerText = groupClaimed;
+            claimedSpan.className = groupClaimed > 0 ? 'text-red-600 font-bold' : 'text-gray-400';
+
+            const goodSpan = document.createElement('span');
+            goodSpan.innerText = Math.max(groupGood, 0);
+            goodSpan.className = groupGood > 0 ? 'text-green-600 font-bold' : 'text-red-400';
+
+            const batchesSpan = document.createElement('span');
+            batchesSpan.innerText = `${group.batches.length}`;
+            batchesSpan.className = 'text-xs text-gray-500 text-center';
+
+            const qtyInput = document.createElement('input');
+            qtyInput.type = 'number';
+            qtyInput.className = 'border rounded px-1 py-1 w-16 text-center text-sm';
+            qtyInput.value = '0';
+            qtyInput.min = 0;
+            qtyInput.max = Math.max(groupGood, 0);
+            qtyInput.disabled = true;
+
+            row.appendChild(cb);
+            row.appendChild(tierSpan);
+            row.appendChild(stockSpan);
+            row.appendChild(soldSpan);
+            row.appendChild(claimedSpan);
+            row.appendChild(goodSpan);
+            row.appendChild(batchesSpan);
+            row.appendChild(qtyInput);
+            container.appendChild(row);
+
+            groupSelection.push({
+                group,
+                checkbox: cb,
+                qtyInput,
+                goodStock: Math.max(groupGood, 0),
+                hasFaulty: isFaulty
+            });
+
+            cb.addEventListener('change', () => {
+                qtyInput.disabled = !cb.checked;
+                if (cb.checked && qtyInput.value === '0') {
+                    qtyInput.value = '1';
+                } else if (!cb.checked) {
+                    qtyInput.value = '0';
+                }
+                updateBatchTotals();
+            });
+
+            qtyInput.addEventListener('input', updateBatchTotals);
+            qtyInput.addEventListener('blur', function() {
+                let val = parseInt(this.value) || 0;
+                const maxStock = parseInt(this.max) || 0;
+                if (val > maxStock) { this.value = maxStock; val = maxStock; }
+                else if (val < 0) { this.value = 0; }
+                updateBatchTotals();
+            });
+        }
+
+        const faultyGroupsCount = groupSelection.filter(g => g.hasFaulty).length;
+        const infoRow = document.createElement('div');
+        infoRow.className = `grid grid-cols-8 gap-2 ${faultyGroupsCount > 0 ? 'bg-orange-50' : 'bg-blue-50'} p-2 mt-2 rounded`;
+        infoRow.innerHTML = `
+            <div class="col-span-8 text-sm ${faultyGroupsCount > 0 ? 'text-orange-700' : 'text-blue-700'}">
+                ${faultyGroupsCount > 0 ? `⚠️ ${faultyGroupsCount} price tier(s) contain claimed/faulty items. ` : ''}
+                <span class="font-bold">${totalAvailableStock}</span> units available (${totalGoodStock} good, ${totalAvailableStock - totalGoodStock} claimed)
+                ${neededQty > totalAvailableStock ? `<span class="text-red-600 ml-2">⚠️ Need ${neededQty} units, only ${totalAvailableStock} available</span>` : ''}
+                <div class="text-xs text-gray-500 mt-1">ℹ️ Stock will be deducted FIFO (oldest batch first) within each selected tier.</div>
+            </div>
+        `;
+        container.appendChild(infoRow);
+
+        document.getElementById('batchModalTitle').innerHTML = 
+            `Select price tiers for <strong>${currentProductForBatch.name}</strong> (need ${neededQty} units, ${totalAvailableStock} available, ${totalGoodStock} good) ${faultyGroupsCount > 0 ? '⚠️ Contains faulty tiers' : ''}`;
+    }
+
+    // =============================================================
+    //  RENDER MODE B — INDIVIDUAL BATCHES (no FIFO)
+    //  Oldest first so the visual order matches intuitive stock age.
+    // =============================================================
+    function renderIndividualBatches(batches) {
+        const container = document.getElementById('batchList');
+
+        // Sort oldest first for display
+        const ordered = [...batches].sort(
+            (a, b) => new Date(a.date || 0) - new Date(b.date || 0)
+        );
+
+        // Header
         const header = document.createElement('div');
         header.className = 'grid grid-cols-8 gap-2 bg-gray-100 p-2 font-bold sticky top-0 border-b-2 border-gray-300 text-xs';
         header.innerHTML = `
@@ -699,58 +889,56 @@
             <div>Qty to Sell</div>
         `;
         container.appendChild(header);
-        
+
         let totalAvailableStock = 0;
         let totalGoodStock = 0;
-        let isFallback = false;
-        
-        for (const batch of currentBatches) {
+        let faultyCount = 0;
+
+        for (const batch of ordered) {
             const remaining = batch.remaining_quantity || 0;
             const claimed = batch.claimed_quantity || 0;
-            const totalQty = batch.quantity || batch.batch_quantity || remaining + claimed;
-            const sold = totalQty - remaining;
+            const totalQty = batch.quantity || batch.batch_quantity || (remaining + claimed);
+            const sold = (typeof batch.sold_quantity === 'number')
+                ? batch.sold_quantity
+                : Math.max(totalQty - remaining, 0);
             const good = remaining - claimed;
-            
-            totalAvailableStock += remaining;
-            totalGoodStock += good;
-            if (batch.is_fallback) isFallback = true;
-            
-            const row = document.createElement('div');
             const isFaulty = batch.is_faulty || claimed > 0;
+
+            totalAvailableStock += remaining;
+            totalGoodStock += Math.max(good, 0);
+            if (isFaulty) faultyCount++;
+
+            const row = document.createElement('div');
             row.className = `grid grid-cols-8 gap-2 items-center border-b py-2 hover:bg-gray-50 ${isFaulty ? 'batch-faulty' : 'batch-good'}`;
-            
+
             const cb = document.createElement('input');
             cb.type = 'checkbox';
             cb.className = 'w-5 h-5 cursor-pointer';
-            
-            const batchIdSpan = document.createElement('span');
-            const batchId = batch.batch_id || batch.id;
-            batchIdSpan.innerText = batch.is_fallback ? '⚠️ FALLBACK' : batchId;
-            batchIdSpan.className = 'text-sm';
-            if (batch.is_fallback) {
-                batchIdSpan.classList.add('text-orange-600', 'font-bold');
-            }
-            
+
+            const idSpan = document.createElement('span');
+            idSpan.innerText = `#${batch.batch_id || batch.id}`;
+            idSpan.className = 'text-sm font-semibold text-indigo-700';
+
             const stockSpan = document.createElement('span');
             stockSpan.innerText = remaining;
             stockSpan.className = 'font-medium';
-            
+
             const soldSpan = document.createElement('span');
             soldSpan.innerText = sold;
             soldSpan.className = 'text-blue-600';
-            
+
             const claimedSpan = document.createElement('span');
             claimedSpan.innerText = claimed;
             claimedSpan.className = claimed > 0 ? 'text-red-600 font-bold' : 'text-gray-400';
-            
+
             const goodSpan = document.createElement('span');
             goodSpan.innerText = Math.max(good, 0);
             goodSpan.className = good > 0 ? 'text-green-600 font-bold' : 'text-red-400';
-            
+
             const priceSpan = document.createElement('span');
-            priceSpan.innerText = `₵${batch.selling_price.toFixed(2)}`;
-            priceSpan.className = 'text-green-600';
-            
+            priceSpan.innerText = `₵${(batch.selling_price || 0).toFixed(2)}`;
+            priceSpan.className = 'text-green-600 text-sm';
+
             const qtyInput = document.createElement('input');
             qtyInput.type = 'number';
             qtyInput.className = 'border rounded px-1 py-1 w-16 text-center text-sm';
@@ -758,9 +946,9 @@
             qtyInput.min = 0;
             qtyInput.max = Math.max(good, 0);
             qtyInput.disabled = true;
-            
+
             row.appendChild(cb);
-            row.appendChild(batchIdSpan);
+            row.appendChild(idSpan);
             row.appendChild(stockSpan);
             row.appendChild(soldSpan);
             row.appendChild(claimedSpan);
@@ -768,97 +956,63 @@
             row.appendChild(priceSpan);
             row.appendChild(qtyInput);
             container.appendChild(row);
-            
-            batchSelection.push({ 
-                batch, 
-                checkbox: cb, 
-                qtyInput, 
+
+            batchSelection.push({
+                batch,
+                checkbox: cb,
+                qtyInput,
                 batchId: batch.batch_id || batch.id,
-                isFaulty: isFaulty,
-                goodStock: good
+                isFaulty,
+                goodStock: Math.max(good, 0)
             });
-            
+
             cb.addEventListener('change', () => {
                 qtyInput.disabled = !cb.checked;
                 if (cb.checked && qtyInput.value === '0') {
                     qtyInput.value = '1';
+                    row.classList.add('selected');
                 } else if (!cb.checked) {
                     qtyInput.value = '0';
+                    row.classList.remove('selected');
                 }
                 updateBatchTotals();
             });
-            
+
             qtyInput.addEventListener('input', updateBatchTotals);
             qtyInput.addEventListener('blur', function() {
                 let val = parseInt(this.value) || 0;
                 const maxStock = parseInt(this.max) || 0;
-                if (val > maxStock) {
-                    this.value = maxStock;
-                    val = maxStock;
-                } else if (val < 0) {
-                    this.value = 0;
-                }
+                if (val > maxStock) { this.value = maxStock; val = maxStock; }
+                else if (val < 0) { this.value = 0; }
                 updateBatchTotals();
             });
         }
-        
-        // Show total available stock info with breakdown
-        const faultyBatchesCount = currentBatches.filter(b => b.is_faulty || (b.claimed_quantity && b.claimed_quantity > 0)).length;
+
         const infoRow = document.createElement('div');
-        infoRow.className = `grid grid-cols-8 gap-2 ${isFallback || faultyBatchesCount > 0 ? 'bg-orange-50' : 'bg-blue-50'} p-2 mt-2 rounded`;
+        infoRow.className = `grid grid-cols-8 gap-2 ${faultyCount > 0 ? 'bg-orange-50' : 'bg-blue-50'} p-2 mt-2 rounded`;
         infoRow.innerHTML = `
-            <div class="col-span-8 text-sm ${isFallback || faultyBatchesCount > 0 ? 'text-orange-700' : 'text-blue-700'}">
-                ${isFallback ? '⚠️ ' : ''}
-                ${faultyBatchesCount > 0 ? `⚠️ ${faultyBatchesCount} batch(es) have claimed/faulty items. ` : ''}
+            <div class="col-span-8 text-sm ${faultyCount > 0 ? 'text-orange-700' : 'text-blue-700'}">
+                ${faultyCount > 0 ? `⚠️ ${faultyCount} batch(es) contain claimed/faulty items. ` : ''}
                 <span class="font-bold">${totalAvailableStock}</span> units available (${totalGoodStock} good, ${totalAvailableStock - totalGoodStock} claimed)
                 ${neededQty > totalAvailableStock ? `<span class="text-red-600 ml-2">⚠️ Need ${neededQty} units, only ${totalAvailableStock} available</span>` : ''}
-                ${isFallback ? `<br><span class="text-xs text-orange-500">⚠️ FALLBACK BATCH: Stock will NOT be deducted from real inventory.</span>` : ''}
+                <div class="text-xs text-gray-500 mt-1">ℹ️ <strong>Manual mode:</strong> only the batches you tick will be deducted — no automatic FIFO.</div>
             </div>
         `;
         container.appendChild(infoRow);
-        
-        function updateBatchTotals() {
-            let assigned = 0;
-            batchSelection.forEach(sel => {
-                if (sel.checkbox.checked) {
-                    let val = parseInt(sel.qtyInput.value) || 0;
-                    const maxStock = Math.max(sel.goodStock, 0);
-                    if (val > maxStock) { 
-                        sel.qtyInput.value = maxStock; 
-                        val = maxStock; 
-                    }
-                    assigned += val;
-                }
-            });
-            document.getElementById('assignedQty').innerText = `Assigned: ${assigned}`;
-            const remaining = neededQty - assigned;
-            document.getElementById('remainingQty').innerText = `Remaining: ${remaining}`;
-            const remSpan = document.getElementById('remainingQty');
-            if (remaining < 0) {
-                remSpan.classList.add('text-red-600');
-                remSpan.classList.remove('text-green-600');
-            } else {
-                remSpan.classList.remove('text-red-600');
-                if (remaining === 0) {
-                    remSpan.classList.add('text-green-600');
-                } else {
-                    remSpan.classList.remove('text-green-600');
-                }
-            }
-        }
-        
+
         document.getElementById('batchModalTitle').innerHTML = 
-            `Select batches for <strong>${product.name}</strong> (need ${qty} units, ${totalAvailableStock} available, ${totalGoodStock} good) ${faultyBatchesCount > 0 ? '⚠️ Contains faulty batches' : ''}`;
-        document.getElementById('assignedQty').innerText = 'Assigned: 0';
-        document.getElementById('remainingQty').innerText = `Remaining: ${neededQty}`;
-        document.getElementById('batchModal').classList.remove('hidden');
-        
-        return true;
+            `Select individual batches for <strong>${currentProductForBatch.name}</strong> (need ${neededQty} units, ${totalAvailableStock} available, ${totalGoodStock} good) ${faultyCount > 0 ? '⚠️ Contains faulty batches' : ''}`;
     }
 
+    // ---------- Active selection array helper ----------
+    function activeSelectionArray() {
+        return individualBatchMode ? batchSelection : groupSelection;
+    }
+
+    // ---------- Select All ----------
     window.selectAllBatches = function() {
         let remaining = neededQty;
-        batchSelection.forEach(sel => {
+        activeSelectionArray().forEach(sel => {
             if (remaining <= 0) {
                 sel.checkbox.checked = false;
                 sel.qtyInput.disabled = true;
@@ -876,7 +1030,7 @@
     };
     
     window.deselectAllBatches = function() {
-        batchSelection.forEach(sel => {
+        activeSelectionArray().forEach(sel => {
             sel.checkbox.checked = false;
             sel.qtyInput.disabled = true;
             sel.qtyInput.value = '0';
@@ -884,33 +1038,28 @@
         updateBatchTotals();
     };
 
+    // ---------- Running totals ----------
     function updateBatchTotals() {
         let assigned = 0;
-        batchSelection.forEach(sel => {
+        activeSelectionArray().forEach(sel => {
             if (sel.checkbox.checked) {
                 let val = parseInt(sel.qtyInput.value) || 0;
                 const maxStock = Math.max(sel.goodStock, 0);
-                if (val > maxStock) { 
-                    sel.qtyInput.value = maxStock; 
-                    val = maxStock; 
-                }
+                if (val > maxStock) { sel.qtyInput.value = maxStock; val = maxStock; }
+                if (val < 0) { sel.qtyInput.value = 0; val = 0; }
                 assigned += val;
             }
         });
-        document.getElementById('assignedQty').innerText = `Assigned: ${assigned}`;
-        const remaining = neededQty - assigned;
-        document.getElementById('remainingQty').innerText = `Remaining: ${remaining}`;
-        const remSpan = document.getElementById('remainingQty');
-        if (remaining < 0) {
-            remSpan.classList.add('text-red-600');
-            remSpan.classList.remove('text-green-600');
-        } else {
-            remSpan.classList.remove('text-red-600');
-            if (remaining === 0) {
-                remSpan.classList.add('text-green-600');
-            } else {
-                remSpan.classList.remove('text-green-600');
-            }
+        const assignedEl = document.getElementById('assignedQty');
+        if (assignedEl) assignedEl.innerText = `Assigned: ${assigned}`;
+
+        const remainingEl = document.getElementById('remainingQty');
+        if (remainingEl) {
+            const remaining = neededQty - assigned;
+            remainingEl.innerText = `Remaining: ${remaining}`;
+            remainingEl.classList.remove('text-red-600', 'text-green-600');
+            if (remaining < 0) remainingEl.classList.add('text-red-600');
+            else if (remaining === 0) remainingEl.classList.add('text-green-600');
         }
     }
 
@@ -918,71 +1067,119 @@
         document.getElementById('batchModal').classList.add('hidden');
         currentProductForBatch = null;
         neededQty = 0;
+        groupSelection = [];
+        batchSelection = [];
+        individualBatchMode = false;
+        const toggle = document.getElementById('individualBatchToggle');
+        if (toggle) toggle.checked = false;
+        const hint = document.getElementById('modeHint');
+        if (hint) hint.textContent = 'FIFO applies automatically';
     };
 
-    // ========== confirmBatchSelection with stock validation ==========
+    // =============================================================
+    //  CONFIRM — mode-aware
+    //   • grouped mode  → FIFO-expand each tier's qty
+    //   • individual mode → use exactly the batches the user ticked
+    // =============================================================
     window.confirmBatchSelection = function() {
         let assigned = 0;
         let selected = [];
         let faultySelected = false;
         let totalCost = 0;
-        
-        for (const sel of batchSelection) {
-            if (sel.checkbox.checked) {
-                let qty = parseInt(sel.qtyInput.value) || 0;
-                if (qty > 0) {
-                    assigned += qty;
-                    selected.push({ 
-                        batch_id: sel.batchId, 
-                        qty: qty, 
-                        batch: sel.batch,
-                        is_fallback: sel.batch.is_fallback || false,
-                        is_faulty: sel.isFaulty || false,
-                        good_stock: sel.goodStock || 0
+
+        if (individualBatchMode) {
+            // ---- Manual batch picking: use exact batch_ids + qty ----
+            for (const sel of batchSelection) {
+                if (!sel.checkbox.checked) continue;
+                const qty = parseInt(sel.qtyInput.value) || 0;
+                if (qty <= 0) continue;
+
+                assigned += qty;
+                const batch = sel.batch;
+                const goodForBatch = Math.max(
+                    (batch.remaining_quantity || 0) - (batch.claimed_quantity || 0),
+                    0
+                );
+                const batchFaulty = batch.is_faulty || (batch.claimed_quantity || 0) > 0;
+                if (batchFaulty) faultySelected = true;
+
+                selected.push({
+                    batch_id: sel.batchId,
+                    qty: qty,
+                    batch: batch,
+                    is_fallback: false,
+                    is_faulty: batchFaulty,
+                    good_stock: goodForBatch
+                });
+                totalCost += qty * (batch.cost_price || 0);
+            }
+        } else {
+            // ---- Grouped mode: FIFO-expand each selected tier ----
+            for (const sel of groupSelection) {
+                if (!sel.checkbox.checked) continue;
+                const qty = parseInt(sel.qtyInput.value) || 0;
+                if (qty <= 0) continue;
+
+                assigned += qty;
+
+                let picks;
+                try {
+                    picks = window.fifoPickFromGroup(sel.group, qty);
+                } catch (err) {
+                    alert(`❌ ${err.message}`);
+                    return;
+                }
+
+                for (const p of picks) {
+                    const goodForBatch = Math.max(
+                        (p.batch.remaining_quantity || 0) - (p.batch.claimed_quantity || 0),
+                        0
+                    );
+                    const batchFaulty = p.batch.is_faulty || (p.batch.claimed_quantity || 0) > 0;
+                    if (batchFaulty) faultySelected = true;
+
+                    selected.push({
+                        batch_id: p.batch_id,
+                        qty: p.qty,
+                        batch: p.batch,
+                        is_fallback: false,
+                        is_faulty: batchFaulty,
+                        good_stock: goodForBatch
                     });
-                    if (sel.isFaulty) faultySelected = true;
-                    totalCost += qty * (sel.batch.cost_price || 0);
+                    totalCost += p.qty * (p.batch.cost_price || 0);
                 }
             }
         }
-        
+
         if (assigned !== neededQty) {
             alert(`Please assign exactly ${neededQty} units. Currently assigned: ${assigned}`);
             return;
         }
         if (selected.length === 0) {
-            alert('Please select at least one batch.');
+            alert(individualBatchMode
+                ? 'Please select at least one batch.'
+                : 'Please select at least one price tier.');
             return;
         }
-        
-        // Warning for faulty batches
+
         if (faultySelected) {
-            if (!confirm('⚠️ You are selecting batches that have claimed/faulty items.\n\nSelling faulty items may affect customer satisfaction and inventory tracking.\n\nContinue with sale?')) {
+            if (!confirm('⚠️ You are selling from batches that have claimed/faulty items.\n\nSelling faulty items may affect customer satisfaction and inventory tracking.\n\nContinue with sale?')) {
                 return;
             }
         }
-        
-        // Check if using fallback batch – this should never happen now, but keep safety check
-        const hasFallback = selected.some(s => s.is_fallback);
-        if (hasFallback) {
-            if (!confirm('⚠️ This product has stock but no specific batch. Selling from fallback will NOT deduct from real inventory. Continue?')) {
-                return;
-            }
-        }
-        
+
         const discount = parseFloat(document.getElementById('discount').value) || 0;
         let subtotal = 0;
         for (const s of selected) {
             subtotal += s.qty * s.batch.selling_price;
         }
         const finalTotal = Math.max(subtotal - discount, 0);
-        
-        // Create a product copy with the CORRECT cost price from batches
+
         const productWithCorrectCost = {
             ...currentProductForBatch,
-            cost_price: totalCost / neededQty
+            cost_price: neededQty > 0 ? (totalCost / neededQty) : (currentProductForBatch.cost_price || 0)
         };
-        
+
         cart.push({
             product: productWithCorrectCost,
             qty: neededQty,
@@ -990,7 +1187,7 @@
             selectedBatches: selected,
             subtotal,
             final: finalTotal,
-            isFallback: hasFallback,
+            isFallback: false,
             totalCost: totalCost,
             hasFaulty: faultySelected
         });
@@ -1000,7 +1197,7 @@
         document.getElementById('discount').value = '';
     };
 
-    // ---------- Cart management with stock breakdown ----------
+    // ---------- Cart management ----------
     function updateCart() {
         const container = document.getElementById('cartItems');
         if (!cart.length) {
@@ -1014,34 +1211,37 @@
             grandTotal += item.final;
             const card = document.createElement('div');
             card.className = 'border rounded-lg p-3 bg-gray-50';
-            const fallbackWarning = item.isFallback ? 
-                '<span class="text-orange-500 text-xs font-bold ml-2">⚠️ FALLBACK</span>' : '';
             const faultyWarning = item.hasFaulty ? 
                 '<span class="text-red-500 text-xs font-bold ml-2">⚠️ FAULTY</span>' : '';
-            
-            // Calculate stock breakdown for display
-            let totalGood = 0;
-            let totalClaimed = 0;
+
+            // Compact display — group by tier, list specific batch IDs
+            const tierMap = new Map();
             item.selectedBatches.forEach(b => {
-                totalGood += b.good_stock || 0;
-                if (b.is_faulty) totalClaimed += b.qty;
+                const cost = Math.round((b.batch.cost_price || 0) * 100) / 100;
+                const sell = Math.round((b.batch.selling_price || 0) * 100) / 100;
+                const key = cost + '|' + sell;
+                if (!tierMap.has(key)) {
+                    tierMap.set(key, { cost, sell, qty: 0, batch_ids: [] });
+                }
+                const t = tierMap.get(key);
+                t.qty += b.qty;
+                t.batch_ids.push(`#${b.batch_id}`);
             });
+            const tierLines = [...tierMap.values()].map(t =>
+                `${t.qty} × ₵${t.sell.toFixed(2)} (cost ₵${t.cost.toFixed(2)}) — ${t.batch_ids.join(', ')}`
+            ).join('<br>');
             
             card.innerHTML = `
                 <div class="flex justify-between items-start">
                     <div class="flex-1">
                         <div>
                             <strong>${item.product.name} (${item.product.brand})</strong>
-                            ${fallbackWarning}
                             ${faultyWarning}
                         </div>
                         <div class="text-sm text-gray-600">Qty: ${item.qty} | Discount: ${formatMoney(item.discount)}</div>
                         <div class="text-xs text-gray-500 mt-1">Batches:</div>
-                        <div class="text-xs">${item.selectedBatches.map(b => 
-                            `Batch #${b.batch_id}: ${b.qty} @ ${formatMoney(b.batch.selling_price)}${b.is_faulty ? ' ⚠️' : ''}`
-                        ).join('<br>')}</div>
+                        <div class="text-xs">${tierLines}</div>
                         <div class="text-xs text-gray-400 mt-1">
-                            ${item.isFallback ? '⚠️ Fallback batch (no real inventory deduction)' : ''}
                             ${item.hasFaulty ? '⚠️ Contains faulty/claimed items' : ''}
                         </div>
                     </div>
@@ -1069,7 +1269,7 @@
         await openBatchSelector(currentProduct, qty);
     });
 
-    // ---------- Payment Modal Functions ----------
+    // ---------- Payment Modal ----------
     function selectPayment(method, event) {
         console.log("✅ Payment method selected:", method);
         selectedPaymentMethod = method;
@@ -1109,7 +1309,6 @@
         });
     }
 
-    // ✅ Fixed date/time parsing
     function getSaleDateTime() {
         const dateVal = document.getElementById('saleDate').value;
         const timeVal = document.getElementById('saleTime').value;
@@ -1135,15 +1334,7 @@
                         throw new Error('Invalid time');
                     }
                 } else {
-                    if (parts.length === 2) {
-                        hours = parseInt(parts[0]);
-                        minutes = parseInt(parts[1]);
-                        if (isNaN(hours) || isNaN(minutes) || hours > 23 || minutes > 59) {
-                            throw new Error('Invalid time');
-                        }
-                    } else {
-                        throw new Error('Invalid time format');
-                    }
+                    throw new Error('Invalid time format');
                 }
                 
                 const time24 = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`;
@@ -1164,7 +1355,6 @@
                     const now = new Date();
                     const date = now.toISOString().split('T')[0];
                     const time = now.toTimeString().split(' ')[0];
-                    console.log(`🔄 Using current date/time as fallback: ${date} ${time}`);
                     return `${date} ${time}`;
                 }
             }
@@ -1177,12 +1367,11 @@
         return `${date} ${time}`;
     }
 
-    // ========== FIXED: Execute Sale with BOTH IDs for compatibility ==========
+    // ========== Execute Sale ==========
     async function executeSaleWithPayment(paymentMethod, chequeNum) {
         if (!pendingSaleCallback) return;
         
         console.log("🚀 Executing sale with payment method:", paymentMethod);
-        console.log("🚀 Cheque number:", chequeNum);
         
         const cartItems = pendingSaleCallback.cart.map(item => ({ 
             product: item.product, 
@@ -1192,7 +1381,6 @@
         
         const selectedBatches = [];
         pendingSaleCallback.cart.forEach(item => {
-            // ✅ FIX: Get the product ID correctly
             const productId = item.product.product_id || item.product.id;
             
             if (!productId) {
@@ -1205,7 +1393,6 @@
                     batch_id: b.batch_id, 
                     qty: b.qty, 
                     product_id: productId,
-                    // ✅ Also send as 'id' for backward compatibility with backend
                     id: productId
                 });
             });
@@ -1226,7 +1413,7 @@
             const res = await fetch('/api/sales/complete', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',  // ✅ Ensure cookie is sent
+                credentials: 'include',
                 body: JSON.stringify(payload)
             });
             
@@ -1253,7 +1440,6 @@
             console.warn('Network error, saving sale offline:', error);
             
             if (!navigator.onLine) {
-                // Use central pending operation
                 if (typeof savePendingOperation === 'function') {
                     try {
                         await savePendingOperation('sales', 'add', 'temp_' + Date.now(), payload);
@@ -1263,7 +1449,6 @@
                         alert('Could not save sale offline. Please try again.');
                     }
                 } else {
-                    // Fallback to legacy localStorage (if sync.js not loaded)
                     console.warn('savePendingOperation not available, using localStorage fallback');
                     if (typeof savePendingSale === 'function') {
                         savePendingSale(payload);
@@ -1308,15 +1493,10 @@
             return;
         }
         
-        // Check if there are fallback or faulty batches in cart
-        const hasFallback = cart.some(item => item.isFallback);
         const hasFaulty = cart.some(item => item.hasFaulty);
         
-        if (hasFallback || hasFaulty) {
-            let warningMsg = '⚠️ ';
-            if (hasFallback) warningMsg += 'One or more items are using FALLBACK batches (no real inventory batch exists). Stock will NOT be deducted. ';
-            if (hasFaulty) warningMsg += 'One or more items are from FAULTY batches (claimed as damaged/defective). ';
-            warningMsg += '\n\nContinue with sale?';
+        if (hasFaulty) {
+            let warningMsg = '⚠️ One or more items are from FAULTY batches (claimed as damaged/defective). \n\nContinue with sale?';
             if (!confirm(warningMsg)) {
                 return;
             }
@@ -1339,7 +1519,7 @@
         document.getElementById('paymentModal').classList.remove('hidden');
     });
 
-    // ---------- Confirm Payment Button (License REMOVED) ----------
+    // ---------- Confirm Payment ----------
     document.getElementById('confirmPaymentBtn').addEventListener('click', async () => {
         console.log("🔘 Confirm button clicked. Current payment method:", selectedPaymentMethod);
         
@@ -1350,7 +1530,6 @@
         
         if (selectedPaymentMethod === 'cheque') {
             const chequeNumber = document.getElementById('chequeNumber').value.trim();
-            console.log("💰 Cheque number entered:", chequeNumber);
             if (!chequeNumber) {
                 alert('Please enter cheque number.');
                 return;
@@ -1364,8 +1543,6 @@
         console.log("✅ Final payment data - Method:", paymentMethodToUse, "Cheque:", chequeNumberToUse);
         
         closePaymentModal();
-        
-        // ✅ License check removed – proceed directly to sale
         await executeSaleWithPayment(paymentMethodToUse, chequeNumberToUse);
     });
 
@@ -1406,7 +1583,6 @@
     // ---------- Online/Offline refresh ----------
     window.addEventListener('online', function() {
         loadProducts();
-        // Check for pending sales and prompt sync
         if (typeof getPendingCount === 'function') {
             getPendingCount().then(count => {
                 if (count > 0) {
@@ -1421,7 +1597,7 @@
         }
     });
      
-    // ---------- One-time notice for revived Sales page ----------
+    // ---------- One-time notice ----------
     (function() {
         const notice = document.getElementById('salesReviveNotice');
         const dismissBtn = document.getElementById('dismissNotice');
@@ -1446,7 +1622,6 @@
         if (typeof updatePendingBadge === 'function') updatePendingBadge();
         setDefaultDateTime();
         
-        // Check for pending sales
         if (typeof getPendingCount === 'function') {
             getPendingCount().then(count => {
                 if (count > 0) {

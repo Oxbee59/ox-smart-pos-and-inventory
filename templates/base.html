@@ -1526,5 +1526,169 @@
         };
     })();
 </script>
+
+<!-- ============================================================ -->
+<!-- BATCH PRICE-GROUPING HELPERS (shared by Products & Sales)    -->
+<!-- ============================================================ -->
+<script>
+(function () {
+    'use strict';
+
+    // ------------------------------------------------------------
+    // batchGoodStock(batch)
+    // Clamp remaining - claimed at 0. Reused everywhere a "good"
+    // figure appears so the number is always consistent.
+    // ------------------------------------------------------------
+    function batchGoodStock(batch) {
+        if (!batch) return 0;
+        const rem = parseInt(batch.remaining_quantity || 0, 10);
+        const claimed = parseInt(batch.claimed_quantity || 0, 10);
+        return Math.max(rem - claimed, 0);
+    }
+
+    // ------------------------------------------------------------
+    // batchRealSold(batch)
+    // Prefer API's sold_quantity (from sales_items). Fall back to
+    // quantity - remaining for stale Dexie caches. Never includes
+    // claimed units. Same rule used across Products, Sales, Purchases.
+    // ------------------------------------------------------------
+    function batchRealSold(batch) {
+        if (!batch) return 0;
+        if (typeof batch.sold_quantity === 'number') return batch.sold_quantity;
+        const qty = parseInt(batch.quantity || 0, 10);
+        const rem = parseInt(batch.remaining_quantity || 0, 10);
+        return Math.max(qty - rem, 0);
+    }
+
+    // ------------------------------------------------------------
+    // roundMoney(v)
+    // Rounds to 2dp as a number. Used as the grouping key so that
+    // float drift (12.0000001 vs 12) never splits a group.
+    // ------------------------------------------------------------
+    function roundMoney(v) {
+        const n = parseFloat(v);
+        if (isNaN(n)) return 0;
+        return Math.round(n * 100) / 100;
+    }
+
+    // ------------------------------------------------------------
+    // groupBatchesByPrice(batches)
+    //
+    // Groups an array of batch objects by (cost_price, selling_price).
+    // Returns an array of group objects:
+    //
+    //   {
+    //     key: "12|25",
+    //     cost_price: 12,
+    //     selling_price: 25,
+    //     batches: [ <real batch>, ... ],   // newest first
+    //     totals: { quantity, remaining, claimed, sold, good }
+    //   }
+    //
+    // Groups are sorted by cost then selling.
+    //
+    // Groups are DISPLAY-ONLY. They carry no `batch_id`. Every edit,
+    // delete, or sale must resolve back to a real batch in `batches`.
+    // ------------------------------------------------------------
+    function groupBatchesByPrice(batches) {
+        if (!Array.isArray(batches) || batches.length === 0) return [];
+
+        const map = new Map();
+        for (const b of batches) {
+            if (!b) continue;
+            const cost = roundMoney(b.cost_price);
+            const sell = roundMoney(b.selling_price);
+            const key = cost + '|' + sell;
+
+            if (!map.has(key)) {
+                map.set(key, {
+                    key,
+                    cost_price: cost,
+                    selling_price: sell,
+                    batches: [],
+                    totals: { quantity: 0, remaining: 0, claimed: 0, sold: 0, good: 0 }
+                });
+            }
+            const g = map.get(key);
+            g.batches.push(b);
+
+            g.totals.quantity  += parseInt(b.quantity || 0, 10);
+            g.totals.remaining += parseInt(b.remaining_quantity || 0, 10);
+            g.totals.claimed   += parseInt(b.claimed_quantity || 0, 10);
+            g.totals.sold      += batchRealSold(b);
+        }
+
+        for (const g of map.values()) {
+            g.totals.good = Math.max(g.totals.remaining - g.totals.claimed, 0);
+            // Newest first — matches existing renderBatchList sort behaviour.
+            g.batches.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+        }
+
+        return [...map.values()].sort((a, b) =>
+            (a.cost_price - b.cost_price) || (a.selling_price - b.selling_price)
+        );
+    }
+
+    // ------------------------------------------------------------
+    // fifoPickFromGroup(group, qty)
+    //
+    // Splits `qty` units across a group's real batches, oldest first.
+    // Only draws from batches that have good stock (remaining-claimed>0).
+    //
+    // Returns: [ { batch_id, qty, batch }, ... ]
+    // Throws:  if the group can't cover the requested qty.
+    //
+    // This is the ONLY place that maps a display-group quantity back to
+    // real batch_ids. Sales must always go through this before sending
+    // to /api/sales/complete.
+    // ------------------------------------------------------------
+    function fifoPickFromGroup(group, qty) {
+        const need0 = parseInt(qty || 0, 10);
+        if (need0 <= 0) return [];
+        if (!group || !Array.isArray(group.batches) || group.batches.length === 0) {
+            throw new Error('fifoPickFromGroup: empty group');
+        }
+
+        // Sort a shallow copy oldest-first for FIFO consumption.
+        const ordered = [...group.batches].sort(
+            (a, b) => new Date(a.date || 0) - new Date(b.date || 0)
+        );
+
+        let need = need0;
+        const picks = [];
+        for (const b of ordered) {
+            if (need <= 0) break;
+            const good = batchGoodStock(b);
+            if (good <= 0) continue;
+            const take = Math.min(good, need);
+            picks.push({
+                batch_id: b.batch_id || b.id,
+                qty: take,
+                batch: b
+            });
+            need -= take;
+        }
+
+        if (need > 0) {
+            throw new Error(
+                'fifoPickFromGroup: short by ' + need + ' unit(s) ' +
+                '(requested ' + need0 + ', available ' + (need0 - need) + ')'
+            );
+        }
+        return picks;
+    }
+
+    // ------------------------------------------------------------
+    // Exports
+    // ------------------------------------------------------------
+    window.batchGoodStock     = batchGoodStock;
+    window.batchRealSold      = batchRealSold;
+    window.roundMoney         = roundMoney;
+    window.groupBatchesByPrice = groupBatchesByPrice;
+    window.fifoPickFromGroup  = fifoPickFromGroup;
+
+    console.log('✅ Batch grouping helpers loaded');
+})();
+</script>
 </body>
 </html>
