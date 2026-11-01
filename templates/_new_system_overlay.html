@@ -1,6 +1,6 @@
 <!-- ============================================================ -->
 <!-- NEW SYSTEM PROMO OVERLAY (added v_new)                        -->
-<!-- Auto-shows on load · auto-hides after 8s · recurs every 3min  -->
+<!-- Auto-shows on load · stays until dismissed · recurs every 5min  -->
 <!-- X button closes permanently (localStorage)                    -->
 <!-- ============================================================ -->
 <div id="ox-new-overlay" class="ox-new-overlay" role="dialog" aria-modal="true" aria-labelledby="ox-new-title">
@@ -21,7 +21,7 @@
         </ul>
         <button class="ox-new-overlay-go">🚀 View the New System</button>
         <button class="ox-new-overlay-continue">Continue with Old System</button>
-        <div class="ox-new-overlay-hint">💡 Click × or Continue to dismiss (returns every 3 min)</div>
+        <div class="ox-new-overlay-hint">💡 Click × or Continue to dismiss (returns every 5 min)</div>
     </div>
 </div>
 
@@ -160,7 +160,7 @@
 (function() {
     'use strict';
     var SHOW_MS = 8000;      // visible for 8 seconds
-    var CYCLE_MS = 180000;   // recur every 3 minutes
+    var CYCLE_MS = 300000;   // recur every 5 minutes
     var overlay = document.getElementById('ox-new-overlay');
     if (!overlay) return;
 
@@ -170,7 +170,6 @@
     function show() {
         overlay.classList.add('show');
         clearTimeout(hideTimer);
-        hideTimer = setTimeout(hide, SHOW_MS);
     }
     function hide() {
         overlay.classList.remove('show');
