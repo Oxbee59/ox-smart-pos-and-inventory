@@ -21,7 +21,7 @@
         </ul>
         <button class="ox-new-overlay-go">🚀 View the New System</button>
         <button class="ox-new-overlay-continue">Continue with Old System</button>
-        <div class="ox-new-overlay-hint">💡 Click × to close this permanently</div>
+        <div class="ox-new-overlay-hint">💡 Click × or Continue to dismiss (returns every 3 min)</div>
     </div>
 </div>
 
@@ -159,12 +159,10 @@
 <script>
 (function() {
     'use strict';
-    var OFF_KEY = 'ox_new_overlay_off';
     var SHOW_MS = 8000;      // visible for 8 seconds
     var CYCLE_MS = 180000;   // recur every 3 minutes
     var overlay = document.getElementById('ox-new-overlay');
     if (!overlay) return;
-    if (localStorage.getItem(OFF_KEY) === '1') return;
 
     var hideTimer = null;
     var cycleTimer = null;
@@ -178,14 +176,9 @@
         overlay.classList.remove('show');
         clearTimeout(hideTimer);
     }
-    function closePermanent() {
-        hide();
-        clearInterval(cycleTimer);
-        try { localStorage.setItem(OFF_KEY, '1'); } catch (e) {}
-    }
 
     var xBtn = overlay.querySelector('.ox-new-overlay-x');
-    if (xBtn) xBtn.onclick = closePermanent;
+    if (xBtn) xBtn.onclick = hide;
 
     var goBtn = overlay.querySelector('.ox-new-overlay-go');
     if (goBtn) goBtn.onclick = function() {
