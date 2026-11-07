@@ -5,6 +5,7 @@ import os
 import uuid
 import threading
 from flask import send_from_directory
+from flask import abort
 
 # ---------- IMPORT PURCHASE SERVICES ----------
 from services.purchase_service import (
@@ -439,7 +440,20 @@ def archive():
 def admin_users():
     return render_template("admin_users.html")
 
-# ===================== CLAIMS ROUTES =====================
+
+@app.route('/herbal-shop')
+@login_required
+def herbal_shop():
+    # Security check: Only allow admins or the sysadmin (oxbee)
+    role = session.get('role')
+    username = session.get('username', '').lower()
+    
+    if role != 'admin' and username != 'oxbee':
+        return render_template("error.html", message="Admin access required"), 403
+        
+    return render_template('herbal_shop.html')
+# ===================== CLAIMS ROUTES =====================#
+
 @app.route('/claims')
 @login_required
 def claims_page():
