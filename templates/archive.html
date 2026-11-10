@@ -1,4 +1,4 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
 
 {% block content %}
 <!-- Offline banner -->
@@ -8,14 +8,14 @@
 
 <!-- Header & Filter + Search -->
 <div class="flex flex-wrap justify-between items-center gap-4 mb-6">
-    <h1 class="text-3xl font-bold text-indigo-600">📁 Product Archive</h1>
+    <h1 class="text-3xl font-bold text-[#1B5E20]">📁 Product Archive</h1>
     <div class="flex flex-wrap items-center gap-3">
         <div>
             <input type="text" id="searchInput" placeholder="🔍 Search product/brand..." 
-                   class="border border-gray-300 rounded-lg px-3 py-2 w-48 md:w-64">
+                   class="border border-gray-300 rounded-lg px-3 py-2 w-48 md:w-64 focus:border-[#2E7D32] focus:ring-1 focus:ring-[#2E7D32] outline-none">
         </div>
         <label class="text-gray-700">Filter:</label>
-        <select id="statusFilter" class="border border-gray-300 rounded-lg px-3 py-2 bg-white">
+        <select id="statusFilter" class="border border-gray-300 rounded-lg px-3 py-2 bg-white focus:border-[#2E7D32] outline-none">
             <option value="ALL">ALL</option>
             <option value="ACTIVE">ACTIVE</option>
             <option value="UPDATED">UPDATED</option>
@@ -24,7 +24,7 @@
             <option value="BATCH DELETED">BATCH DELETED</option>
             <option value="PERMANENTLY DELETED">PERMANENTLY DELETED</option>
         </select>
-        <button onclick="resetAndLoad()" class="bg-teal-500 hover:bg-teal-600 text-white px-3 py-2 rounded-lg text-sm flex items-center gap-1">
+        <button onclick="resetAndLoad()" class="bg-[#2E7D32] hover:bg-[#1B5E20] text-white px-3 py-2 rounded-lg text-sm flex items-center gap-1 font-medium transition">
             <i class="fas fa-sync-alt"></i> Refresh
         </button>
     </div>
@@ -45,35 +45,35 @@
 
 <!-- Load More Button -->
 <div id="loadMoreContainer" class="text-center mt-6 hidden">
-    <button id="loadMoreBtn" class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg transition-colors flex items-center gap-2 mx-auto">
+    <button id="loadMoreBtn" class="bg-[#2E7D32] hover:bg-[#1B5E20] text-white px-6 py-2 rounded-lg transition-colors flex items-center gap-2 mx-auto font-medium">
         <i class="fas fa-chevron-down"></i> Load More
     </button>
 </div>
 
 <!-- Modal: View Batches -->
 <div id="batchModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
-    <div class="bg-white rounded-xl shadow-xl w-11/12 max-w-2xl max-h-[80vh] overflow-y-auto">
+    <div class="bg-white rounded-xl shadow-xl w-11/12 max-w-2xl max-h-[80vh] overflow-y-auto border border-[#E8F5E9]">
         <div class="sticky top-0 bg-white p-4 border-b flex justify-between items-center">
-            <h3 class="text-xl font-bold" id="batchModalTitle">Batches</h3>
+            <h3 class="text-xl font-bold text-[#1B5E20]" id="batchModalTitle">Batches</h3>
             <button onclick="closeBatchModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
         </div>
         <div id="batchList" class="p-4 space-y-3"></div>
         <div class="sticky bottom-0 bg-white p-4 border-t text-right">
-            <button onclick="closeBatchModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded">Close</button>
+            <button onclick="closeBatchModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded transition">Close</button>
         </div>
     </div>
 </div>
 
 <!-- Modal: View Claims -->
 <div id="claimsModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
-    <div class="bg-white rounded-xl shadow-xl w-11/12 max-w-2xl max-h-[80vh] overflow-y-auto">
+    <div class="bg-white rounded-xl shadow-xl w-11/12 max-w-2xl max-h-[80vh] overflow-y-auto border border-[#E8F5E9]">
         <div class="sticky top-0 bg-white p-4 border-b flex justify-between items-center">
-            <h3 class="text-xl font-bold" id="claimsModalTitle">Claims</h3>
+            <h3 class="text-xl font-bold text-[#1B5E20]" id="claimsModalTitle">Claims</h3>
             <button onclick="closeClaimsModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
         </div>
         <div id="claimsList" class="p-4 space-y-3"></div>
         <div class="sticky bottom-0 bg-white p-4 border-t text-right">
-            <button onclick="closeClaimsModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded">Close</button>
+            <button onclick="closeClaimsModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded transition">Close</button>
         </div>
     </div>
 </div>
@@ -100,17 +100,14 @@
         async function getCacheTable() {
             if (!db) return null;
             try {
-                // Try to get the cache table
                 return db.cache || db.table('cache');
             } catch (e) {
                 return null;
             }
         }
 
-        // Generic cache functions
         async function putCache(key, value) {
             if (!db) {
-                // Fallback to localStorage
                 try {
                     localStorage.setItem(key, JSON.stringify({ data: value, timestamp: Date.now() }));
                 } catch (e) {}
@@ -121,7 +118,6 @@
                 if (table) {
                     await table.put({ key, value, timestamp: Date.now() });
                 } else {
-                    // Fallback to localStorage
                     localStorage.setItem(key, JSON.stringify({ data: value, timestamp: Date.now() }));
                 }
             } catch (e) {
@@ -131,7 +127,6 @@
         }
 
         async function getCache(key) {
-            // Try Dexie first
             if (db) {
                 try {
                     const table = await getCacheTable();
@@ -142,7 +137,6 @@
                             if (age < CACHE_MAX_AGE) {
                                 return entry.value;
                             } else {
-                                // Stale – remove
                                 await table.delete(key);
                                 return null;
                             }
@@ -152,7 +146,6 @@
                     console.warn('Cache read failed', e);
                 }
             }
-            // Fallback to localStorage
             try {
                 const raw = localStorage.getItem(key);
                 if (!raw) return null;
@@ -185,12 +178,10 @@
         let hasMore = true;
         const PER_PAGE = 50;
 
-        // Helper: format currency
         function formatMoney(amount) {
             return '₵' + (parseFloat(amount) || 0).toFixed(2);
         }
 
-        // Helper: escape HTML
         function escapeHtml(str) {
             if (!str) return '';
             return str.replace(/[&<>]/g, function(m) {
@@ -201,10 +192,10 @@
             });
         }
 
-        // Get status color
+        // Get status color — only ACTIVE changed to herbal green; others kept semantic
         function getStatusColor(action) {
             const colors = {
-                'ACTIVE': '#22C55E',
+                'ACTIVE': '#2E7D32',
                 'UPDATED': '#F59E0B',
                 'DELETED': '#EF4444',
                 'PRODUCT DELETED': '#EF4444',
@@ -214,7 +205,6 @@
             return colors[action] || '#999';
         }
 
-        // Format date for display
         function formatDate(dateStr) {
             if (!dateStr) return '';
             try {
@@ -225,17 +215,16 @@
             }
         }
 
-        // Get claim status color
+        // Get claim status color — resolved → herbal green; active/pending kept semantic
         function getClaimStatusColor(status) {
             const colors = {
                 'active': '#EF4444',
-                'resolved': '#22C55E',
+                'resolved': '#2E7D32',
                 'pending': '#F59E0B'
             };
             return colors[status] || '#6B7280';
         }
 
-        // Reset and load from beginning
         function resetAndLoad() {
             currentPage = 1;
             allItems = [];
@@ -243,7 +232,6 @@
             loadArchive(true);
         }
 
-        // Load archive data: Dexie-first, background refresh
         async function loadArchive(reset = true) {
             if (isLoading) return;
             isLoading = true;
@@ -270,29 +258,24 @@
             let data = null;
             let fromCache = false;
 
-            // 1. Always try cache first
             data = await getCache(cacheKey);
             if (data && data.items && data.items.length > 0) {
                 fromCache = true;
-                // Use cached data but don't stop – we'll refresh in background if online
                 applyData(data);
             }
 
-            // 2. If online, fetch fresh data and update cache
             if (navigator.onLine) {
                 try {
                     const url = `/api/archive?status=${status}&page=${currentPage}&per_page=${PER_PAGE}&search=${encodeURIComponent(searchTerm)}`;
                     const res = await fetch(url);
                     if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
                     data = await res.json();
-                    // Store in cache
                     await putCache(cacheKey, data);
                     fromCache = false;
                     applyData(data);
                 } catch (error) {
                     console.warn('API failed, using cached data if available', error);
                     if (!data) {
-                        // No cache and API failed – show error
                         const container = document.getElementById('archiveList');
                         container.innerHTML = `
                             <div class="text-center text-red-500 py-8">
@@ -304,7 +287,6 @@
                     }
                 }
             } else if (!data) {
-                // Offline and no cache
                 const container = document.getElementById('archiveList');
                 container.innerHTML = `
                     <div class="text-center text-gray-400 py-8">
@@ -318,15 +300,12 @@
             isLoading = false;
         }
 
-        // Apply data to UI (reusable)
         function applyData(data) {
             if (data && data.items && data.items.length > 0) {
-                // Update pagination info
                 totalItems = data.total || 0;
                 totalPages = data.total_pages || 1;
                 hasMore = data.has_more || false;
                 
-                // Append items
                 if (currentPage === 1) {
                     allItems = data.items || [];
                 } else {
@@ -352,12 +331,7 @@
                         container.appendChild(note);
                     }
                 }
-                // Show offline note if from cache
-                if (!navigator.onLine || (data._fromCache)) {
-                    // We'll rely on the offline banner instead
-                }
             } else {
-                // No data
                 const container = document.getElementById('archiveList');
                 container.innerHTML = `
                     <div class="text-center text-gray-400 py-8">
@@ -369,17 +343,14 @@
             }
         }
 
-        // Load more items
         function loadMore() {
             if (!hasMore || isLoading) return;
             currentPage++;
             loadArchive(false);
         }
 
-        // Render cards
         function renderArchive(items) {
             const container = document.getElementById('archiveList');
-            // Keep the "Load More" container separate, we'll re-append it later
             const loadMoreContainer = document.getElementById('loadMoreContainer');
             
             if (!items || !items.length) {
@@ -393,11 +364,9 @@
                 return;
             }
 
-            // If we're on page 1, clear and rebuild
             if (currentPage === 1) {
                 container.innerHTML = '';
             } else {
-                // Remove any "all loaded" message if present
                 const notes = container.querySelectorAll('.text-xs.text-gray-400.text-center.mt-2');
                 notes.forEach(n => n.remove());
             }
@@ -406,9 +375,8 @@
             
             items.forEach(item => {
                 const card = document.createElement('div');
-                card.className = 'bg-white rounded-xl shadow-md border p-4';
+                card.className = 'bg-white rounded-xl shadow-md border border-[#E8F5E9] p-4';
 
-                // Header row with claims badge
                 const headerDiv = document.createElement('div');
                 headerDiv.className = 'flex justify-between items-start mb-2';
                 
@@ -419,7 +387,7 @@
                 
                 headerDiv.innerHTML = `
                     <div>
-                        <span class="font-bold text-lg text-indigo-700">${escapeHtml(item.name)} (${escapeHtml(item.brand)})</span>
+                        <span class="font-bold text-lg text-[#1B5E20]">${escapeHtml(item.name)} (${escapeHtml(item.brand)})</span>
                         ${claimsBadge}
                     </div>
                     <div>
@@ -428,7 +396,6 @@
                 `;
                 card.appendChild(headerDiv);
 
-                // Details
                 const detailsDiv = document.createElement('div');
                 detailsDiv.className = 'text-gray-700 text-sm mb-3';
                 if (item.action === 'ACTIVE') {
@@ -455,11 +422,9 @@
                 }
                 card.appendChild(detailsDiv);
 
-                // Buttons
                 const btnDiv = document.createElement('div');
                 btnDiv.className = 'flex justify-end gap-2 flex-wrap';
                 
-                // View Claims button (if has claims)
                 if (item.has_claims && item.claims && item.claims.length > 0) {
                     const claimsBtn = document.createElement('button');
                     claimsBtn.textContent = `⚠️ View Claims (${item.total_claimed})`;
@@ -468,16 +433,14 @@
                     btnDiv.appendChild(claimsBtn);
                 }
                 
-                // View Batches button for ACTIVE items
                 if (item.action === 'ACTIVE') {
                     const viewBtn = document.createElement('button');
                     viewBtn.textContent = '📋 View Batches';
-                    viewBtn.className = 'bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm transition-colors';
+                    viewBtn.className = 'bg-[#2E7D32] hover:bg-[#1B5E20] text-white px-3 py-1 rounded text-sm transition-colors';
                     viewBtn.onclick = () => viewBatches(item.name, item.brand);
                     btnDiv.appendChild(viewBtn);
                 }
                 
-                // Restore button logic
                 const canRestore = ['DELETED', 'BATCH DELETED', 'PRODUCT DELETED'].includes(item.action);
                 const isPermanent = item.action === 'PERMANENTLY DELETED';
                 
@@ -490,13 +453,13 @@
                 } else if (canRestore && item.id && !item.is_permanent) {
                     const restoreBtn = document.createElement('button');
                     restoreBtn.textContent = '↻ Restore';
-                    restoreBtn.className = 'bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm transition-colors';
+                    restoreBtn.className = 'bg-[#2E7D32] hover:bg-[#1B5E20] text-white px-3 py-1 rounded text-sm transition-colors';
                     restoreBtn.onclick = () => restoreItem(item.id);
                     btnDiv.appendChild(restoreBtn);
                 } else if (item.action === 'UPDATED') {
                     const infoBtn = document.createElement('button');
                     infoBtn.textContent = 'ℹ️ Update History';
-                    infoBtn.className = 'bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-sm transition-colors';
+                    infoBtn.className = 'bg-amber-500 hover:bg-amber-600 text-white px-3 py-1 rounded text-sm transition-colors';
                     infoBtn.onclick = () => alert('This is an update history record.\n\nIt tracks changes made to products and cannot be restored.\n\n✅ The actual product is still active in inventory.');
                     btnDiv.appendChild(infoBtn);
                 }
@@ -507,7 +470,6 @@
 
             container.appendChild(fragment);
             
-            // Show "all loaded" message if we're done
             if (!hasMore && allItems.length > 0 && allItems.length === totalItems) {
                 const note = document.createElement('div');
                 note.className = 'text-xs text-gray-400 text-center mt-2';
@@ -516,7 +478,6 @@
             }
         }
 
-        // View Claims modal
         function viewClaims(claims, productName, brand) {
             const modalTitle = document.getElementById('claimsModalTitle');
             const container = document.getElementById('claimsList');
@@ -532,7 +493,7 @@
             container.innerHTML = '';
             claims.forEach(claim => {
                 const div = document.createElement('div');
-                div.className = 'border rounded p-3 mb-2';
+                div.className = 'border border-[#E8F5E9] rounded p-3 mb-2';
                 const statusColor = getClaimStatusColor(claim.status);
                 div.innerHTML = `
                     <div class="flex justify-between items-start">
@@ -560,7 +521,6 @@
             document.getElementById('claimsModal').classList.add('hidden');
         }
 
-        // View batches modal (with Dexie caching)
         async function viewBatches(name, brand) {
             const modalTitle = document.getElementById('batchModalTitle');
             const container = document.getElementById('batchList');
@@ -572,14 +532,12 @@
             let batches = [];
             let fromCache = false;
 
-            // 1. Try cache first
             batches = await getCache(cacheKey);
             if (batches) {
                 fromCache = true;
                 renderBatches(batches);
             }
 
-            // 2. If online, fetch fresh
             if (navigator.onLine) {
                 try {
                     const res = await fetch(`/api/archive/batches?name=${encodeURIComponent(name)}&brand=${encodeURIComponent(brand)}`);
@@ -593,12 +551,10 @@
                 } catch (error) {
                     console.warn('Batch API failed, using cached data if available', error);
                     if (!batches || batches.length === 0) {
-                        // No cache and API failed
                         container.innerHTML = '<div class="text-gray-400 text-center py-4">Failed to load batches. Please try again.</div>';
                     }
                 }
             } else if (!batches || batches.length === 0) {
-                // Offline and no cache
                 container.innerHTML = '<div class="text-gray-400 text-center py-4">No cached batch data available offline.</div>';
             }
         }
@@ -612,7 +568,7 @@
             container.innerHTML = '';
             batches.forEach(b => {
                 const div = document.createElement('div');
-                div.className = 'border rounded p-2 mb-2';
+                div.className = 'border border-[#E8F5E9] rounded p-2 mb-2';
                 const faultyBadge = (b.is_faulty || b.claimed_quantity > 0) 
                     ? `<span class="text-red-500 text-xs font-bold ml-2">⚠️ FAULTY (${b.claimed_quantity || 0} claimed)</span>` 
                     : '';
@@ -624,7 +580,6 @@
                 `;
                 container.appendChild(div);
             });
-            // Show offline note if from cache
             if (!navigator.onLine) {
                 const note = document.createElement('div');
                 note.className = 'text-xs text-gray-400 text-center mt-2';
@@ -637,7 +592,6 @@
             document.getElementById('batchModal').classList.add('hidden');
         }
 
-        // Restore item (requires internet)
         async function restoreItem(archiveId) {
             if (!navigator.onLine) {
                 alert('Restoring requires internet. Please connect and try again.');
@@ -672,12 +626,10 @@
         });
         document.getElementById('loadMoreBtn').addEventListener('click', loadMore);
 
-        // Auto-refresh on reconnect
         window.addEventListener('online', function() {
             resetAndLoad();
         });
 
-        // Initial load
         resetAndLoad();
     });
 </script>

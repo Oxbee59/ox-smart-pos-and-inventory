@@ -3,56 +3,48 @@
 {% block content %}
 <!-- Offline banner -->
 <div id="offlineBanner" class="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded hidden">
-    ⚠️ You are offline – showing cached accessories. Sales will be saved and synced when you reconnect.
+    ⚠️ You are offline – showing cached products. Sales will be saved and synced when you reconnect.
 </div>
 
-<!-- One-time notice: Sales page revived -->
-<div id="salesReviveNotice" class="notice-banner" style="display: none;">
-    <div class="notice-content">
-        <span>🔄 <strong>Sales page revived!</strong> Further updates will continue later.</span>
-        <button id="dismissNotice" class="notice-close">&times;</button>
-    </div>
-</div>
-
-<!-- ✅ NEW: Gentle Loading Products Prompt -->
-<div id="loadingProductsPrompt" class="mb-4 bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded-lg flex items-center gap-3">
+<!-- Gentle Loading Products Prompt -->
+<div id="loadingProductsPrompt" class="mb-4 bg-[#E8F5E9] border border-[#2E7D32] text-[#1B5E20] px-4 py-3 rounded-lg flex items-center gap-3">
     <div class="flex-shrink-0">
         <div class="spinner-border" role="status">
             <span class="sr-only">Loading...</span>
         </div>
     </div>
     <div class="flex-1">
-        <div class="font-semibold">⏳ Loading accessories...</div>
-        <div class="text-xs text-blue-600 mt-0.5" id="loadingProductsMessage">
+        <div class="font-semibold" id="loadingProductsTitle">⏳ Loading products...</div>
+        <div class="text-xs text-[#2E7D32] mt-0.5" id="loadingProductsMessage">
             Fetching products and batches from server
         </div>
     </div>
-    <div class="text-xs text-blue-500 font-mono" id="loadingProductsElapsed">0.0s</div>
+    <div class="text-xs text-[#1B5E20] font-mono" id="loadingProductsElapsed">0.0s</div>
 </div>
 
-<!-- ✅ NEW: Success Prompt (hidden by default) -->
-<div id="loadingSuccessPrompt" class="mb-4 bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg hidden">
+<!-- Success Prompt (hidden by default) -->
+<div id="loadingSuccessPrompt" class="mb-4 bg-[#E8F5E9] border border-[#2E7D32] text-[#1B5E20] px-4 py-3 rounded-lg hidden">
     <div class="flex items-center justify-between gap-3">
         <div class="flex items-center gap-3">
-            <i class="fas fa-check-circle text-green-600 text-xl"></i>
+            <i class="fas fa-check-circle text-[#2E7D32] text-xl"></i>
             <div>
-                <div class="font-semibold" id="loadingSuccessTitle">✅ Accessories loaded</div>
-                <div class="text-xs text-green-600 mt-0.5" id="loadingSuccessDetail"></div>
+                <div class="font-semibold" id="loadingSuccessTitle">✅ Products loaded</div>
+                <div class="text-xs text-[#2E7D32] mt-0.5" id="loadingSuccessDetail"></div>
             </div>
         </div>
-        <button onclick="hideSuccessPrompt()" class="text-green-600 hover:text-green-800 text-xl leading-none">&times;</button>
+        <button onclick="hideSuccessPrompt()" class="text-[#2E7D32] hover:text-[#1B5E20] text-xl leading-none">&times;</button>
     </div>
 </div>
 
-<!-- No accessories banner -->
-<div id="noProductsBanner" class="mb-4 bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded hidden">
-    <strong>⚠️ No accessories found.</strong><br>
-    Please ensure your inventory imports are correctly categorised as <strong>Accessories</strong> (not Screens).
+<!-- No products banner -->
+<div id="noProductsBanner" class="mb-4 bg-amber-50 border border-amber-400 text-amber-800 px-4 py-3 rounded hidden">
+    <strong id="noProductsBannerTitle">⚠️ No products found.</strong><br>
+    <span id="noProductsBannerHint">Please ensure your inventory imports are correctly categorised.</span>
     <br><br>
-    <a href="/inventory/import" class="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded inline-block">
+    <a href="/inventory/import" class="bg-[#2E7D32] hover:bg-[#1B5E20] text-white px-4 py-2 rounded inline-block font-medium transition">
         📥 Go to Import Page
     </a>
-    <button onclick="refreshProducts()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded ml-2">
+    <button onclick="refreshProducts()" class="bg-[#2E7D32] hover:bg-[#1B5E20] text-white px-4 py-2 rounded ml-2 font-medium transition">
         🔄 Refresh
     </button>
 </div>
@@ -61,54 +53,55 @@
 <div class="flex flex-wrap -mx-4">
     <!-- LEFT PANEL: Products & Form -->
     <div class="w-full lg:w-1/2 px-4 mb-6">
-        <div class="bg-white rounded-xl shadow-md p-4">
+        <div class="bg-white rounded-xl shadow-md p-4 border border-[#E8F5E9]">
             <div class="flex items-center gap-2 mb-2">
-                <h2 class="text-xl font-bold text-indigo-600">🛒 Sales Terminal</h2>
-                <span class="bg-green-100 text-green-800 text-xs font-semibold px-2.5 py-0.5 rounded">Accessories</span>
-                <span id="productCountBadge" class="bg-indigo-100 text-indigo-800 text-xs font-semibold px-2.5 py-0.5 rounded hidden"></span>
+                <h2 class="text-xl font-bold text-[#1B5E20]">🛒 Sales Terminal</h2>
+                <span class="bg-[#E8F5E9] text-[#1B5E20] text-xs font-semibold px-2.5 py-0.5 rounded" id="salesGroupBadge">Others</span>
+                <span id="productCountBadge" class="bg-[#E8F5E9] text-[#1B5E20] text-xs font-semibold px-2.5 py-0.5 rounded hidden"></span>
             </div>
-            
-            <input type="text" id="searchProduct" placeholder="🔍 Search accessory..." 
-                   class="w-full border border-gray-300 rounded-lg px-3 py-2 mb-3">
-            
+
+            <input type="text" id="searchProduct"
+                   placeholder="🔍 Search product..."
+                   class="w-full border border-gray-300 rounded-lg px-3 py-2 mb-3 focus:border-[#2E7D32] focus:ring-1 focus:ring-[#2E7D32] outline-none">
+
             <div id="productList" class="max-h-80 overflow-y-auto border rounded-lg p-2 mb-4"></div>
-            
-            <div id="selectedProductInfo" class="text-gray-600 text-sm mb-2">No accessory selected</div>
-            
+
+            <div id="selectedProductInfo" class="text-gray-600 text-sm mb-2">No product selected</div>
+
             <div class="grid grid-cols-2 gap-3 mb-3">
-                <input type="number" id="quantity" placeholder="Quantity" class="border rounded-lg px-3 py-2">
-                <input type="number" step="0.01" id="discount" placeholder="Discount (₵)" class="border rounded-lg px-3 py-2">
+                <input type="number" id="quantity" placeholder="Quantity" class="border rounded-lg px-3 py-2 focus:border-[#2E7D32] outline-none">
+                <input type="number" step="0.01" id="discount" placeholder="Discount (₵)" class="border rounded-lg px-3 py-2 focus:border-[#2E7D32] outline-none">
             </div>
-            
+
             <div class="mb-3">
                 <label class="block text-sm font-medium text-gray-700">Sale Date</label>
-                <input type="date" id="saleDate" class="border rounded-lg px-3 py-2 w-full">
+                <input type="date" id="saleDate" class="border rounded-lg px-3 py-2 w-full focus:border-[#2E7D32] outline-none">
             </div>
             <div class="mb-3">
                 <label class="block text-sm font-medium text-gray-700">Sale Time (HH:MM with AM/PM or 24h)</label>
-                <input type="text" id="saleTime" placeholder="e.g. 2:30 PM or 14:30" 
-                       class="border rounded-lg px-3 py-2 w-full">
+                <input type="text" id="saleTime" placeholder="e.g. 2:30 PM or 14:30"
+                       class="border rounded-lg px-3 py-2 w-full focus:border-[#2E7D32] outline-none">
             </div>
-            
-            <button id="addToCartBtn" class="w-full bg-teal-500 hover:bg-teal-600 text-white py-2 rounded-lg">
+
+            <button id="addToCartBtn" class="w-full bg-[#2E7D32] hover:bg-[#1B5E20] text-white py-2 rounded-lg font-medium transition">
                 ➕ Add to Cart
             </button>
         </div>
     </div>
-    
+
     <!-- RIGHT PANEL: Cart & Receipt -->
     <div class="w-full lg:w-1/2 px-4">
-        <div class="bg-white rounded-xl shadow-md p-4">
-            <h2 class="text-xl font-bold text-indigo-600 mb-3">🧾 Cart</h2>
+        <div class="bg-white rounded-xl shadow-md p-4 border border-[#E8F5E9]">
+            <h2 class="text-xl font-bold text-[#1B5E20] mb-3">🧾 Cart</h2>
             <div id="cartItems" class="max-h-96 overflow-y-auto border rounded-lg p-2 mb-4 space-y-3"></div>
             <div class="mb-3 text-right">
                 <span class="text-lg font-bold">Grand Total: </span>
-                <span id="grandTotal" class="text-2xl font-bold text-green-600">₵0.00</span>
+                <span id="grandTotal" class="text-2xl font-bold text-[#2E7D32]">₵0.00</span>
             </div>
-            <button id="completeSaleBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg mb-3">
+            <button id="completeSaleBtn" class="w-full bg-[#2E7D32] hover:bg-[#1B5E20] text-white py-2 rounded-lg mb-3 font-medium transition">
                 💳 Complete Sale
             </button>
-            <button id="printReceiptBtn" class="w-full bg-gray-600 hover:bg-gray-700 text-white py-2 rounded-lg mb-3" disabled>
+            <button id="printReceiptBtn" class="w-full bg-gray-600 hover:bg-gray-700 text-white py-2 rounded-lg mb-3 transition" disabled>
                 🖨 Print Receipt
             </button>
             <div id="receiptPreview" class="border rounded-lg p-3 bg-gray-50 font-mono text-sm max-h-60 overflow-y-auto"></div>
@@ -118,11 +111,10 @@
 
 <!-- Batch / Tier Selection Modal -->
 <div id="batchModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
-    <div id="batchModalInner" class="bg-white rounded-xl shadow-xl w-11/12 max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-        <!-- Header -->
+    <div id="batchModalInner" class="bg-white rounded-xl shadow-xl w-11/12 max-w-4xl max-h-[90vh] overflow-hidden flex flex-col border border-[#E8F5E9]">
         <div class="flex-shrink-0 border-b bg-white">
             <div class="p-4 flex justify-between items-center">
-                <h3 class="text-xl font-bold" id="batchModalTitle">Select Price Tiers</h3>
+                <h3 class="text-xl font-bold text-[#1B5E20]" id="batchModalTitle">Select Price Tiers</h3>
                 <button onclick="closeBatchModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
             </div>
             <div class="px-4 pb-3 flex items-center justify-between text-xs flex-wrap gap-2">
@@ -134,22 +126,20 @@
             </div>
         </div>
 
-        <!-- Horizontally-scrollable wrapper for the 8-col grid -->
         <div id="batchListWrap" class="flex-1 overflow-y-auto overflow-x-auto min-h-0">
             <div id="batchList" class="p-4 space-y-3 min-w-[640px]"></div>
         </div>
 
-        <!-- Footer -->
         <div class="flex-shrink-0 bg-white p-4 border-t flex flex-wrap justify-between gap-3">
             <div class="flex flex-wrap gap-2">
-                <button onclick="selectAllBatches()" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm">Select All</button>
-                <button onclick="deselectAllBatches()" class="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1 rounded text-sm">Deselect All</button>
+                <button onclick="selectAllBatches()" class="bg-[#2E7D32] hover:bg-[#1B5E20] text-white px-3 py-1 rounded text-sm font-medium transition">Select All</button>
+                <button onclick="deselectAllBatches()" class="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1 rounded text-sm font-medium transition">Deselect All</button>
             </div>
             <div class="flex flex-wrap items-center gap-3">
                 <span id="assignedQty" class="text-sm font-bold">Assigned: 0</span>
                 <span id="remainingQty" class="text-sm font-bold">Remaining: 0</span>
-                <button onclick="confirmBatchSelection()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded text-sm">✓ Confirm</button>
-                <button onclick="closeBatchModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">Cancel</button>
+                <button onclick="confirmBatchSelection()" class="bg-[#2E7D32] hover:bg-[#1B5E20] text-white px-4 py-2 rounded text-sm font-medium transition">✓ Confirm</button>
+                <button onclick="closeBatchModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm transition">Cancel</button>
             </div>
         </div>
     </div>
@@ -157,11 +147,11 @@
 
 <!-- Payment Modal -->
 <div id="paymentModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
-    <div class="bg-white rounded-xl shadow-xl w-96 p-6">
-        <h3 class="text-xl font-bold mb-4">Select Payment Method</h3>
+    <div class="bg-white rounded-xl shadow-xl w-96 p-6 border border-[#E8F5E9]">
+        <h3 class="text-xl font-bold text-[#1B5E20] mb-4">Select Payment Method</h3>
         <div class="space-y-3">
             <button onclick="selectPayment('cash', event)" class="payment-option w-full text-left px-4 py-3 border rounded-lg hover:bg-gray-50 transition">
-                <span class="font-bold text-green-600">💵 Cash</span>
+                <span class="font-bold text-[#2E7D32]">💵 Cash</span>
                 <span class="text-sm text-gray-500 block">Pay with cash</span>
             </button>
             <button onclick="selectPayment('momo', event)" class="payment-option w-full text-left px-4 py-3 border rounded-lg hover:bg-gray-50 transition">
@@ -169,17 +159,17 @@
                 <span class="text-sm text-gray-500 block">Pay with MoMo (MTN, Vodafone, AirtelTigo)</span>
             </button>
             <button onclick="showChequeInput(event)" class="payment-option w-full text-left px-4 py-3 border rounded-lg hover:bg-gray-50 transition">
-                <span class="font-bold text-purple-600">📝 Cheque</span>
+                <span class="font-bold text-amber-600">📝 Cheque</span>
                 <span class="text-sm text-gray-500 block">Pay with cheque</span>
             </button>
         </div>
         <div id="chequeInputContainer" class="hidden mt-4">
             <label class="block text-sm font-medium text-gray-700">Cheque Number</label>
-            <input type="text" id="chequeNumber" placeholder="Enter cheque number" class="w-full border rounded-lg px-3 py-2 mt-1">
+            <input type="text" id="chequeNumber" placeholder="Enter cheque number" class="w-full border rounded-lg px-3 py-2 mt-1 focus:border-[#2E7D32] outline-none">
         </div>
         <div class="flex justify-end gap-3 mt-6">
-            <button id="cancelPaymentBtn" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded">Cancel</button>
-            <button id="confirmPaymentBtn" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">Confirm Sale</button>
+            <button id="cancelPaymentBtn" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded transition">Cancel</button>
+            <button id="confirmPaymentBtn" class="bg-[#2E7D32] hover:bg-[#1B5E20] text-white px-4 py-2 rounded font-medium transition">Confirm Sale</button>
         </div>
     </div>
 </div>
@@ -197,14 +187,13 @@
         font-size: 0.65rem;
     }
     .stock-total { background: #f3f4f6; }
-    .stock-sold { background: #dbeafe; }
+    .stock-sold { background: #E8F5E9; }   /* was #dbeafe (blue) → herbal */
     .stock-claimed { background: #fee2e2; }
     .stock-good { background: #d1fae5; }
     .batch-faulty { border-left: 3px solid #ef4444; background: #fef2f2; }
     .batch-good { border-left: 3px solid #22c55e; background: #f0fdf4; }
     .batch-warning { border-left: 3px solid #f59e0b; background: #fffbeb; }
 
-    /* ✅ Loading spinner animation */
     .spinner-border {
         display: inline-block;
         width: 1.25rem;
@@ -214,43 +203,21 @@
         border-right-color: transparent;
         border-radius: 50%;
         animation: spinner-border 0.75s linear infinite;
-        color: #2563eb;
+        color: #2E7D32;   /* was #2563eb (blue) */
     }
-    @keyframes spinner-border {
-        to { transform: rotate(360deg); }
-    }
+    @keyframes spinner-border { to { transform: rotate(360deg); } }
     .sr-only {
         position: absolute;
-        width: 1px;
-        height: 1px;
-        padding: 0;
-        margin: -1px;
-        overflow: hidden;
-        clip: rect(0, 0, 0, 0);
-        white-space: nowrap;
-        border: 0;
+        width: 1px; height: 1px;
+        padding: 0; margin: -1px;
+        overflow: hidden; clip: rect(0, 0, 0, 0);
+        white-space: nowrap; border: 0;
     }
 
-    /* Price-tier row highlight for groups containing faulty batches */
     .tier-faulty { background: #fef2f2 !important; }
     .tier-good { background: #f0fdf4 !important; }
+    .batch-row.selected { background: #E8F5E9 !important; }   /* herbal green */
 
-    /* Selected row emphasis */
-    .batch-row.selected { background: #ecfdf5 !important; }
-
-    /* ============================================================
-       Batch modal — layout (Tailwind-independent)
-
-       Guarantees:
-         • Modal fits in 90vh, never exceeds viewport
-         • Header (title + toggle) stays pinned at top
-         • Footer (Assign/Confirm/Cancel) stays pinned at bottom
-         • Only the middle batch list scrolls
-         • 8-col grid keeps its width via min-width on #batchList
-
-       Does NOT depend on any Tailwind arbitrary-value class being
-       present in the compiled bundle.
-       ============================================================ */
     #batchModal:not(.hidden) {
         display: flex !important;
         align-items: center !important;
@@ -271,11 +238,7 @@
         box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
         box-sizing: border-box;
     }
-    /* Header and footer are direct children marked .flex-shrink-0 */
-    #batchModalInner > .flex-shrink-0 {
-        flex: 0 0 auto !important;
-    }
-    /* Middle scrolls */
+    #batchModalInner > .flex-shrink-0 { flex: 0 0 auto !important; }
     #batchListWrap {
         flex: 1 1 0 !important;
         min-height: 0 !important;
@@ -289,9 +252,6 @@
         box-sizing: border-box;
     }
 
-    /* ============================================================
-       Mobile — full-screen modal (overrides the desktop 90vh cap)
-       ============================================================ */
     @media (max-width: 768px) {
         #batchModal { padding: 0 !important; }
         #batchModalInner {
@@ -301,26 +261,39 @@
             max-height: 100vh !important;
             border-radius: 0 !important;
         }
-        #batchList {
-            min-width: 620px !important;
-        }
+        #batchList { min-width: 620px !important; }
         #batchList input[type="number"] {
             width: 52px !important;
             padding: 3px 4px !important;
             font-size: 0.78rem;
         }
     }
-
     @media (max-width: 480px) {
-        #batchList {
-            min-width: 560px !important;
-        }
+        #batchList { min-width: 560px !important; }
         #batchModalTitle { font-size: 1rem !important; }
     }
 </style>
 
 <script>
-    // ---------- Sales JS (Accessories – excludes Screen) ----------
+    // ============================================================
+    //  GROUP CONFIGURATION — set by app.py when rendering
+    // ============================================================
+    const GROUP        = '{{ group|default("others") }}';
+    const OIL_CATS     = ['Spiritual Oils', 'Anointing Oils', 'Essential Oils'];
+    const NON_OIL_CATS = ['Tree Roots', 'Tree Barks', 'Leaves', 'Seeds'];
+
+    const GROUP_LABEL  = GROUP === 'oils' ? 'Oils' : 'Roots, Barks & Others';
+    const GROUP_BADGE  = GROUP === 'oils' ? 'Oils' : 'Others';
+
+    function isInGroup(category) {
+        const cat = (category || '').trim();
+        if (GROUP === 'oils') return OIL_CATS.includes(cat);
+        if (OIL_CATS.includes(cat)) return false;
+        if (cat === 'Screen') return false;
+        return true;
+    }
+
+    // ---------- Sales JS ----------
     let products = [];
     let currentProduct = null;
     let cart = [];
@@ -329,7 +302,6 @@
     let currentProductForBatch = null;
     let neededQty = 0;
 
-    // ── Selection state ──
     let individualBatchMode = false;
     let groupSelection = [];
     let batchSelection = [];
@@ -342,9 +314,7 @@
         return '₵' + amount.toFixed(2);
     }
 
-    // =============================================================
-    //  ✅ Loading prompt helpers
-    // =============================================================
+    // ---------- Loading prompt helpers ----------
     let loadingTimerInterval = null;
     let loadingStartTime = null;
 
@@ -353,17 +323,12 @@
         const msgEl = document.getElementById('loadingProductsMessage');
         const elapsedEl = document.getElementById('loadingProductsElapsed');
         const successPrompt = document.getElementById('loadingSuccessPrompt');
-        
         if (!prompt) return;
-        
         if (successPrompt) successPrompt.classList.add('hidden');
-        
         prompt.classList.remove('hidden');
         if (msgEl) msgEl.textContent = message;
-        
         loadingStartTime = Date.now();
         if (elapsedEl) elapsedEl.textContent = '0.0s';
-        
         if (loadingTimerInterval) clearInterval(loadingTimerInterval);
         loadingTimerInterval = setInterval(() => {
             if (loadingStartTime && elapsedEl) {
@@ -392,16 +357,11 @@
         const titleEl = document.getElementById('loadingSuccessTitle');
         const detailEl = document.getElementById('loadingSuccessDetail');
         if (!successPrompt) return;
-        
         hideLoadingPrompt();
-        
         if (titleEl) titleEl.textContent = title;
         if (detailEl) detailEl.textContent = detail;
         successPrompt.classList.remove('hidden');
-        
-        setTimeout(() => {
-            successPrompt.classList.add('hidden');
-        }, 4000);
+        setTimeout(() => successPrompt.classList.add('hidden'), 4000);
     }
 
     function hideSuccessPrompt() {
@@ -412,40 +372,31 @@
     // ---------- Offline banner ----------
     function updateOfflineBanner() {
         const banner = document.getElementById('offlineBanner');
-        if (!navigator.onLine) {
-            banner.classList.remove('hidden');
-        } else {
-            banner.classList.add('hidden');
-        }
+        if (!navigator.onLine) banner.classList.remove('hidden');
+        else banner.classList.add('hidden');
     }
     window.addEventListener('online', updateOfflineBanner);
     window.addEventListener('offline', updateOfflineBanner);
 
-    // ---------- Clear Offline Data (with Dexie) ----------
+    // ---------- Clear Offline Data ----------
     function clearOfflineData() {
         const keys = [
-            'pending_sales',
-            'offline_sales', 
+            'pending_sales', 'offline_sales',
             'sales_products_cache_accessories',
+            'sales_products_cache_oils',
             'sales_license_cache',
         ];
         keys.forEach(key => {
-            try {
-                localStorage.removeItem(key);
-                console.log('🗑️ Cleared:', key);
-            } catch(e) {}
+            try { localStorage.removeItem(key); } catch(e) {}
         });
-        const allKeys = Object.keys(localStorage);
-        allKeys.forEach(key => {
+        Object.keys(localStorage).forEach(key => {
             if (key.startsWith('batches_')) {
-                localStorage.removeItem(key);
-                console.log('🗑️ Cleared batch cache:', key);
+                try { localStorage.removeItem(key); } catch(e) {}
             }
         });
         if (db) {
             db.products.clear();
             db.batches.clear();
-            console.log('🗑️ Dexie products & batches cleared');
         }
         document.getElementById('receiptPreview').innerHTML = '';
         document.getElementById('printReceiptBtn').disabled = true;
@@ -475,22 +426,27 @@
 
         if (navigator.onLine) {
             try {
-                updateLoadingMessage('Fetching accessories from server...');
-                const res = await fetch('/api/sales/products?exclude_category=Screen');
+                updateLoadingMessage(`Fetching ${GROUP_LABEL} products from server...`);
+                const res = await fetch(`/api/sales/products?group=${GROUP}`);
                 if (res.ok) {
                     updateLoadingMessage('Parsing product data...');
                     const apiProds = await res.json();
-                    if (apiProds.length > 0) {
-                        updateLoadingMessage(`Caching ${apiProds.length} products locally...`);
-                        await storeProductsInDexie(apiProds);
-                        prods = apiProds.map(p => ({
+                    if (Array.isArray(apiProds) && apiProds.length > 0) {
+                        const filteredProds = apiProds.filter(p => isInGroup(p.category));
+                        updateLoadingMessage(`Caching ${filteredProds.length} products locally...`);
+                        await storeProductsInDexie(filteredProds);
+                        prods = filteredProds.map(p => ({
                             ...p,
                             stock: p.batches ? p.batches.reduce((s, b) => s + b.remaining_quantity, 0) : 0,
                             batches: p.batches || []
                         }));
                         apiSuccess = true;
                         sourceLabel = 'server';
-                        console.log('📦 Loaded products from API:', prods.length);
+                        console.log(`📦 Loaded ${GROUP_LABEL} products from API:`, prods.length);
+                    } else if (Array.isArray(apiProds)) {
+                        apiSuccess = true;
+                        prods = [];
+                        sourceLabel = 'server';
                     }
                 }
             } catch (e) {
@@ -498,15 +454,14 @@
                 updateLoadingMessage('Server unavailable, loading cached data...');
             }
         } else {
-            updateLoadingMessage('Offline – loading cached accessories...');
+            updateLoadingMessage('Offline – loading cached products...');
         }
 
         if (!apiSuccess || !navigator.onLine) {
             try {
                 updateLoadingMessage('Reading from local cache...');
-                let cached = await db.products.where('category').notEqual('Screen').toArray();
-                const uncategorized = await db.products.where('category').equals('').toArray();
-                cached = cached.concat(uncategorized);
+                let cached = await db.products.toArray();
+                cached = cached.filter(p => isInGroup(p.category));
                 for (const p of cached) {
                     const batches = await db.batches.where('product_id').equals(p.id).toArray();
                     p.batches = batches;
@@ -514,7 +469,7 @@
                 }
                 prods = cached;
                 sourceLabel = 'cache';
-                console.log('📦 Loaded products from Dexie:', prods.length);
+                console.log(`📦 Loaded ${GROUP_LABEL} products from Dexie:`, prods.length);
             } catch (e) {
                 console.warn('Failed to read from Dexie:', e);
             }
@@ -527,11 +482,7 @@
             prods.forEach(p => {
                 const key = `${p.name}|${p.brand}`;
                 if (!grouped[key]) {
-                    grouped[key] = {
-                        ...p,
-                        stock: 0,
-                        batches: []
-                    };
+                    grouped[key] = { ...p, stock: 0, batches: [] };
                 }
                 grouped[key].stock += p.stock || 0;
                 if (p.batches && p.batches.length > 0) {
@@ -552,20 +503,18 @@
             }
 
             const elapsed = ((Date.now() - loadingStartTime) / 1000).toFixed(1);
-            const sourceText = sourceLabel === 'server' 
-                ? 'from server' 
-                : sourceLabel === 'cache' 
-                    ? 'from offline cache' 
-                    : '';
+            const sourceText = sourceLabel === 'server'
+                ? 'from server'
+                : sourceLabel === 'cache' ? 'from offline cache' : '';
             const detailText = `${totalProducts} product${totalProducts !== 1 ? 's' : ''} · ${totalBatches} batch${totalBatches !== 1 ? 'es' : ''} · ${totalStock} units ${sourceText} in ${elapsed}s`;
-            showSuccessPrompt('✅ Accessories loaded', detailText);
+            showSuccessPrompt(`✅ ${GROUP_LABEL} loaded`, detailText);
         } else {
             hideLoadingPrompt();
             document.getElementById('productList').innerHTML = '';
             noProductsBanner.classList.remove('hidden');
             if (!navigator.onLine) {
-                document.getElementById('productList').innerHTML = 
-                    '<div class="text-gray-500 p-2">No cached accessories – connect to refresh</div>';
+                document.getElementById('productList').innerHTML =
+                    `<div class="text-gray-500 p-2">No cached ${GROUP_LABEL} products – connect to refresh</div>`;
             }
             const badge = document.getElementById('productCountBadge');
             if (badge) badge.classList.add('hidden');
@@ -621,19 +570,19 @@
     function renderProductList(prods) {
         const container = document.getElementById('productList');
         if (!prods.length) {
-            container.innerHTML = '<div class="text-gray-400 p-2">No accessories available</div>';
+            container.innerHTML = `<div class="text-gray-400 p-2">No ${GROUP_LABEL} products available</div>`;
             return;
         }
         container.innerHTML = '';
         prods.forEach(p => {
             const btn = document.createElement('button');
             btn.className = 'w-full text-left px-3 py-2 hover:bg-gray-100 rounded-lg border-b';
-            
+
             let hasFaulty = false;
             let faultyCount = 0;
             let goodStock = 0;
             let totalStock = 0;
-            
+
             if (p.batches && p.batches.length > 0) {
                 p.batches.forEach(batch => {
                     const claimed = batch.claimed_quantity || 0;
@@ -646,12 +595,12 @@
                     goodStock += remaining - claimed;
                 });
             }
-            
+
             const batchCount = p.batches ? p.batches.length : 0;
             const batchLabel = batchCount > 0 ? ` (${batchCount} batches)` : '';
             const faultyLabel = hasFaulty ? ` ⚠️ ${faultyCount} claimed` : '';
             const goodLabel = goodStock > 0 ? ` ✅ ${goodStock} good` : '';
-            
+
             btn.innerHTML = `
                 <div class="flex justify-between items-center">
                     <span>${p.name} (${p.brand})</span>
@@ -663,31 +612,27 @@
             `;
             btn.title = hasFaulty ? `⚠️ ${faultyCount} units claimed as faulty for this product` : `Click to select ${p.name}`;
             btn.onclick = () => selectProduct(p);
-            
-            if (hasFaulty) {
-                btn.style.borderLeft = '3px solid #ef4444';
-            }
-            
+
+            if (hasFaulty) btn.style.borderLeft = '3px solid #ef4444';
+
             container.appendChild(btn);
         });
     }
 
-    function refreshProducts() {
-        loadProducts();
-    }
+    function refreshProducts() { loadProducts(); }
     window.refreshProducts = refreshProducts;
 
     // ---------- Select product ----------
     function selectProduct(product) {
         currentProduct = product;
         const batchCount = product.batches ? product.batches.length : 0;
-        
+
         let hasFaulty = false;
         let faultyCount = 0;
         let faultyBatches = [];
         let goodStock = 0;
         let totalStock = 0;
-        
+
         if (product.batches && product.batches.length > 0) {
             product.batches.forEach(batch => {
                 const claimed = batch.claimed_quantity || 0;
@@ -696,13 +641,12 @@
                 if (claimed > 0 || batch.is_faulty) {
                     hasFaulty = true;
                     faultyCount += claimed;
-                    const batchId = batch.batch_id || batch.id;
-                    faultyBatches.push(batchId);
+                    faultyBatches.push(batch.batch_id || batch.id);
                 }
                 goodStock += remaining - claimed;
             });
         }
-        
+
         let statusHtml = `<strong>Selected:</strong> ${product.name} (${product.brand}) - ₵${product.selling_price.toFixed(2)} - Stock: ${product.stock} (${batchCount} batches)`;
         statusHtml += `<br><span class="text-xs">📦 ${goodStock} good units available</span>`;
         if (hasFaulty) {
@@ -716,9 +660,9 @@
     // ---------- Search ----------
     document.getElementById('searchProduct').addEventListener('input', function(e) {
         const keyword = e.target.value.toLowerCase();
-        const filtered = products.filter(p => 
-            p.name.toLowerCase().includes(keyword) || 
-            p.brand.toLowerCase().includes(keyword)
+        const filtered = products.filter(p =>
+            (p.name || '').toLowerCase().includes(keyword) ||
+            (p.brand || '').toLowerCase().includes(keyword)
         );
         renderProductList(filtered);
     });
@@ -731,24 +675,14 @@
         neededQty = qty;
         let batches = [];
 
-        console.log('🔍 Opening selector for:', product.name);
-        console.log('📦 Product stock:', product.stock);
-
         if (product.batches && product.batches.length > 0) {
             batches = product.batches;
-            console.log('📦 Using batches from product object:', batches.length);
-        } else {
-            if (db) {
-                try {
-                    const cachedBatches = await db.batches.where('product_id').equals(product.id).toArray();
-                    if (cachedBatches && cachedBatches.length > 0) {
-                        batches = cachedBatches;
-                        console.log('📦 Loaded batches from Dexie:', batches.length);
-                    }
-                } catch (e) {
-                    console.warn('Failed to read batches from Dexie:', e);
-                }
-            }
+        } else if (db) {
+            try {
+                const pid = product.product_id || product.id;
+                const cachedBatches = await db.batches.where('product_id').equals(pid).toArray();
+                if (cachedBatches && cachedBatches.length > 0) batches = cachedBatches;
+            } catch (e) { console.warn('Failed to read batches from Dexie:', e); }
         }
 
         if (batches.length === 0) {
@@ -756,9 +690,7 @@
             return false;
         }
 
-        let filteredBatches = batches.filter(b => (b.remaining_quantity || 0) > 0);
-        console.log(`📊 ${filteredBatches.length} batches with stock available`);
-
+        const filteredBatches = batches.filter(b => (b.remaining_quantity || 0) > 0);
         if (filteredBatches.length === 0) {
             alert(`❌ No available stock for ${product.name}. Please check inventory.`);
             return false;
@@ -776,12 +708,10 @@
         if (toggle) toggle.checked = false;
 
         renderBatchModal();
-
         document.getElementById('batchModal').classList.remove('hidden');
         return true;
     }
 
-    // ---------- Toggle individual-batch mode ----------
     window.toggleIndividualBatchMode = function(enabled) {
         individualBatchMode = !!enabled;
         const hint = document.getElementById('modeHint');
@@ -790,23 +720,16 @@
                 ? 'Pick specific batches manually — no FIFO'
                 : 'FIFO applies automatically';
         }
-        if (currentProductForBatch && neededQty > 0) {
-            renderBatchModal();
-        }
+        if (currentProductForBatch && neededQty > 0) renderBatchModal();
     };
 
-    // ---------- Dispatcher ----------
     function renderBatchModal() {
         const container = document.getElementById('batchList');
         container.innerHTML = '';
         groupSelection = [];
         batchSelection = [];
-
-        if (individualBatchMode) {
-            renderIndividualBatches(currentBatches);
-        } else {
-            renderGroupedTiers(currentBatches);
-        }
+        if (individualBatchMode) renderIndividualBatches(currentBatches);
+        else renderGroupedTiers(currentBatches);
 
         const assignedEl = document.getElementById('assignedQty');
         if (assignedEl) assignedEl.innerText = 'Assigned: 0';
@@ -825,7 +748,7 @@
         const container = document.getElementById('batchList');
 
         const header = document.createElement('div');
-        header.className = 'grid grid-cols-8 gap-2 bg-gray-100 p-2 font-bold sticky top-0 border-b-2 border-gray-300 text-xs';
+        header.className = 'grid grid-cols-8 gap-2 bg-[#E8F5E9] p-2 font-bold sticky top-0 border-b-2 border-[#2E7D32] text-xs text-[#1B5E20]';
         header.innerHTML = `
             <div>Select</div>
             <div>Price Tier</div>
@@ -902,20 +825,15 @@
             container.appendChild(row);
 
             groupSelection.push({
-                group,
-                checkbox: cb,
-                qtyInput,
+                group, checkbox: cb, qtyInput,
                 goodStock: Math.max(groupGood, 0),
                 hasFaulty: isFaulty
             });
 
             cb.addEventListener('change', () => {
                 qtyInput.disabled = !cb.checked;
-                if (cb.checked && qtyInput.value === '0') {
-                    qtyInput.value = '1';
-                } else if (!cb.checked) {
-                    qtyInput.value = '0';
-                }
+                if (cb.checked && qtyInput.value === '0') qtyInput.value = '1';
+                else if (!cb.checked) qtyInput.value = '0';
                 updateBatchTotals();
             });
 
@@ -931,9 +849,9 @@
 
         const faultyGroupsCount = groupSelection.filter(g => g.hasFaulty).length;
         const infoRow = document.createElement('div');
-        infoRow.className = `grid grid-cols-8 gap-2 ${faultyGroupsCount > 0 ? 'bg-orange-50' : 'bg-blue-50'} p-2 mt-2 rounded`;
+        infoRow.className = `grid grid-cols-8 gap-2 ${faultyGroupsCount > 0 ? 'bg-orange-50' : 'bg-[#E8F5E9]'} p-2 mt-2 rounded`;
         infoRow.innerHTML = `
-            <div class="col-span-8 text-sm ${faultyGroupsCount > 0 ? 'text-orange-700' : 'text-blue-700'}">
+            <div class="col-span-8 text-sm ${faultyGroupsCount > 0 ? 'text-orange-700' : 'text-[#1B5E20]'}">
                 ${faultyGroupsCount > 0 ? `⚠️ ${faultyGroupsCount} price tier(s) contain claimed/faulty items. ` : ''}
                 <span class="font-bold">${totalAvailableStock}</span> units available (${totalGoodStock} good, ${totalAvailableStock - totalGoodStock} claimed)
                 ${neededQty > totalAvailableStock ? `<span class="text-red-600 ml-2">⚠️ Need ${neededQty} units, only ${totalAvailableStock} available</span>` : ''}
@@ -942,7 +860,7 @@
         `;
         container.appendChild(infoRow);
 
-        document.getElementById('batchModalTitle').innerHTML = 
+        document.getElementById('batchModalTitle').innerHTML =
             `Select price tiers for <strong>${currentProductForBatch.name}</strong> (need ${neededQty} units, ${totalAvailableStock} available, ${totalGoodStock} good) ${faultyGroupsCount > 0 ? '⚠️ Contains faulty tiers' : ''}`;
     }
 
@@ -952,12 +870,10 @@
     function renderIndividualBatches(batches) {
         const container = document.getElementById('batchList');
 
-        const ordered = [...batches].sort(
-            (a, b) => new Date(a.date || 0) - new Date(b.date || 0)
-        );
+        const ordered = [...batches].sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0));
 
         const header = document.createElement('div');
-        header.className = 'grid grid-cols-8 gap-2 bg-gray-100 p-2 font-bold sticky top-0 border-b-2 border-gray-300 text-xs';
+        header.className = 'grid grid-cols-8 gap-2 bg-[#E8F5E9] p-2 font-bold sticky top-0 border-b-2 border-[#2E7D32] text-xs text-[#1B5E20]';
         header.innerHTML = `
             <div>Select</div>
             <div>Batch ID</div>
@@ -997,7 +913,7 @@
 
             const idSpan = document.createElement('span');
             idSpan.innerText = `#${batch.batch_id || batch.id}`;
-            idSpan.className = 'text-sm font-semibold text-indigo-700';
+            idSpan.className = 'text-sm font-semibold text-[#1B5E20]';
 
             const stockSpan = document.createElement('span');
             stockSpan.innerText = remaining;
@@ -1017,7 +933,7 @@
 
             const priceSpan = document.createElement('span');
             priceSpan.innerText = `₵${(batch.selling_price || 0).toFixed(2)}`;
-            priceSpan.className = 'text-green-600 text-sm';
+            priceSpan.className = 'text-[#2E7D32] text-sm';
 
             const qtyInput = document.createElement('input');
             qtyInput.type = 'number';
@@ -1038,12 +954,9 @@
             container.appendChild(row);
 
             batchSelection.push({
-                batch,
-                checkbox: cb,
-                qtyInput,
+                batch, checkbox: cb, qtyInput,
                 batchId: batch.batch_id || batch.id,
-                isFaulty,
-                goodStock: Math.max(good, 0)
+                isFaulty, goodStock: Math.max(good, 0)
             });
 
             cb.addEventListener('change', () => {
@@ -1069,9 +982,9 @@
         }
 
         const infoRow = document.createElement('div');
-        infoRow.className = `grid grid-cols-8 gap-2 ${faultyCount > 0 ? 'bg-orange-50' : 'bg-blue-50'} p-2 mt-2 rounded`;
+        infoRow.className = `grid grid-cols-8 gap-2 ${faultyCount > 0 ? 'bg-orange-50' : 'bg-[#E8F5E9]'} p-2 mt-2 rounded`;
         infoRow.innerHTML = `
-            <div class="col-span-8 text-sm ${faultyCount > 0 ? 'text-orange-700' : 'text-blue-700'}">
+            <div class="col-span-8 text-sm ${faultyCount > 0 ? 'text-orange-700' : 'text-[#1B5E20]'}">
                 ${faultyCount > 0 ? `⚠️ ${faultyCount} batch(es) contain claimed/faulty items. ` : ''}
                 <span class="font-bold">${totalAvailableStock}</span> units available (${totalGoodStock} good, ${totalAvailableStock - totalGoodStock} claimed)
                 ${neededQty > totalAvailableStock ? `<span class="text-red-600 ml-2">⚠️ Need ${neededQty} units, only ${totalAvailableStock} available</span>` : ''}
@@ -1080,16 +993,14 @@
         `;
         container.appendChild(infoRow);
 
-        document.getElementById('batchModalTitle').innerHTML = 
+        document.getElementById('batchModalTitle').innerHTML =
             `Select individual batches for <strong>${currentProductForBatch.name}</strong> (need ${neededQty} units, ${totalAvailableStock} available, ${totalGoodStock} good) ${faultyCount > 0 ? '⚠️ Contains faulty batches' : ''}`;
     }
 
-    // ---------- Active selection array ----------
     function activeSelectionArray() {
         return individualBatchMode ? batchSelection : groupSelection;
     }
 
-    // ---------- Select All ----------
     window.selectAllBatches = function() {
         let remaining = neededQty;
         activeSelectionArray().forEach(sel => {
@@ -1108,7 +1019,7 @@
         });
         updateBatchTotals();
     };
-    
+
     window.deselectAllBatches = function() {
         activeSelectionArray().forEach(sel => {
             sel.checkbox.checked = false;
@@ -1118,7 +1029,6 @@
         updateBatchTotals();
     };
 
-    // ---------- Running totals ----------
     function updateBatchTotals() {
         let assigned = 0;
         activeSelectionArray().forEach(sel => {
@@ -1156,9 +1066,6 @@
         if (hint) hint.textContent = 'FIFO applies automatically';
     };
 
-    // =============================================================
-    //  CONFIRM — mode-aware
-    // =============================================================
     window.confirmBatchSelection = function() {
         let assigned = 0;
         let selected = [];
@@ -1170,22 +1077,16 @@
                 if (!sel.checkbox.checked) continue;
                 const qty = parseInt(sel.qtyInput.value) || 0;
                 if (qty <= 0) continue;
-
                 assigned += qty;
                 const batch = sel.batch;
                 const goodForBatch = Math.max(
-                    (batch.remaining_quantity || 0) - (batch.claimed_quantity || 0),
-                    0
+                    (batch.remaining_quantity || 0) - (batch.claimed_quantity || 0), 0
                 );
                 const batchFaulty = batch.is_faulty || (batch.claimed_quantity || 0) > 0;
                 if (batchFaulty) faultySelected = true;
-
                 selected.push({
-                    batch_id: sel.batchId,
-                    qty: qty,
-                    batch: batch,
-                    is_fallback: false,
-                    is_faulty: batchFaulty,
+                    batch_id: sel.batchId, qty, batch,
+                    is_fallback: false, is_faulty: batchFaulty,
                     good_stock: goodForBatch
                 });
                 totalCost += qty * (batch.cost_price || 0);
@@ -1195,9 +1096,7 @@
                 if (!sel.checkbox.checked) continue;
                 const qty = parseInt(sel.qtyInput.value) || 0;
                 if (qty <= 0) continue;
-
                 assigned += qty;
-
                 let picks;
                 try {
                     picks = window.fifoPickFromGroup(sel.group, qty);
@@ -1205,21 +1104,15 @@
                     alert(`❌ ${err.message}`);
                     return;
                 }
-
                 for (const p of picks) {
                     const goodForBatch = Math.max(
-                        (p.batch.remaining_quantity || 0) - (p.batch.claimed_quantity || 0),
-                        0
+                        (p.batch.remaining_quantity || 0) - (p.batch.claimed_quantity || 0), 0
                     );
                     const batchFaulty = p.batch.is_faulty || (p.batch.claimed_quantity || 0) > 0;
                     if (batchFaulty) faultySelected = true;
-
                     selected.push({
-                        batch_id: p.batch_id,
-                        qty: p.qty,
-                        batch: p.batch,
-                        is_fallback: false,
-                        is_faulty: batchFaulty,
+                        batch_id: p.batch_id, qty: p.qty, batch: p.batch,
+                        is_fallback: false, is_faulty: batchFaulty,
                         good_stock: goodForBatch
                     });
                     totalCost += p.qty * (p.batch.cost_price || 0);
@@ -1239,16 +1132,12 @@
         }
 
         if (faultySelected) {
-            if (!confirm('⚠️ You are selling from batches that have claimed/faulty items.\n\nSelling faulty items may affect customer satisfaction and inventory tracking.\n\nContinue with sale?')) {
-                return;
-            }
+            if (!confirm('⚠️ You are selling from batches that have claimed/faulty items.\n\nSelling faulty items may affect customer satisfaction and inventory tracking.\n\nContinue with sale?')) return;
         }
 
         const discount = parseFloat(document.getElementById('discount').value) || 0;
         let subtotal = 0;
-        for (const s of selected) {
-            subtotal += s.qty * s.batch.selling_price;
-        }
+        for (const s of selected) subtotal += s.qty * s.batch.selling_price;
         const finalTotal = Math.max(subtotal - discount, 0);
 
         const productWithCorrectCost = {
@@ -1264,7 +1153,7 @@
             subtotal,
             final: finalTotal,
             isFallback: false,
-            totalCost: totalCost,
+            totalCost,
             hasFaulty: faultySelected
         });
         updateCart();
@@ -1273,7 +1162,7 @@
         document.getElementById('discount').value = '';
     };
 
-    // ---------- Cart management ----------
+    // ---------- Cart ----------
     function updateCart() {
         const container = document.getElementById('cartItems');
         if (!cart.length) {
@@ -1287,7 +1176,7 @@
             grandTotal += item.final;
             const card = document.createElement('div');
             card.className = 'border rounded-lg p-3 bg-gray-50';
-            const faultyWarning = item.hasFaulty ? 
+            const faultyWarning = item.hasFaulty ?
                 '<span class="text-red-500 text-xs font-bold ml-2">⚠️ FAULTY</span>' : '';
 
             const tierMap = new Map();
@@ -1295,9 +1184,7 @@
                 const cost = Math.round((b.batch.cost_price || 0) * 100) / 100;
                 const sell = Math.round((b.batch.selling_price || 0) * 100) / 100;
                 const key = cost + '|' + sell;
-                if (!tierMap.has(key)) {
-                    tierMap.set(key, { cost, sell, qty: 0, batch_ids: [] });
-                }
+                if (!tierMap.has(key)) tierMap.set(key, { cost, sell, qty: 0, batch_ids: [] });
                 const t = tierMap.get(key);
                 t.qty += b.qty;
                 t.batch_ids.push(`#${b.batch_id}`);
@@ -1305,7 +1192,7 @@
             const tierLines = [...tierMap.values()].map(t =>
                 `${t.qty} × ₵${t.sell.toFixed(2)} (cost ₵${t.cost.toFixed(2)}) — ${t.batch_ids.join(', ')}`
             ).join('<br>');
-            
+
             card.innerHTML = `
                 <div class="flex justify-between items-start">
                     <div class="flex-1">
@@ -1330,7 +1217,7 @@
         });
         document.getElementById('grandTotal').innerText = formatMoney(grandTotal);
     }
-    
+
     window.removeCartItem = function(index) {
         cart.splice(index, 1);
         updateCart();
@@ -1346,32 +1233,28 @@
 
     // ---------- Payment Modal ----------
     function selectPayment(method, event) {
-        console.log("✅ Payment method selected:", method);
         selectedPaymentMethod = method;
         selectedChequeNumber = null;
         document.getElementById('chequeInputContainer').classList.add('hidden');
-        
         document.querySelectorAll('.payment-option').forEach(btn => {
-            btn.classList.remove('bg-indigo-50', 'border-indigo-500');
+            btn.classList.remove('bg-[#E8F5E9]', 'border-[#2E7D32]');
         });
         if (event && event.target) {
             const clickedBtn = event.target.closest('.payment-option');
-            if (clickedBtn) clickedBtn.classList.add('bg-indigo-50', 'border-indigo-500');
+            if (clickedBtn) clickedBtn.classList.add('bg-[#E8F5E9]', 'border-[#2E7D32]');
         }
     }
     window.selectPayment = selectPayment;
 
     function showChequeInput(event) {
-        console.log("✅ Cheque payment selected");
         selectedPaymentMethod = 'cheque';
         document.getElementById('chequeInputContainer').classList.remove('hidden');
-        
         document.querySelectorAll('.payment-option').forEach(btn => {
-            btn.classList.remove('bg-indigo-50', 'border-indigo-500');
+            btn.classList.remove('bg-[#E8F5E9]', 'border-[#2E7D32]');
         });
         if (event && event.target) {
             const clickedBtn = event.target.closest('.payment-option');
-            if (clickedBtn) clickedBtn.classList.add('bg-indigo-50', 'border-indigo-500');
+            if (clickedBtn) clickedBtn.classList.add('bg-[#E8F5E9]', 'border-[#2E7D32]');
         }
     }
     window.showChequeInput = showChequeInput;
@@ -1380,52 +1263,41 @@
         document.getElementById('paymentModal').classList.add('hidden');
         document.getElementById('chequeNumber').value = '';
         document.querySelectorAll('.payment-option').forEach(btn => {
-            btn.classList.remove('bg-indigo-50', 'border-indigo-500');
+            btn.classList.remove('bg-[#E8F5E9]', 'border-[#2E7D32]');
         });
     }
 
     function getSaleDateTime() {
         const dateVal = document.getElementById('saleDate').value;
         const timeVal = document.getElementById('saleTime').value;
-        
+
         if (dateVal && timeVal) {
             try {
                 let hours = 0, minutes = 0;
                 let timeStr = timeVal.trim();
-                
                 const isPM = timeStr.toLowerCase().includes('pm');
                 const isAM = timeStr.toLowerCase().includes('am');
-                
                 let cleanTime = timeStr.replace(/[ap]m\s*/gi, '').trim();
                 let parts = cleanTime.split(':');
                 if (parts.length === 2) {
                     hours = parseInt(parts[0]);
                     minutes = parseInt(parts[1]);
-                    
                     if (isPM && hours < 12) hours += 12;
                     if (isAM && hours === 12) hours = 0;
-                    
                     if (isNaN(hours) || isNaN(minutes) || hours > 23 || minutes > 59) {
                         throw new Error('Invalid time');
                     }
                 } else {
                     throw new Error('Invalid time format');
                 }
-                
                 const time24 = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`;
-                const result = `${dateVal} ${time24}`;
-                console.log(`📅 Formatted date/time: ${result}`);
-                return result;
-                
+                return `${dateVal} ${time24}`;
             } catch(e) {
-                console.warn('⚠️ Date/time parsing failed:', e.message);
                 try {
                     const now = new Date();
                     const hours = now.getHours().toString().padStart(2, '0');
                     const minutes = now.getMinutes().toString().padStart(2, '0');
-                    const fallback = `${dateVal} ${hours}:${minutes}:00`;
-                    console.log(`🔄 Using fallback date/time: ${fallback}`);
-                    return fallback;
+                    return `${dateVal} ${hours}:${minutes}:00`;
                 } catch {
                     const now = new Date();
                     const date = now.toISOString().split('T')[0];
@@ -1434,56 +1306,48 @@
                 }
             }
         }
-        
+
         const now = new Date();
         const date = now.toISOString().split('T')[0];
         const time = now.toTimeString().split(' ')[0];
-        console.log(`📅 No date/time selected, using current: ${date} ${time}`);
         return `${date} ${time}`;
     }
 
     // ========== Execute Sale ==========
     async function executeSaleWithPayment(paymentMethod, chequeNum) {
         if (!pendingSaleCallback) return;
-        
-        console.log("🚀 Executing sale with payment method:", paymentMethod);
-        
-        const cartItems = pendingSaleCallback.cart.map(item => ({ 
-            product: item.product, 
-            qty: item.qty, 
-            discount: item.discount 
+
+        const cartItems = pendingSaleCallback.cart.map(item => ({
+            product: item.product,
+            qty: item.qty,
+            discount: item.discount
         }));
-        
+
         const selectedBatches = [];
         pendingSaleCallback.cart.forEach(item => {
             const productId = item.product.product_id || item.product.id;
-            
             if (!productId) {
                 console.warn('⚠️ Missing product_id for item:', item.product);
                 return;
             }
-            
             item.selectedBatches.forEach(b => {
-                selectedBatches.push({ 
-                    batch_id: b.batch_id, 
-                    qty: b.qty, 
+                selectedBatches.push({
+                    batch_id: b.batch_id,
+                    qty: b.qty,
                     product_id: productId,
                     id: productId
                 });
             });
         });
-        
-        const payload = { 
-            cart_items: cartItems, 
-            sale_datetime: pendingSaleCallback.saleDatetime, 
+
+        const payload = {
+            cart_items: cartItems,
+            sale_datetime: pendingSaleCallback.saleDatetime,
             selected_batches: selectedBatches,
             payment_method: paymentMethod,
             cheque_number: chequeNum
         };
-        
-        console.log("📅 Sale datetime from form:", pendingSaleCallback.saleDatetime);
-        console.log("📦 Sending payload:", JSON.stringify(payload, null, 2));
-        
+
         try {
             const res = await fetch('/api/sales/complete', {
                 method: 'POST',
@@ -1491,15 +1355,11 @@
                 credentials: 'include',
                 body: JSON.stringify(payload)
             });
-            
             if (!res.ok) {
                 const errorData = await res.json();
                 throw new Error(errorData.error || `HTTP error! status: ${res.status}`);
             }
-            
             const data = await res.json();
-            console.log("📥 Response data:", data);
-            
             if (data.success) {
                 lastSale = data;
                 document.getElementById('receiptPreview').innerHTML = `<pre class="whitespace-pre-wrap">${data.receipt_text}</pre>`;
@@ -1513,7 +1373,7 @@
             }
         } catch (error) {
             console.warn('Network error, saving sale offline:', error);
-            
+
             if (!navigator.onLine) {
                 if (typeof savePendingOperation === 'function') {
                     try {
@@ -1523,22 +1383,16 @@
                         console.error('Failed to save pending sale:', e);
                         alert('Could not save sale offline. Please try again.');
                     }
-                } else {
-                    console.warn('savePendingOperation not available, using localStorage fallback');
-                    if (typeof savePendingSale === 'function') {
-                        savePendingSale(payload);
-                    }
+                } else if (typeof savePendingSale === 'function') {
+                    savePendingSale(payload);
                 }
-                
-                if (typeof updatePendingBadge === 'function') {
-                    updatePendingBadge();
-                }
-                
+                if (typeof updatePendingBadge === 'function') updatePendingBadge();
+
                 cart = [];
                 updateCart();
-                
+
                 document.getElementById('receiptPreview').innerHTML = `
-                    <div class="bg-yellow-100 border border-yellow-400 text-yellow-700 p-3 rounded">
+                    <div class="bg-amber-50 border border-amber-400 text-amber-800 p-3 rounded">
                         <strong>⚠️ Offline Sale Saved</strong><br>
                         This sale has been saved locally and will be synced when you reconnect.
                         <br><br>
@@ -1549,85 +1403,55 @@
                         <span class="text-xs">Sale ID: pending (${new Date().toLocaleString()})</span>
                     </div>
                 `;
-                
                 alert('You are offline. Sale saved locally and will be synced later.');
             } else {
                 alert('❌ Sale failed: ' + error.message);
             }
         }
-        
+
         pendingSaleCallback = null;
         selectedPaymentMethod = null;
         selectedChequeNumber = null;
     }
 
-    // ---------- Complete Sale Button ----------
     document.getElementById('completeSaleBtn').addEventListener('click', async () => {
-        if (cart.length === 0) {
-            alert('Cart is empty.');
-            return;
-        }
-        
+        if (cart.length === 0) { alert('Cart is empty.'); return; }
+
         const hasFaulty = cart.some(item => item.hasFaulty);
-        
         if (hasFaulty) {
-            let warningMsg = '⚠️ One or more items are from FAULTY batches (claimed as damaged/defective). \n\nContinue with sale?';
-            if (!confirm(warningMsg)) {
-                return;
-            }
+            if (!confirm('⚠️ One or more items are from FAULTY batches (claimed as damaged/defective). \n\nContinue with sale?')) return;
         }
-        
-        pendingSaleCallback = {
-            cart: [...cart],
-            saleDatetime: getSaleDateTime()
-        };
-        
+
+        pendingSaleCallback = { cart: [...cart], saleDatetime: getSaleDateTime() };
+
         selectedPaymentMethod = null;
         selectedChequeNumber = null;
         document.getElementById('chequeNumber').value = '';
         document.getElementById('chequeInputContainer').classList.add('hidden');
-        
         document.querySelectorAll('.payment-option').forEach(btn => {
-            btn.classList.remove('bg-indigo-50', 'border-indigo-500');
+            btn.classList.remove('bg-[#E8F5E9]', 'border-[#2E7D32]');
         });
-        
         document.getElementById('paymentModal').classList.remove('hidden');
     });
 
-    // ---------- Confirm Payment ----------
     document.getElementById('confirmPaymentBtn').addEventListener('click', async () => {
-        console.log("🔘 Confirm button clicked. Current payment method:", selectedPaymentMethod);
-        
-        if (!selectedPaymentMethod) {
-            alert('Please select a payment method.');
-            return;
-        }
-        
+        if (!selectedPaymentMethod) { alert('Please select a payment method.'); return; }
         if (selectedPaymentMethod === 'cheque') {
             const chequeNumber = document.getElementById('chequeNumber').value.trim();
-            if (!chequeNumber) {
-                alert('Please enter cheque number.');
-                return;
-            }
+            if (!chequeNumber) { alert('Please enter cheque number.'); return; }
             selectedChequeNumber = chequeNumber;
         }
-        
         const paymentMethodToUse = selectedPaymentMethod;
         const chequeNumberToUse = selectedChequeNumber;
-        
-        console.log("✅ Final payment data - Method:", paymentMethodToUse, "Cheque:", chequeNumberToUse);
-        
         closePaymentModal();
         await executeSaleWithPayment(paymentMethodToUse, chequeNumberToUse);
     });
 
     document.getElementById('cancelPaymentBtn').addEventListener('click', () => {
-        console.log("❌ Payment cancelled");
         closePaymentModal();
         pendingSaleCallback = null;
     });
 
-    // ---------- Print Receipt ----------
     document.getElementById('printReceiptBtn').addEventListener('click', () => {
         if (!lastSale) return;
         const printWindow = window.open('', '_blank');
@@ -1644,7 +1468,6 @@
         printWindow.document.close();
     });
 
-    // ---------- Set default date/time ----------
     function setDefaultDateTime() {
         const now = new Date();
         document.getElementById('saleDate').value = now.toISOString().split('T')[0];
@@ -1655,14 +1478,13 @@
         document.getElementById('saleTime').value = `${hours}:${minutes.toString().padStart(2,'0')} ${ampm}`;
     }
 
-    // ---------- Online/Offline refresh ----------
     window.addEventListener('online', function() {
         loadProducts();
         if (typeof getPendingCount === 'function') {
             getPendingCount().then(count => {
                 if (count > 0) {
                     document.getElementById('receiptPreview').innerHTML = `
-                        <div class="bg-blue-100 border border-blue-400 text-blue-700 p-3 rounded">
+                        <div class="bg-[#E8F5E9] border border-[#2E7D32] text-[#1B5E20] p-3 rounded">
                             <strong>🔄 Syncing pending sales...</strong><br>
                             You have ${count} pending sales. They will be synced automatically.
                         </div>
@@ -1671,37 +1493,48 @@
             });
         }
     });
-     
-    // ---------- One-time notice ----------
-    (function() {
-        const notice = document.getElementById('salesReviveNotice');
-        const dismissBtn = document.getElementById('dismissNotice');
-        const STORAGE_KEY = 'salesReviveNoticeDismissed';
 
-        if (localStorage.getItem(STORAGE_KEY) === 'true') {
-            notice.style.display = 'none';
-            return;
+    // ============================================================
+    //  GROUP-AWARE LABEL SWAP (runs once on DOMContentLoaded)
+    // ============================================================
+    function applyGroupLabels() {
+        const badge = document.getElementById('salesGroupBadge');
+        if (badge) badge.textContent = GROUP_BADGE;
+
+        const offBanner = document.getElementById('offlineBanner');
+        if (offBanner) offBanner.textContent =
+            `⚠️ You are offline – showing cached ${GROUP_LABEL} products. Sales will be saved and synced when you reconnect.`;
+
+        const loadingTitle = document.getElementById('loadingProductsTitle');
+        if (loadingTitle) loadingTitle.textContent = `⏳ Loading ${GROUP_LABEL}...`;
+
+        const noProductsTitle = document.getElementById('noProductsBannerTitle');
+        if (noProductsTitle) noProductsTitle.textContent = `⚠️ No ${GROUP_LABEL} products found.`;
+
+        const noProductsHint = document.getElementById('noProductsBannerHint');
+        if (noProductsHint) noProductsHint.textContent =
+            `Please ensure your inventory imports are correctly categorised for ${GROUP_LABEL}.`;
+
+        const searchInput = document.getElementById('searchProduct');
+        if (searchInput) searchInput.placeholder = `🔍 Search ${GROUP_LABEL}...`;
+
+        const selectedInfo = document.getElementById('selectedProductInfo');
+        if (selectedInfo && !currentProduct) {
+            selectedInfo.textContent = `No ${GROUP_LABEL} product selected`;
         }
-
-        notice.style.display = 'flex';
-
-        dismissBtn.addEventListener('click', function() {
-            notice.style.display = 'none';
-            localStorage.setItem(STORAGE_KEY, 'true');
-        });
-    })();
+    }
 
     // ---------- Initialization ----------
     document.addEventListener('DOMContentLoaded', function() {
+        applyGroupLabels();
+
         loadProducts();
         if (typeof updatePendingBadge === 'function') updatePendingBadge();
         setDefaultDateTime();
-        
+
         if (typeof getPendingCount === 'function') {
             getPendingCount().then(count => {
-                if (count > 0) {
-                    console.log(`📤 Found ${count} pending sales on load`);
-                }
+                if (count > 0) console.log(`📤 Found ${count} pending sales on load`);
             });
         }
     });

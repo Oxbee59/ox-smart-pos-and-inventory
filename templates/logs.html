@@ -1,4 +1,4 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
 
 {% block content %}
 <!-- Hidden div for passing data to JavaScript -->
@@ -9,9 +9,9 @@
     ⚠️ You are offline – showing cached logs. Data will update when you reconnect.
 </div>
 
-<div class="flex justify-between items-center mb-6">
+<div class="flex justify-between items-center mb-6 flex-wrap gap-3">
     <div>
-        <h1 class="text-3xl font-bold text-indigo-600">📋 User Activity Logs</h1>
+        <h1 class="text-3xl font-bold text-[#1B5E20]">📋 User Activity Logs</h1>
         {% if is_oxbee %}
         <p class="text-gray-500 text-sm mt-1">🔒 Full access - Viewing all user activity logs</p>
         {% else %}
@@ -19,33 +19,33 @@
         {% endif %}
     </div>
     <div>
-        <button onclick="loadLogs()" id="refreshBtn" class="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-lg">
+        <button onclick="loadLogs()" id="refreshBtn" class="bg-[#2E7D32] hover:bg-[#1B5E20] text-white px-4 py-2 rounded-lg font-medium transition">
             🔄 Refresh
         </button>
     </div>
 </div>
 
 <!-- Security Notice -->
-<div class="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+<div class="bg-[#E8F5E9] border border-[#C8E6C9] rounded-xl p-4 mb-6">
     <div class="flex items-center gap-3">
-        <i class="fas fa-info-circle text-blue-500 text-xl"></i>
+        <i class="fas fa-info-circle text-[#2E7D32] text-xl"></i>
         <div>
-            <p class="text-sm text-blue-700 font-medium">🔒 Security Notice</p>
+            <p class="text-sm text-[#1B5E20] font-medium">🔒 Security Notice</p>
             {% if is_oxbee %}
-            <p class="text-xs text-blue-600">You are viewing all user activity logs as the system administrator.</p>
+            <p class="text-xs text-[#2E7D32]">You are viewing all user activity logs as the system administrator.</p>
             {% else %}
-            <p class="text-xs text-blue-600">You are viewing user activity logs. System administrator (oxbee) logs are hidden for security.</p>
+            <p class="text-xs text-[#2E7D32]">You are viewing user activity logs. System administrator (oxbee) logs are hidden for security.</p>
             {% endif %}
         </div>
     </div>
 </div>
 
 <!-- Filters -->
-<div class="bg-white rounded-xl shadow-md p-4 mb-6">
+<div class="bg-white rounded-xl shadow-md p-4 mb-6 border border-[#E8F5E9]">
     <div class="flex flex-wrap gap-4 items-end">
         <div>
             <label class="block text-sm font-medium text-gray-700">Action Filter</label>
-            <select id="actionFilter" class="border rounded-lg px-3 py-2">
+            <select id="actionFilter" class="border border-gray-300 rounded-lg px-3 py-2 focus:border-[#2E7D32] outline-none">
                 <option value="">All Actions</option>
                 <option value="login">Login</option>
                 <option value="logout">Logout</option>
@@ -54,30 +54,30 @@
         </div>
         <div>
             <label class="block text-sm font-medium text-gray-700">User</label>
-            <select id="userFilter" class="border rounded-lg px-3 py-2">
+            <select id="userFilter" class="border border-gray-300 rounded-lg px-3 py-2 focus:border-[#2E7D32] outline-none">
                 <option value="">All Users</option>
             </select>
         </div>
-        <button onclick="applyFilters()" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg">
+        <button onclick="applyFilters()" class="bg-[#2E7D32] hover:bg-[#1B5E20] text-white px-5 py-2 rounded-lg font-medium transition">
             🔍 Apply Filters
         </button>
-        <button onclick="clearFilters()" class="bg-gray-400 hover:bg-gray-500 text-white px-5 py-2 rounded-lg">
+        <button onclick="clearFilters()" class="bg-gray-400 hover:bg-gray-500 text-white px-5 py-2 rounded-lg transition">
             ✕ Clear
         </button>
     </div>
 </div>
 
 <!-- Logs Table -->
-<div class="bg-white rounded-xl shadow-md overflow-hidden">
+<div class="bg-white rounded-xl shadow-md overflow-hidden border border-[#E8F5E9]">
     <div class="overflow-x-auto">
         <table class="w-full">
-            <thead class="bg-gray-100 border-b">
+            <thead class="bg-[#E8F5E9] border-b">
                 <tr>
-                    <th class="text-left px-4 py-3 text-sm font-semibold text-gray-600">Time</th>
-                    <th class="text-left px-4 py-3 text-sm font-semibold text-gray-600">User</th>
-                    <th class="text-left px-4 py-3 text-sm font-semibold text-gray-600">Action</th>
-                    <th class="text-left px-4 py-3 text-sm font-semibold text-gray-600">IP Address</th>
-                    <th class="text-left px-4 py-3 text-sm font-semibold text-gray-600">Device</th>
+                    <th class="text-left px-4 py-3 text-sm font-semibold text-[#1B5E20]">Time</th>
+                    <th class="text-left px-4 py-3 text-sm font-semibold text-[#1B5E20]">User</th>
+                    <th class="text-left px-4 py-3 text-sm font-semibold text-[#1B5E20]">Action</th>
+                    <th class="text-left px-4 py-3 text-sm font-semibold text-[#1B5E20]">IP Address</th>
+                    <th class="text-left px-4 py-3 text-sm font-semibold text-[#1B5E20]">Device</th>
                 </tr>
             </thead>
             <tbody id="logsTableBody">
@@ -87,12 +87,12 @@
             </tbody>
         </table>
     </div>
-    <div id="pagination" class="flex justify-between items-center px-4 py-3 border-t bg-gray-50">
+    <div id="pagination" class="flex justify-between items-center px-4 py-3 border-t bg-[#E8F5E9]">
         <span id="totalLogs" class="text-sm text-gray-500">Loading...</span>
         <div class="flex gap-2">
-            <button onclick="prevPage()" class="px-3 py-1 border rounded hover:bg-gray-100 disabled:opacity-50" id="prevBtn">Previous</button>
+            <button onclick="prevPage()" class="px-3 py-1 border rounded hover:bg-[#C8E6C9] disabled:opacity-50" id="prevBtn">Previous</button>
             <span id="pageInfo" class="px-3 py-1 text-sm text-gray-600">Page 1</span>
-            <button onclick="nextPage()" class="px-3 py-1 border rounded hover:bg-gray-100 disabled:opacity-50" id="nextBtn">Next</button>
+            <button onclick="nextPage()" class="px-3 py-1 border rounded hover:bg-[#C8E6C9] disabled:opacity-50" id="nextBtn">Next</button>
         </div>
     </div>
 </div>
@@ -190,8 +190,8 @@
 
         function getActionBadge(action) {
             const badges = {
-                'login': '<span class="inline-flex items-center bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-medium">✅ Login</span>',
-                'logout': '<span class="inline-flex items-center bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">🚪 Logout</span>',
+                'login': '<span class="inline-flex items-center bg-[#E8F5E9] text-[#1B5E20] px-2 py-1 rounded text-xs font-medium">✅ Login</span>',
+                'logout': '<span class="inline-flex items-center bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs font-medium">🚪 Logout</span>',
                 'login_failed': '<span class="inline-flex items-center bg-red-100 text-red-800 px-2 py-1 rounded text-xs font-medium">❌ Failed Login</span>'
             };
             return badges[action] || action;
@@ -368,9 +368,9 @@
             }
 
             tbody.innerHTML = logs.map(log => `
-                <tr class="border-b hover:bg-gray-50 transition">
+                <tr class="border-b hover:bg-[#E8F5E9] transition">
                     <td class="px-4 py-3 text-sm text-gray-600">${formatTimestamp(log.timestamp)}</td>
-                    <td class="px-4 py-3 text-sm font-medium text-indigo-600">${escapeHtml(log.username)}</td>
+                    <td class="px-4 py-3 text-sm font-medium text-[#1B5E20]">${escapeHtml(log.username)}</td>
                     <td class="px-4 py-3">${getActionBadge(log.action)}</td>
                     <td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(log.ip_address || 'N/A')}</td>
                     <td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(truncateUserAgent(log.user_agent))}</td>

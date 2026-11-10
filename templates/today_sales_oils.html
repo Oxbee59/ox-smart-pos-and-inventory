@@ -3,17 +3,17 @@
 {% block content %}
 <!-- Offline banner -->
 <div id="offlineBanner" class="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded hidden">
-    ⚠️ You are offline – Please connect to the internet to view screen sales data.
+    ⚠️ You are offline – Please connect to the internet to view oil sales data.
 </div>
 
-<!-- ✅ NEW: Batch Filter Banner -->
-<div id="batchFilterBanner" class="mb-4 bg-indigo-50 border border-indigo-300 text-indigo-800 px-4 py-3 rounded-lg hidden">
+<!-- Batch Filter Banner -->
+<div id="batchFilterBanner" class="mb-4 bg-[#E8F5E9] border border-[#2E7D32] text-[#1B5E20] px-4 py-3 rounded-lg hidden">
     <div class="flex flex-wrap items-center justify-between gap-2">
         <div class="flex items-center gap-2 text-sm">
             <span>🎯</span>
-            <span>Showing screen sales for <strong id="batchFilterLabel">Batch #--</strong></span>
+            <span>Showing oil sales for <strong id="batchFilterLabel">Batch #--</strong></span>
         </div>
-        <button id="clearBatchFilterBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded text-xs md:text-sm">
+        <button id="clearBatchFilterBtn" class="bg-[#2E7D32] hover:bg-[#1B5E20] text-white px-3 py-1 rounded text-xs md:text-sm font-medium transition">
             ✕ Clear Batch Filter
         </button>
     </div>
@@ -22,36 +22,35 @@
 <!-- Hidden user role for JavaScript -->
 <div id="userRole" data-role="{{ current_user.role if current_user else 'user' }}" style="display:none;"></div>
 
-<!-- Header with screen indicator -->
+<!-- Header -->
 <div class="flex flex-wrap justify-between items-center gap-3 mb-6">
     <div class="flex items-center gap-2">
-        <h1 class="text-2xl md:text-3xl font-bold text-indigo-600">📊 Sales Overview</h1>
-        <span class="bg-purple-100 text-purple-800 text-xs font-semibold px-2.5 py-0.5 rounded">Screens Only</span>
+        <h1 class="text-2xl md:text-3xl font-bold text-[#1B5E20]">📊 Sales Overview</h1>
+        <span class="bg-[#E8F5E9] text-[#1B5E20] text-xs font-semibold px-2.5 py-0.5 rounded" id="todaySalesGroupBadge">Oils</span>
     </div>
-    <button id="refreshBtn" class="bg-teal-500 hover:bg-teal-600 text-white px-3 py-1.5 md:px-4 md:py-2 rounded-lg text-sm md:text-base">🔄 Refresh</button>
+    <button id="refreshBtn" class="bg-[#2E7D32] hover:bg-[#1B5E20] text-white px-3 py-1.5 md:px-4 md:py-2 rounded-lg text-sm md:text-base font-medium transition">🔄 Refresh</button>
 </div>
 
 <!-- Search Bar with Advanced Options -->
-<div class="mb-4 bg-white rounded-xl shadow-md p-3 md:p-4">
+<div class="mb-4 bg-white rounded-xl shadow-md p-3 md:p-4 border border-[#E8F5E9]">
     <div class="flex flex-col md:flex-row gap-3">
         <div class="flex-1">
-            <input type="text" id="searchInput" placeholder="🔍 Search screen product, brand, user, or category..."
-                   class="w-full border border-gray-300 rounded-lg px-3 py-1.5 md:px-4 md:py-2 text-sm md:text-base">
+            <input type="text" id="searchInput" placeholder="🔍 Search oil product, brand, user, or category..."
+                   class="w-full border border-gray-300 rounded-lg px-3 py-1.5 md:px-4 md:py-2 text-sm md:text-base focus:border-[#2E7D32] focus:ring-1 focus:ring-[#2E7D32] outline-none">
         </div>
         <div class="flex flex-wrap gap-2 items-center">
-            <button id="advancedToggle" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1.5 rounded-lg text-sm">
+            <button id="advancedToggle" class="bg-[#E8F5E9] hover:bg-[#C8E6C9] text-[#1B5E20] px-3 py-1.5 rounded-lg text-sm font-medium transition">
                 ⚙️ Advanced
             </button>
-            <button id="clearSearchBtn" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-lg text-sm">✕ Clear</button>
+            <button id="clearSearchBtn" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-sm transition">✕ Clear</button>
         </div>
     </div>
-    
-    <!-- Advanced Search Options -->
+
     <div id="advancedSearch" class="hidden mt-3 pt-3 border-t border-gray-200">
         <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
             <div>
                 <label class="block text-xs font-medium text-gray-700">Search Mode</label>
-                <select id="searchMode" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
+                <select id="searchMode" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:border-[#2E7D32] outline-none">
                     <option value="contains">Contains (Partial Match)</option>
                     <option value="exact">Exact Match</option>
                     <option value="starts">Starts With</option>
@@ -61,7 +60,7 @@
             </div>
             <div>
                 <label class="block text-xs font-medium text-gray-700">Search In</label>
-                <select id="searchField" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
+                <select id="searchField" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:border-[#2E7D32] outline-none">
                     <option value="all">All Fields</option>
                     <option value="name">Product Name</option>
                     <option value="brand">Brand</option>
@@ -71,113 +70,111 @@
             </div>
             <div>
                 <label class="block text-xs font-medium text-gray-700">Case Sensitive</label>
-                <select id="caseSensitive" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
+                <select id="caseSensitive" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:border-[#2E7D32] outline-none">
                     <option value="false">No</option>
                     <option value="true">Yes</option>
                 </select>
             </div>
             <div class="flex items-end">
-                <button id="applyAdvancedSearch" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg text-sm w-full">
+                <button id="applyAdvancedSearch" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-1.5 rounded-lg text-sm w-full font-medium transition">
                     🔍 Apply
                 </button>
             </div>
         </div>
         <div class="mt-2 text-xs text-gray-500">
-            💡 Tip: Use "All Words" mode to search for multiple terms (e.g., "samsung screen" finds products with both words)
+            💡 Tip: Use "All Words" mode to search for multiple terms (e.g., "spiritual oil" finds products with both words)
         </div>
     </div>
-    
-    <p class="text-xs text-gray-500 mt-1">🔎 Type to filter screen sales records | <span id="resultCount" class="font-semibold">0</span> sales found</p>
+
+    <p class="text-xs text-gray-500 mt-1">🔎 Type to filter oil sales records | <span id="resultCount" class="font-semibold">0</span> sales found</p>
 </div>
 
 <!-- Period Filter Buttons -->
 <div class="flex flex-wrap gap-1.5 md:gap-2 mb-4">
-    <button data-period="daily" class="period-btn bg-teal-500 hover:bg-teal-600 text-white px-2.5 py-1 md:px-4 md:py-2 rounded-lg text-xs md:text-sm">Today</button>
-    <button data-period="weekly" class="period-btn bg-teal-500 hover:bg-teal-600 text-white px-2.5 py-1 md:px-4 md:py-2 rounded-lg text-xs md:text-sm">This Week</button>
-    <button data-period="monthly" class="period-btn bg-teal-500 hover:bg-teal-600 text-white px-2.5 py-1 md:px-4 md:py-2 rounded-lg text-xs md:text-sm">This Month</button>
-    <button data-period="yearly" class="period-btn bg-teal-500 hover:bg-teal-600 text-white px-2.5 py-1 md:px-4 md:py-2 rounded-lg text-xs md:text-sm">This Year</button>
-    <button data-period="all" class="period-btn bg-purple-500 hover:bg-purple-600 text-white px-2.5 py-1 md:px-4 md:py-2 rounded-lg text-xs md:text-sm">All Time</button>
+    <button data-period="daily" class="period-btn bg-[#2E7D32] hover:bg-[#1B5E20] text-white px-2.5 py-1 md:px-4 md:py-2 rounded-lg text-xs md:text-sm font-medium transition">Today</button>
+    <button data-period="weekly" class="period-btn bg-[#2E7D32] hover:bg-[#1B5E20] text-white px-2.5 py-1 md:px-4 md:py-2 rounded-lg text-xs md:text-sm font-medium transition">This Week</button>
+    <button data-period="monthly" class="period-btn bg-[#2E7D32] hover:bg-[#1B5E20] text-white px-2.5 py-1 md:px-4 md:py-2 rounded-lg text-xs md:text-sm font-medium transition">This Month</button>
+    <button data-period="yearly" class="period-btn bg-[#2E7D32] hover:bg-[#1B5E20] text-white px-2.5 py-1 md:px-4 md:py-2 rounded-lg text-xs md:text-sm font-medium transition">This Year</button>
+    <button data-period="all" class="period-btn bg-[#F1C40F] hover:bg-[#d4ac0d] text-[#0D2B1D] px-2.5 py-1 md:px-4 md:py-2 rounded-lg text-xs md:text-sm font-semibold transition">All Time</button>
 </div>
 
 <!-- Date Range Filter -->
-<div class="bg-white rounded-xl shadow-md p-3 md:p-4 mb-6">
+<div class="bg-white rounded-xl shadow-md p-3 md:p-4 mb-6 border border-[#E8F5E9]">
     <div class="flex flex-wrap items-end gap-2 md:gap-4">
         <div>
             <label class="block text-xs md:text-sm font-medium text-gray-700">From Date</label>
-            <input type="date" id="startDate" class="border rounded-lg px-2 py-1 md:px-3 md:py-2 text-sm">
+            <input type="date" id="startDate" class="border border-gray-300 rounded-lg px-2 py-1 md:px-3 md:py-2 text-sm focus:border-[#2E7D32] outline-none">
         </div>
         <div>
             <label class="block text-xs md:text-sm font-medium text-gray-700">To Date</label>
-            <input type="date" id="endDate" class="border rounded-lg px-2 py-1 md:px-3 md:py-2 text-sm">
+            <input type="date" id="endDate" class="border border-gray-300 rounded-lg px-2 py-1 md:px-3 md:py-2 text-sm focus:border-[#2E7D32] outline-none">
         </div>
-        <button id="applyDateBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 md:px-5 md:py-2 rounded-lg text-xs md:text-sm">Apply Custom Range</button>
-        <button id="pdfBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 md:px-5 md:py-2 rounded-lg text-xs md:text-sm ml-auto">🖨️ PDF</button>
+        <button id="applyDateBtn" class="bg-[#2E7D32] hover:bg-[#1B5E20] text-white px-3 py-1 md:px-5 md:py-2 rounded-lg text-xs md:text-sm font-medium transition">Apply Custom Range</button>
+        <button id="pdfBtn" class="bg-[#1B5E20] hover:bg-[#0D2B1D] text-white px-3 py-1 md:px-5 md:py-2 rounded-lg text-xs md:text-sm font-medium ml-auto transition">🖨️ PDF</button>
     </div>
     <div id="filterInfo" class="text-xs text-gray-500 mt-2 hidden">
         📋 Currently filtered by: <span id="filterDescription"></span>
     </div>
 </div>
 
-<!-- Sales List (cards) -->
+<!-- Sales List -->
 <div id="salesList" class="space-y-3 md:space-y-4 scrollable-area" style="max-height: 60vh; overflow-y: auto; padding-right: 4px;">
-    <div class="text-center text-gray-400 py-8">Loading screen sales data...</div>
+    <div class="text-center text-gray-400 py-8">Loading oil sales data...</div>
 </div>
 
-<!-- ========== SUMMARY ========== -->
-<div id="summaryBar" class="mt-6 p-3 md:p-4 bg-gray-900 rounded-xl text-teal-400 text-center font-bold shadow-lg text-xs md:text-sm">
+<!-- SUMMARY -->
+<div id="summaryBar" class="mt-6 p-3 md:p-4 bg-[#0D2B1D] rounded-xl text-[#E8F5E9] text-center font-bold shadow-lg text-xs md:text-sm">
     <!-- totals will appear here -->
 </div>
 
-<!-- ========== MODAL: SELECT ITEMS TO REVERSE ========== -->
+<!-- MODAL: REVERSE ITEMS -->
 <div id="reverseModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-[#E8F5E9]">
         <div class="sticky top-0 bg-white p-3 md:p-4 border-b flex justify-between items-center">
-            <h3 class="text-base md:text-xl font-bold" id="reverseModalTitle">Select Items to Reverse</h3>
+            <h3 class="text-base md:text-xl font-bold text-[#1B5E20]" id="reverseModalTitle">Select Items to Reverse</h3>
             <button onclick="closeReverseModal()" class="text-gray-500 hover:text-gray-700 text-xl md:text-2xl">&times;</button>
         </div>
         <div id="reverseItemList" class="p-3 md:p-4 space-y-3"></div>
         <div class="sticky bottom-0 bg-white p-3 md:p-4 border-t flex flex-wrap justify-between gap-2">
             <div class="flex gap-2">
-                <button onclick="selectAllReverseItems()" class="bg-blue-500 text-white px-2 py-1 md:px-3 md:py-1 rounded text-xs md:text-sm">Select All</button>
-                <button onclick="deselectAllReverseItems()" class="bg-orange-500 text-white px-2 py-1 md:px-3 md:py-1 rounded text-xs md:text-sm">Deselect All</button>
+                <button onclick="selectAllReverseItems()" class="bg-[#2E7D32] hover:bg-[#1B5E20] text-white px-2 py-1 md:px-3 md:py-1 rounded text-xs md:text-sm font-medium transition">Select All</button>
+                <button onclick="deselectAllReverseItems()" class="bg-amber-500 hover:bg-amber-600 text-white px-2 py-1 md:px-3 md:py-1 rounded text-xs md:text-sm font-medium transition">Deselect All</button>
             </div>
             <div class="flex gap-2">
-                <button id="confirmReverseBtn" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 md:px-4 md:py-2 rounded text-xs md:text-sm">Reverse Selected</button>
-                <button onclick="closeReverseModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-3 py-1 md:px-4 md:py-2 rounded text-xs md:text-sm">Cancel</button>
+                <button id="confirmReverseBtn" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 md:px-4 md:py-2 rounded text-xs md:text-sm font-medium transition">Reverse Selected</button>
+                <button onclick="closeReverseModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-3 py-1 md:px-4 md:py-2 rounded text-xs md:text-sm transition">Cancel</button>
             </div>
         </div>
     </div>
 </div>
 
-<!-- ========== MODAL: VIEW DETAILS ========== -->
+<!-- MODAL: VIEW DETAILS -->
 <div id="viewDetailsModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-[#E8F5E9]">
         <div class="sticky top-0 bg-white p-3 md:p-4 border-b flex justify-between items-center">
-            <h3 class="text-base md:text-xl font-bold" id="viewDetailsTitle">Select Item to View Details</h3>
+            <h3 class="text-base md:text-xl font-bold text-[#1B5E20]" id="viewDetailsTitle">Select Item to View Details</h3>
             <button onclick="closeViewDetailsModal()" class="text-gray-500 hover:text-gray-700 text-xl md:text-2xl">&times;</button>
         </div>
         <div id="viewDetailsItemList" class="p-3 md:p-4 space-y-3"></div>
         <div class="sticky bottom-0 bg-white p-3 md:p-4 border-t text-right">
-            <button onclick="closeViewDetailsModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-3 py-1 md:px-4 md:py-2 rounded text-xs md:text-sm">Close</button>
+            <button onclick="closeViewDetailsModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-3 py-1 md:px-4 md:py-2 rounded text-xs md:text-sm transition">Close</button>
         </div>
     </div>
 </div>
 
-<!-- ========== MODAL: BATCH DETAILS ========== -->
+<!-- MODAL: BATCH DETAILS -->
 <div id="batchDetailsModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-[#E8F5E9]">
         <div class="sticky top-0 bg-white p-3 md:p-4 border-b flex justify-between items-center">
-            <h3 class="text-base md:text-xl font-bold" id="batchDetailsTitle">Batch Details</h3>
+            <h3 class="text-base md:text-xl font-bold text-[#1B5E20]" id="batchDetailsTitle">Batch Details</h3>
             <button onclick="closeBatchDetailsModal()" class="text-gray-500 hover:text-gray-700 text-xl md:text-2xl">&times;</button>
         </div>
-        <div id="batchDetailsContent" class="p-3 md:p-4">
-            <!-- dynamically loaded -->
-        </div>
+        <div id="batchDetailsContent" class="p-3 md:p-4"></div>
         <div class="sticky bottom-0 bg-white p-3 md:p-4 border-t flex flex-wrap justify-between items-center gap-2">
-            <button id="openInPurchasesBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 md:px-4 md:py-2 rounded text-xs md:text-sm hidden">
+            <button id="openInPurchasesBtn" class="bg-[#1B5E20] hover:bg-[#0D2B1D] text-white px-3 py-1 md:px-4 md:py-2 rounded text-xs md:text-sm font-medium hidden transition">
                 🔗 Open in Purchases
             </button>
-            <button onclick="closeBatchDetailsModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-3 py-1 md:px-4 md:py-2 rounded text-xs md:text-sm ml-auto">Close</button>
+            <button onclick="closeBatchDetailsModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-3 py-1 md:px-4 md:py-2 rounded text-xs md:text-sm ml-auto transition">Close</button>
         </div>
     </div>
 </div>
@@ -187,46 +184,39 @@
         scrollbar-width: thin;
         scrollbar-color: #cbd5e1 #f1f1f1;
     }
-    .scrollable-area::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
-    }
-    .scrollable-area::-webkit-scrollbar-track {
-        background: #f1f1f1;
-        border-radius: 10px;
-    }
+    .scrollable-area::-webkit-scrollbar { width: 8px; height: 8px; }
+    .scrollable-area::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
     .scrollable-area::-webkit-scrollbar-thumb {
-        background: #cbd5e1;
-        border-radius: 10px;
-        border: 2px solid #f1f1f1;
+        background: #cbd5e1; border-radius: 10px; border: 2px solid #f1f1f1;
     }
-    .scrollable-area::-webkit-scrollbar-thumb:hover {
-        background: #94a3b8;
-    }
+    .scrollable-area::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     @media (max-width: 767px) {
-        .scrollable-area::-webkit-scrollbar {
-            width: 10px;
-            height: 10px;
-        }
+        .scrollable-area::-webkit-scrollbar { width: 10px; height: 10px; }
         .scrollable-area::-webkit-scrollbar-thumb {
-            background: #94a3b8;
-            border-radius: 10px;
-            border: 2px solid #f1f1f1;
+            background: #94a3b8; border-radius: 10px; border: 2px solid #f1f1f1;
         }
-        .scrollable-area {
-            scrollbar-color: #94a3b8 #f1f1f1;
-        }
+        .scrollable-area { scrollbar-color: #94a3b8 #f1f1f1; }
     }
-    .highlight-match {
-        background-color: #fef08a;
-        padding: 0 2px;
-        border-radius: 2px;
-    }
+    .highlight-match { background-color: #fef08a; padding: 0 2px; border-radius: 2px; }
 </style>
 
 <script>
+    // ============================================================
+    //  OILS PAGE — category fixed to the 3 oils
+    // ============================================================
+    const OIL_CATS = ['Spiritual Oils', 'Anointing Oils', 'Essential Oils'];
+    const GROUP_LABEL = 'Oils';
+    const GROUP_BADGE = 'Oils';
+
+    function isInGroup(category) {
+        return OIL_CATS.includes((category || '').trim());
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
-        console.log("DOM loaded – initializing Screen Sales (API-only)");
+        console.log("DOM loaded – initializing Oil Sales (API-only)");
+
+        const badgeEl = document.getElementById('todaySalesGroupBadge');
+        if (badgeEl) badgeEl.textContent = GROUP_BADGE;
 
         const userRoleEl = document.getElementById('userRole');
         const isAdmin = userRoleEl ? userRoleEl.getAttribute('data-role') === 'admin' : false;
@@ -238,7 +228,6 @@
         let currentEndDate = null;
         let currentSearchTerm = '';
 
-        // ✅ NEW: Batch filter tracking
         let currentBatchId = null;
 
         let searchMode = 'contains';
@@ -253,20 +242,16 @@
         // ---------- Offline banner ----------
         function updateOfflineBanner() {
             const banner = document.getElementById('offlineBanner');
-            if (!navigator.onLine) {
-                banner.classList.remove('hidden');
-            } else {
-                banner.classList.add('hidden');
-            }
+            if (!navigator.onLine) banner.classList.remove('hidden');
+            else banner.classList.add('hidden');
         }
         window.addEventListener('online', updateOfflineBanner);
         window.addEventListener('offline', updateOfflineBanner);
 
-        // ---------- Formatting helpers ----------
+        // ---------- Formatting ----------
         function formatMoney(amount) {
             return '₵' + (parseFloat(amount) || 0).toFixed(2);
         }
-
         function escapeHtml(str) {
             if (!str) return '';
             return str.replace(/[&<>]/g, function (m) {
@@ -276,36 +261,37 @@
                 return m;
             });
         }
-
+        function formatDate(dateStr) {
+            if (!dateStr) return '';
+            return new Date(dateStr).toLocaleString();
+        }
         function getPaymentBadge(paymentMethod, chequeNumber) {
             if (paymentMethod === 'cash' || paymentMethod === '') {
-                return '<span class="inline-flex items-center bg-green-100 text-green-800 px-1.5 py-0.5 md:px-2 md:py-1 rounded text-xs font-medium">💵 Cash</span>';
+                return '<span class="inline-flex items-center bg-[#E8F5E9] text-[#1B5E20] px-1.5 py-0.5 md:px-2 md:py-1 rounded text-xs font-medium">💵 Cash</span>';
             } else if (paymentMethod === 'momo') {
                 return '<span class="inline-flex items-center bg-blue-100 text-blue-800 px-1.5 py-0.5 md:px-2 md:py-1 rounded text-xs font-medium">📱 MoMo</span>';
             } else if (paymentMethod === 'cheque') {
-                return `<span class="inline-flex items-center bg-purple-100 text-purple-800 px-1.5 py-0.5 md:px-2 md:py-1 rounded text-xs font-medium">📝 Cheque ${chequeNumber ? '#' + escapeHtml(chequeNumber) : ''}</span>`;
-            } else {
-                return '<span class="inline-flex items-center bg-gray-100 text-gray-800 px-1.5 py-0.5 md:px-2 md:py-1 rounded text-xs font-medium">❓ Unknown</span>';
+                return `<span class="inline-flex items-center bg-amber-100 text-amber-800 px-1.5 py-0.5 md:px-2 md:py-1 rounded text-xs font-medium">📝 Cheque ${chequeNumber ? '#' + escapeHtml(chequeNumber) : ''}</span>`;
             }
+            return '<span class="inline-flex items-center bg-gray-100 text-gray-800 px-1.5 py-0.5 md:px-2 md:py-1 rounded text-xs font-medium">❓ Unknown</span>';
         }
 
         // ---------- Advanced Search ----------
-        function matchesSearch(value, searchTerm, mode, caseSensitive) {
+        function matchesSearch(value, searchTerm, mode, cs) {
             if (!value) return false;
-            let searchValue = value, term = searchTerm;
-            if (!caseSensitive) { searchValue = searchValue.toLowerCase(); term = term.toLowerCase(); }
+            let s = value, t = searchTerm;
+            if (!cs) { s = s.toLowerCase(); t = t.toLowerCase(); }
             switch(mode) {
-                case 'exact': return searchValue === term;
-                case 'starts': return searchValue.startsWith(term);
-                case 'ends': return searchValue.endsWith(term);
+                case 'exact': return s === t;
+                case 'starts': return s.startsWith(t);
+                case 'ends': return s.endsWith(t);
                 case 'words': {
-                    const words = term.split(/\s+/).filter(w => w.length > 0);
-                    return words.every(word => searchValue.includes(word));
+                    const words = t.split(/\s+/).filter(w => w.length > 0);
+                    return words.every(word => s.includes(word));
                 }
-                default: return searchValue.includes(term);
+                default: return s.includes(t);
             }
         }
-
         function getSearchableText(sale, field) {
             switch(field) {
                 case 'name': return sale.name || '';
@@ -315,14 +301,13 @@
                 default: return [sale.name, sale.brand, sale.username, sale.category].filter(Boolean).join(' ');
             }
         }
-
         function applyAdvancedSearchAndRender() {
             const searchInput = document.getElementById('searchInput');
             currentSearchTerm = searchInput ? searchInput.value : '';
             searchMode = document.getElementById('searchMode').value;
             searchField = document.getElementById('searchField').value;
             caseSensitive = document.getElementById('caseSensitive').value === 'true';
-            
+
             let filtered = currentSalesData;
             if (currentSearchTerm.trim()) {
                 const term = currentSearchTerm.trim();
@@ -334,45 +319,41 @@
             currentFilteredData = filtered;
             updateFilterInfo();
             renderSales(filtered, currentSearchTerm);
-            
+
             const distinctSales = new Set();
             filtered.forEach(item => distinctSales.add(item.sale_id));
             const distinctCount = distinctSales.size;
             const totalDistinct = new Set();
             currentSalesData.forEach(item => totalDistinct.add(item.sale_id));
             const totalDistinctCount = totalDistinct.size;
-            
+
             const resultCount = document.getElementById('resultCount');
             if (resultCount) {
-                if (currentSearchTerm.trim()) {
-                    resultCount.textContent = `${distinctCount} (of ${totalDistinctCount})`;
-                } else {
-                    resultCount.textContent = distinctCount;
-                }
+                resultCount.textContent = currentSearchTerm.trim()
+                    ? `${distinctCount} (of ${totalDistinctCount})`
+                    : distinctCount;
             }
         }
 
         // ---------- Data loading ----------
         async function loadSalesData() {
             updateOfflineBanner();
-            console.log("Loading screen sales data (API-only)");
+            console.log("Loading oil sales data (API-only)");
 
             const container = document.getElementById('salesList');
-            container.innerHTML = '<div class="text-center text-gray-400 py-8">⏳ Loading screen sales data...</div>';
+            container.innerHTML = '<div class="text-center text-gray-400 py-8">⏳ Loading oil sales data...</div>';
 
             if (!navigator.onLine) {
                 container.innerHTML = `
                     <div class="text-center text-gray-400 py-8">
-                        ⚠️ You are offline. Please connect to the internet to view screen sales.
+                        ⚠️ You are offline. Please connect to the internet to view oil sales.
                         <br><span class="text-sm text-gray-500">Sales data requires an active internet connection.</span>
-                    </div>
-                `;
-                document.getElementById('summaryBar').innerHTML = '📡 Offline – connect to view screen sales';
+                    </div>`;
+                document.getElementById('summaryBar').innerHTML = '📡 Offline – connect to view oil sales';
                 return;
             }
 
             try {
-                // ✅ Build URL with optional batch_id
                 const params = new URLSearchParams();
                 if (currentStartDate && currentEndDate) {
                     params.append('start_date', currentStartDate);
@@ -380,45 +361,39 @@
                 } else {
                     params.append('period', currentPeriod);
                 }
-                params.append('category', 'Screen');
-                if (currentBatchId) {
-                    params.append('batch_id', currentBatchId);
-                }
+                params.append('group', 'oils');
+                if (currentBatchId) params.append('batch_id', currentBatchId);
 
                 const url = `/api/today_sales?${params.toString()}`;
-                console.log('Fetching screen sales:', url);
+                console.log('Fetching oil sales:', url);
                 const res = await fetch(url);
-                
-                if (!res.ok) {
-                    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-                }
-                
+
+                if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+
                 const apiData = await res.json();
-                
-                if (apiData && apiData.length > 0) {
-                    currentSalesData = apiData;
-                    console.log('📦 Loaded screen sales from API:', currentSalesData.length);
+
+                if (Array.isArray(apiData)) {
+                    currentSalesData = apiData.filter(row => isInGroup(row.category));
                 } else {
                     currentSalesData = [];
-                    console.log('API returned empty data for screen period:', currentPeriod);
                 }
-                
+                console.log(`📦 Loaded ${currentSalesData.length} oil sales`);
+
                 updateFilterInfo();
                 applyAdvancedSearchAndRender();
-                
+
             } catch (error) {
-                console.error('Error loading screen sales:', error);
+                console.error('Error loading oil sales:', error);
                 container.innerHTML = `
                     <div class="text-center text-red-500 py-8">
-                        ❌ Error loading screen sales data. Please try refreshing.
+                        ❌ Error loading oil sales data. Please try refreshing.
                         <br><span class="text-sm text-gray-400">${error.message}</span>
-                    </div>
-                `;
-                document.getElementById('summaryBar').innerHTML = '❌ Failed to load screen sales data';
+                    </div>`;
+                document.getElementById('summaryBar').innerHTML = '❌ Failed to load oil sales data';
             }
         }
 
-        // ---------- Update filter info ----------
+        // ---------- Filter info ----------
         function updateFilterInfo() {
             const filterInfo = document.getElementById('filterInfo');
             const filterDesc = document.getElementById('filterDescription');
@@ -449,13 +424,15 @@
             }
         }
 
-        // ---------- Render sales cards ----------
+        // ---------- Render sales ----------
         function renderSales(sales, searchTerm = '') {
             const container = document.getElementById('salesList');
             if (!sales || sales.length === 0) {
-                let message = searchTerm ? `No screen sales found matching "${searchTerm}"` : 'No screen sales recorded for this period.';
+                let message = searchTerm
+                    ? `No oil sales found matching "${searchTerm}"`
+                    : 'No oil sales recorded for this period.';
                 if (currentBatchId && !searchTerm) {
-                    message = `No screen sales found for Batch #${currentBatchId} in this period.`;
+                    message = `No oil sales found for Batch #${currentBatchId} in this period.`;
                 }
                 container.innerHTML = `<div class="text-center text-gray-400 py-8">${message}</div>`;
                 updateSummary([]);
@@ -503,12 +480,11 @@
                     if (isAdmin) {
                         extraDetails = `
                             <div>Cost: ${formatMoney(item.cost_price)}</div>
-                            <div>Profit: ${formatMoney(item.profit)}</div>
-                        `;
+                            <div>Profit: ${formatMoney(item.profit)}</div>`;
                     }
                     return `
                         <div class="border-b pb-1 md:pb-2 mb-1 md:mb-2 last:border-0">
-                            <div class="font-semibold text-indigo-700 text-sm md:text-base">${displayName} (${displayBrand}) ${statusText}</div>
+                            <div class="font-semibold text-[#1B5E20] text-sm md:text-base">${displayName} (${displayBrand}) ${statusText}</div>
                             <div class="text-xs md:text-sm grid grid-cols-2 gap-0.5 md:gap-1">
                                 <div>Qty: ${item.quantity}</div>
                                 <div>Selling: ${formatMoney(item.selling_price)}</div>
@@ -516,11 +492,11 @@
                                 ${extraDetails}
                                 <div>Subtotal: ${formatMoney(item.subtotal)}</div>
                             </div>
-                        </div>
-                    `;
+                        </div>`;
                 }).join('');
+
                 html += `
-                    <div class="bg-white rounded-xl shadow-md p-3 md:p-4 border" data-sale-id="${saleId}">
+                    <div class="bg-white rounded-xl shadow-md p-3 md:p-4 border border-[#E8F5E9]" data-sale-id="${saleId}">
                         <div class="flex flex-wrap justify-between items-start mb-1 md:mb-2 gap-1">
                             <div class="text-xs md:text-sm text-gray-500">Sale #${saleId} | ${saleGroup.date}</div>
                             <div>${paymentBadge}</div>
@@ -529,16 +505,15 @@
                         ${itemsHtml}
                         <div class="mt-1 md:mt-2 pt-1 md:pt-2 border-t flex flex-wrap justify-between items-center gap-2">
                             <div class="flex gap-1">
-                                <button class="reverse-sale-btn bg-red-500 hover:bg-red-600 text-white px-2 py-0.5 md:px-3 md:py-1 rounded text-xs md:text-sm" data-sale-id="${saleId}" data-sale-items='${JSON.stringify(saleGroup.items)}'>↺ Reverse</button>
-                                ${isAdmin ? `<button class="view-details-btn bg-blue-500 hover:bg-blue-600 text-white px-2 py-0.5 md:px-3 md:py-1 rounded text-xs md:text-sm" data-sale-id="${saleId}" data-sale-items='${JSON.stringify(saleGroup.items)}'>📋 Details</button>` : ''}
+                                <button class="reverse-sale-btn bg-red-600 hover:bg-red-700 text-white px-2 py-0.5 md:px-3 md:py-1 rounded text-xs md:text-sm transition" data-sale-id="${saleId}" data-sale-items='${JSON.stringify(saleGroup.items)}'>↺ Reverse</button>
+                                ${isAdmin ? `<button class="view-details-btn bg-[#2E7D32] hover:bg-[#1B5E20] text-white px-2 py-0.5 md:px-3 md:py-1 rounded text-xs md:text-sm transition" data-sale-id="${saleId}" data-sale-items='${JSON.stringify(saleGroup.items)}'>📋 Details</button>` : ''}
                             </div>
                             <div class="flex flex-wrap items-center gap-1 md:gap-2">
                                 <span class="text-xs md:text-sm">Discount: ${formatMoney(saleGroup.discount)}</span>
-                                <span class="text-base md:text-lg font-bold">Total: ${formatMoney(saleGroup.total)}</span>
+                                <span class="text-base md:text-lg font-bold text-[#1B5E20]">Total: ${formatMoney(saleGroup.total)}</span>
                             </div>
                         </div>
-                    </div>
-                `;
+                    </div>`;
             }
             container.innerHTML = html;
             updateSummary(sales);
@@ -550,7 +525,6 @@
                     openReverseModal(saleId, saleItems);
                 });
             });
-
             if (isAdmin) {
                 document.querySelectorAll('.view-details-btn').forEach(btn => {
                     btn.addEventListener('click', () => {
@@ -560,10 +534,10 @@
                     });
                 });
             }
-            console.log(`✅ Rendered ${saleCount} screen sales with ${sales.length} total items`);
+            console.log(`✅ Rendered ${saleCount} oil sales with ${sales.length} total items`);
         }
 
-        // ---------- Update summary ----------
+        // ---------- Summary ----------
         function updateSummary(sales) {
             const seenSales = new Set();
             let totalSales = 0, totalDiscount = 0, totalProfit = 0, totalItems = 0;
@@ -575,15 +549,10 @@
                     totalProfit += sale.net_profit || 0;
                     seenSales.add(sale.sale_id);
                     const method = (sale.payment_method || 'cash').toLowerCase();
-                    if (method === 'cash' || method === '') {
-                        cashTotal += sale.total || 0;
-                    } else if (method === 'momo') {
-                        momoTotal += sale.total || 0;
-                    } else if (method === 'cheque') {
-                        chequeTotal += sale.total || 0;
-                    } else {
-                        cashTotal += sale.total || 0;
-                    }
+                    if (method === 'cash' || method === '') cashTotal += sale.total || 0;
+                    else if (method === 'momo') momoTotal += sale.total || 0;
+                    else if (method === 'cheque') chequeTotal += sale.total || 0;
+                    else cashTotal += sale.total || 0;
                 }
                 totalItems += sale.quantity || 0;
             }
@@ -596,38 +565,35 @@
                 periodText = `📅 ${periodNames[currentPeriod] || currentPeriod}`;
             }
             let filterSummary = currentSearchTerm ? ` | 🔍 "${currentSearchTerm}"` : '';
-            if (currentBatchId) {
-                filterSummary += ` | 🎯 Batch #${currentBatchId}`;
-            }
+            if (currentBatchId) filterSummary += ` | 🎯 Batch #${currentBatchId}`;
 
             let profitHtml = '';
             if (isAdmin) {
-                profitHtml = `<span class="text-gray-500">|</span>
-                              <span>📈 Profit: <strong class="${totalProfit >= 0 ? 'text-teal-400' : 'text-red-400'}">${formatMoney(totalProfit)}</strong></span>`;
+                profitHtml = `<span class="text-[#4C6B56]">|</span>
+                              <span>📈 Profit: <strong class="${totalProfit >= 0 ? 'text-[#F1C40F]' : 'text-red-400'}">${formatMoney(totalProfit)}</strong></span>`;
             }
 
             document.getElementById('summaryBar').innerHTML = `
                 <div class="flex flex-wrap justify-center items-center gap-1 md:gap-2 text-[10px] md:text-xs">
-                    <span class="text-teal-300">${periodText}</span>
-                    <span class="text-gray-500">|</span>
-                    <span>🧾 Screen Sales: <strong>${totalSalesCount}</strong></span>
-                    <span class="text-gray-500">|</span>
+                    <span class="text-[#A5D6A7]">${periodText}</span>
+                    <span class="text-[#4C6B56]">|</span>
+                    <span>🧾 Oil Sales: <strong>${totalSalesCount}</strong></span>
+                    <span class="text-[#4C6B56]">|</span>
                     <span>📦 Items: <strong>${totalItems}</strong></span>
-                    <span class="text-gray-500">|</span>
+                    <span class="text-[#4C6B56]">|</span>
                     <span>💰 Sales: <strong class="text-green-400">${formatMoney(totalSales)}</strong></span>
-                    <span class="text-gray-500">|</span>
+                    <span class="text-[#4C6B56]">|</span>
                     <span>📉 Disc: <strong class="text-red-400">${formatMoney(totalDiscount)}</strong></span>
                     ${profitHtml}
                     ${filterSummary}
                 </div>
                 <div class="flex flex-wrap justify-center items-center gap-1 md:gap-2 text-[9px] md:text-xs mt-0.5">
                     <span class="text-green-400">💵 Cash: ${formatMoney(cashTotal)}</span>
-                    <span class="text-gray-600">|</span>
+                    <span class="text-[#4C6B56]">|</span>
                     <span class="text-blue-400">📱 MoMo: ${formatMoney(momoTotal)}</span>
-                    <span class="text-gray-600">|</span>
-                    <span class="text-purple-400">📝 Cheque: ${formatMoney(chequeTotal)}</span>
-                </div>
-            `;
+                    <span class="text-[#4C6B56]">|</span>
+                    <span class="text-amber-400">📝 Cheque: ${formatMoney(chequeTotal)}</span>
+                </div>`;
         }
 
         // ---------- Reverse modal ----------
@@ -638,7 +604,7 @@
             currentReverseItems = [];
             saleItems.forEach((item) => {
                 const div = document.createElement('div');
-                div.className = 'border rounded-lg p-2 md:p-3 flex items-start space-x-2 md:space-x-3';
+                div.className = 'border border-[#E8F5E9] rounded-lg p-2 md:p-3 flex items-start space-x-2 md:space-x-3';
                 const cb = document.createElement('input');
                 cb.type = 'checkbox';
                 cb.className = 'mt-1';
@@ -646,11 +612,10 @@
                 const info = document.createElement('div');
                 info.className = 'flex-1 text-xs md:text-sm';
                 let details = `
-                    <strong>${escapeHtml(item.name)} (${escapeHtml(item.brand)})</strong><br>
+                    <strong class="text-[#1B5E20]">${escapeHtml(item.name)} (${escapeHtml(item.brand)})</strong><br>
                     Batch #${item.batch_id === -1 ? 'DELETED' : item.batch_id}<br>
                     Quantity: ${item.quantity}<br>
-                    Selling: ${formatMoney(item.selling_price)}
-                `;
+                    Selling: ${formatMoney(item.selling_price)}`;
                 if (isAdmin) {
                     details += `<br>Cost: ${formatMoney(item.cost_price)}<br>Profit: ${formatMoney(item.profit)}`;
                 }
@@ -660,7 +625,7 @@
                 container.appendChild(div);
                 currentReverseItems.push({ checkbox: cb, itemData: item });
             });
-            document.getElementById('reverseModalTitle').innerHTML = `Reverse Items from Screen Sale #${saleId}`;
+            document.getElementById('reverseModalTitle').innerHTML = `Reverse Items from Oil Sale #${saleId}`;
             document.getElementById('reverseModal').classList.remove('hidden');
         };
 
@@ -669,24 +634,13 @@
             currentReverseSaleId = null;
             currentReverseItems = [];
         };
-
-        window.selectAllReverseItems = function () {
-            currentReverseItems.forEach(i => i.checkbox.checked = true);
-        };
-        window.deselectAllReverseItems = function () {
-            currentReverseItems.forEach(i => i.checkbox.checked = false);
-        };
+        window.selectAllReverseItems = function () { currentReverseItems.forEach(i => i.checkbox.checked = true); };
+        window.deselectAllReverseItems = function () { currentReverseItems.forEach(i => i.checkbox.checked = false); };
 
         async function confirmReverseSelected() {
-            if (!navigator.onLine) {
-                alert('Reversing sales requires internet. Please connect and try again.');
-                return;
-            }
+            if (!navigator.onLine) { alert('Reversing sales requires internet. Please connect and try again.'); return; }
             const selected = currentReverseItems.filter(i => i.checkbox.checked);
-            if (selected.length === 0) {
-                alert('Please select at least one item to reverse.');
-                return;
-            }
+            if (selected.length === 0) { alert('Please select at least one item to reverse.'); return; }
             const itemsToReverse = selected.map(i => JSON.parse(i.checkbox.dataset.item));
             try {
                 const response = await fetch('/api/sales/reverse_items', {
@@ -707,7 +661,7 @@
             }
         }
 
-        // ---------- View Details modal (admin) ----------
+        // ---------- View Details modal ----------
         window.openViewDetailsModal = function (saleId, saleItems) {
             if (!isAdmin) return;
             currentViewSaleId = saleId;
@@ -715,46 +669,39 @@
             container.innerHTML = '';
             saleItems.forEach((item) => {
                 const div = document.createElement('div');
-                div.className = 'border rounded-lg p-2 md:p-3 flex items-center justify-between';
+                div.className = 'border border-[#E8F5E9] rounded-lg p-2 md:p-3 flex items-center justify-between';
                 const info = document.createElement('div');
                 info.className = 'flex-1 text-xs md:text-sm';
                 let details = `
-                    <strong>${escapeHtml(item.name)} (${escapeHtml(item.brand)})</strong><br>
+                    <strong class="text-[#1B5E20]">${escapeHtml(item.name)} (${escapeHtml(item.brand)})</strong><br>
                     Batch #${item.batch_id === -1 ? 'DELETED' : item.batch_id}<br>
                     Quantity: ${item.quantity}<br>
-                    Selling: ${formatMoney(item.selling_price)}
-                `;
+                    Selling: ${formatMoney(item.selling_price)}`;
                 if (isAdmin) {
                     details += `<br>Cost: ${formatMoney(item.cost_price)}<br>Profit: ${formatMoney(item.profit)}`;
                 }
                 info.innerHTML = details;
 
                 const viewBtn = document.createElement('button');
-                viewBtn.className = 'bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 md:px-3 md:py-1 rounded text-xs md:text-sm ml-2 flex-shrink-0';
+                viewBtn.className = 'bg-[#2E7D32] hover:bg-[#1B5E20] text-white px-2 py-1 md:px-3 md:py-1 rounded text-xs md:text-sm ml-2 flex-shrink-0 font-medium transition';
                 viewBtn.textContent = '📋 View Batch Details';
-                viewBtn.dataset.batchId = item.batch_id;
-                viewBtn.dataset.productName = item.name;
-                viewBtn.dataset.productBrand = item.brand;
-                viewBtn.dataset.quantity = item.quantity;
-                viewBtn.dataset.sellingPrice = item.selling_price;
-                viewBtn.dataset.costPrice = item.cost_price;
-                viewBtn.dataset.saleId = saleId;
                 viewBtn.addEventListener('click', function(e) {
                     e.stopPropagation();
-                    const batchId = parseInt(this.dataset.batchId);
-                    const productName = this.dataset.productName;
-                    const productBrand = this.dataset.productBrand;
-                    const quantitySold = parseInt(this.dataset.quantity);
-                    const sellingPrice = parseFloat(this.dataset.sellingPrice);
-                    const costPrice = parseFloat(this.dataset.costPrice);
-                    showBatchDetails(batchId, productName, productBrand, quantitySold, sellingPrice, costPrice);
+                    showBatchDetails(
+                        parseInt(item.batch_id),
+                        item.name,
+                        item.brand,
+                        parseInt(item.quantity),
+                        parseFloat(item.selling_price),
+                        parseFloat(item.cost_price)
+                    );
                 });
 
                 div.appendChild(info);
                 div.appendChild(viewBtn);
                 container.appendChild(div);
             });
-            document.getElementById('viewDetailsTitle').innerHTML = `Screen Sale #${saleId} – Select Item`;
+            document.getElementById('viewDetailsTitle').innerHTML = `Oil Sale #${saleId} – Select Item`;
             document.getElementById('viewDetailsModal').classList.remove('hidden');
         };
 
@@ -764,10 +711,10 @@
             currentViewItems = [];
         };
 
-        // ---------- Batch details modal ----------
+        // ---------- Batch details ----------
         window.openInPurchases = function(batchId) {
             if (batchId && batchId !== -1) {
-                window.location.href = `/purchases/screens?show_history=${batchId}`;
+                window.location.href = `/purchases/oils?show_history=${batchId}`;
             }
         };
 
@@ -777,8 +724,8 @@
                 openInPurchasesBtn.classList.add('hidden');
                 document.getElementById('batchDetailsTitle').innerHTML = `Batch #DELETED – ${productName} (${productBrand})`;
                 document.getElementById('batchDetailsContent').innerHTML = `
-                    <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
-                        <p class="text-yellow-700">⚠️ This batch has been deleted. Only sale history is available.</p>
+                    <div class="bg-amber-50 border-l-4 border-amber-400 p-4 mb-4">
+                        <p class="text-amber-800">⚠️ This batch has been deleted. Only sale history is available.</p>
                     </div>
                     <div class="grid grid-cols-2 gap-2 text-sm">
                         <div class="bg-gray-50 p-2 rounded">Product: <strong>${escapeHtml(productName)}</strong></div>
@@ -787,29 +734,22 @@
                         <div class="bg-gray-50 p-2 rounded">Selling Price: <strong>${formatMoney(sellingPrice)}</strong></div>
                         ${isAdmin ? `<div class="bg-gray-50 p-2 rounded">Cost Price: <strong>${formatMoney(costPrice)}</strong></div>
                                      <div class="bg-gray-50 p-2 rounded">Profit: <strong>${formatMoney((sellingPrice - costPrice) * quantitySold)}</strong></div>` : ''}
-                    </div>
-                `;
+                    </div>`;
                 document.getElementById('batchDetailsModal').classList.remove('hidden');
                 return;
             }
 
             openInPurchasesBtn.classList.remove('hidden');
-            openInPurchasesBtn.onclick = function() {
-                window.openInPurchases(batchId);
-            };
+            openInPurchasesBtn.onclick = function() { window.openInPurchases(batchId); };
 
             try {
                 const response = await fetch(`/api/purchases/${batchId}/history`);
                 if (!response.ok) {
-                    if (response.status === 404) {
-                        throw new Error('Batch not found');
-                    }
+                    if (response.status === 404) throw new Error('Batch not found');
                     throw new Error('Failed to fetch batch details');
                 }
                 const data = await response.json();
-                if (!data.success) {
-                    throw new Error(data.error || 'Unknown error');
-                }
+                if (!data.success) throw new Error(data.error || 'Unknown error');
                 const purchase = data.purchase;
 
                 const totalQty = purchase.original_quantity || purchase.current_quantity || 0;
@@ -825,8 +765,8 @@
                         <div class="bg-gray-50 p-2 rounded">Brand: <strong>${escapeHtml(productBrand)}</strong></div>
                         <div class="bg-gray-50 p-2 rounded">Batch ID: <strong>#${purchase.batch_id}</strong></div>
                         <div class="bg-gray-50 p-2 rounded">Original Date: <strong>${formatDate(purchase.original_date)}</strong></div>
-                        <div class="bg-blue-50 p-2 rounded">Total Quantity: <strong>${totalQty}</strong></div>
-                        <div class="bg-blue-50 p-2 rounded">Sold: <strong>${soldQty}</strong></div>
+                        <div class="bg-[#E8F5E9] p-2 rounded">Total Quantity: <strong>${totalQty}</strong></div>
+                        <div class="bg-[#E8F5E9] p-2 rounded">Sold: <strong>${soldQty}</strong></div>
                         <div class="bg-gray-50 p-2 rounded">Remaining: <strong>${remainingQty}</strong></div>
                         <div class="bg-red-50 p-2 rounded">Claimed: <strong>${claimedQty}</strong></div>
                         <div class="bg-green-50 p-2 rounded">✅ Good Stock: <strong>${Math.max(goodQty, 0)}</strong></div>
@@ -837,10 +777,9 @@
                         ${purchase.original_discount > 0 ? `<div class="bg-gray-50 p-2 rounded col-span-2">Discount: <strong>${formatMoney(purchase.original_discount)}</strong></div>` : ''}
                     </div>
                     <div class="mt-3 text-sm">
-                        <div class="bg-yellow-50 p-2 rounded">📌 This sale sold <strong>${quantitySold}</strong> unit(s) from this batch at <strong>${formatMoney(sellingPrice)}</strong> each.</div>
-                        ${isAdmin ? `<div class="bg-teal-50 p-2 rounded mt-2">📈 Profit on this sale: <strong>${formatMoney((sellingPrice - purchase.original_cost_price) * quantitySold)}</strong></div>` : ''}
-                    </div>
-                `;
+                        <div class="bg-amber-50 p-2 rounded">📌 This sale sold <strong>${quantitySold}</strong> unit(s) from this batch at <strong>${formatMoney(sellingPrice)}</strong> each.</div>
+                        ${isAdmin ? `<div class="bg-[#E8F5E9] p-2 rounded mt-2 text-[#1B5E20]">📈 Profit on this sale: <strong>${formatMoney((sellingPrice - purchase.original_cost_price) * quantitySold)}</strong></div>` : ''}
+                    </div>`;
                 document.getElementById('batchDetailsModal').classList.remove('hidden');
             } catch (error) {
                 alert('Could not load batch details: ' + error.message);
@@ -856,33 +795,20 @@
                         <div class="bg-gray-50 p-2 rounded">Selling Price: <strong>${formatMoney(sellingPrice)}</strong></div>
                         ${isAdmin ? `<div class="bg-gray-50 p-2 rounded">Cost Price: <strong>${formatMoney(costPrice)}</strong></div>
                                      <div class="bg-gray-50 p-2 rounded">Profit: <strong>${formatMoney((sellingPrice - costPrice) * quantitySold)}</strong></div>` : ''}
-                    </div>
-                `;
+                    </div>`;
                 document.getElementById('batchDetailsModal').classList.remove('hidden');
             }
         };
-
-        function formatDate(dateStr) {
-            if (!dateStr) return '';
-            const d = new Date(dateStr);
-            return d.toLocaleString();
-        }
 
         window.closeBatchDetailsModal = function () {
             document.getElementById('batchDetailsModal').classList.add('hidden');
         };
 
-        // ---------- PDF export ----------
+        // ---------- PDF ----------
         async function exportPDF() {
-            if (!navigator.onLine) {
-                alert('PDF export requires internet. Please connect and try again.');
-                return;
-            }
+            if (!navigator.onLine) { alert('PDF export requires internet. Please connect and try again.'); return; }
             const dataToExport = currentFilteredData;
-            if (!dataToExport || dataToExport.length === 0) {
-                alert('No data to export. Please adjust your filters.');
-                return;
-            }
+            if (!dataToExport || dataToExport.length === 0) { alert('No data to export. Please adjust your filters.'); return; }
             let periodText = '';
             if (currentStartDate && currentEndDate) {
                 periodText = `Period: ${currentStartDate} to ${currentEndDate}`;
@@ -890,9 +816,7 @@
                 const periodNames = { 'daily': 'Today', 'weekly': 'This Week', 'monthly': 'This Month', 'yearly': 'This Year', 'all': 'All Time' };
                 periodText = periodNames[currentPeriod] || 'Today';
             }
-            if (currentBatchId) {
-                periodText += ` (Batch #${currentBatchId})`;
-            }
+            if (currentBatchId) periodText += ` (Batch #${currentBatchId})`;
             if (currentSearchTerm) {
                 const modeText = { 'contains': 'contains', 'exact': 'exactly matches', 'starts': 'starts with', 'ends': 'ends with', 'words': 'contains all words' }[searchMode] || 'contains';
                 periodText += ` (Filtered by: "${currentSearchTerm}" - ${modeText})`;
@@ -904,7 +828,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         sales_data: dataToExport,
-                        period_text: periodText + ' (Screens)',
+                        period_text: periodText + ` (${GROUP_LABEL})`,
                         summary: summary,
                         is_admin: isAdmin
                     })
@@ -914,8 +838,7 @@
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    const fileName = `Screen_Sales_${periodText.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().slice(0, 19)}.pdf`;
-                    a.download = fileName;
+                    a.download = `Oils_Sales_${periodText.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().slice(0, 19)}.pdf`;
                     document.body.appendChild(a);
                     a.click();
                     a.remove();
@@ -929,7 +852,7 @@
             }
         }
 
-        // ---------- ✅ NEW: Batch filter helpers ----------
+        // ---------- Batch filter helpers ----------
         function showBatchFilterBanner(batchId) {
             const banner = document.getElementById('batchFilterBanner');
             const label = document.getElementById('batchFilterLabel');
@@ -937,24 +860,21 @@
             label.textContent = `Batch #${batchId}`;
             banner.classList.remove('hidden');
         }
-
         function hideBatchFilterBanner() {
             const banner = document.getElementById('batchFilterBanner');
             if (banner) banner.classList.add('hidden');
         }
-
         function readBatchIdFromURL() {
             const params = new URLSearchParams(window.location.search);
             const batchId = params.get('batch_id');
             if (batchId && !isNaN(parseInt(batchId))) {
                 currentBatchId = parseInt(batchId);
                 showBatchFilterBanner(currentBatchId);
-                console.log(`🎯 Screen batch filter active: #${currentBatchId}`);
+                console.log(`🎯 Oil batch filter active: #${currentBatchId}`);
                 return true;
             }
             return false;
         }
-
         function clearBatchFilter() {
             currentBatchId = null;
             hideBatchFilterBanner();
@@ -1001,16 +921,11 @@
                 document.getElementById('endDate').value = '';
                 document.getElementById('searchInput').value = '';
                 currentSearchTerm = '';
-                // ✅ Keep batch filter active
                 loadSalesData();
             });
         });
-
-        // ✅ NEW: Batch filter clear button
         const clearBatchBtn = document.getElementById('clearBatchFilterBtn');
-        if (clearBatchBtn) {
-            clearBatchBtn.addEventListener('click', clearBatchFilter);
-        }
+        if (clearBatchBtn) clearBatchBtn.addEventListener('click', clearBatchFilter);
 
         window.addEventListener('online', () => {
             updateOfflineBanner();
@@ -1022,9 +937,7 @@
         document.getElementById('startDate').value = today;
         document.getElementById('endDate').value = today;
 
-        // ✅ NEW: Check for batch_id in URL BEFORE loading
         readBatchIdFromURL();
-
         loadSalesData();
     });
 </script>

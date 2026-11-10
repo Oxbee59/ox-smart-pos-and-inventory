@@ -3,20 +3,20 @@
 {% block content %}
 <!-- Offline banner -->
 <div id="offlineBanner" class="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded hidden">
-    ⚠️ You are offline – showing cached accessory products. Deletions will be saved and applied when you reconnect.
+    ⚠️ You are offline – showing cached products. Deletions will be saved and applied when you reconnect.
 </div>
 
 <!-- Force Refresh / Clear Cache Banner -->
-<div class="bg-white rounded-xl shadow-md p-4 mb-4">
+<div class="bg-white rounded-xl shadow-md p-4 mb-4 border border-[#E8F5E9]">
     <div class="flex items-center justify-between flex-wrap gap-2">
         <div>
             <span class="text-sm text-gray-500">💡 Having issues loading data?</span>
         </div>
         <div class="flex gap-2 flex-wrap">
-            <button onclick="forceRefresh()" class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm">
+            <button onclick="forceRefresh()" class="bg-[#2E7D32] hover:bg-[#1B5E20] text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium transition">
                 🔄 Force Refresh
             </button>
-            <button onclick="clearAllLocalData()" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm">
+            <button onclick="clearAllLocalData()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium transition">
                 🗑️ Clear All Data
             </button>
         </div>
@@ -24,26 +24,26 @@
 </div>
 
 <!-- Header -->
-<div class="bg-white rounded-xl shadow-md p-6 mb-6">
+<div class="bg-white rounded-xl shadow-md p-6 mb-6 border border-[#E8F5E9]">
     <div class="flex items-center gap-2">
-        <h2 class="text-2xl font-bold text-indigo-600 mb-0">📦 Product Manager</h2>
-        <span class="bg-green-100 text-green-800 text-xs font-semibold px-2.5 py-0.5 rounded">Accessories</span>
+        <h2 class="text-2xl font-bold text-[#1B5E20] mb-0">📦 Product Manager</h2>
+        <span class="bg-[#E8F5E9] text-[#1B5E20] text-xs font-semibold px-2.5 py-0.5 rounded" id="productsGroupBadge">Others</span>
     </div>
-    <p class="text-gray-600 mt-1">Manage your accessory products and batches</p>
+    <p class="text-gray-600 mt-1" id="productsHeaderSubtitle">Manage your products and batches</p>
 </div>
 
 <!-- Search Bar with Advanced Options -->
-<div class="mb-4 bg-white rounded-xl shadow-md p-3 md:p-4">
+<div class="mb-4 bg-white rounded-xl shadow-md p-3 md:p-4 border border-[#E8F5E9]">
     <div class="flex flex-col md:flex-row gap-3">
         <div class="flex-1">
-            <input type="text" id="searchInput" placeholder="🔍 Search by name, brand, category or batch # (e.g. #94)..." 
-                   class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm md:text-base">
+            <input type="text" id="searchInput" placeholder="🔍 Search by name, brand, category or batch # (e.g. #94)..."
+                   class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm md:text-base focus:border-[#2E7D32] focus:ring-1 focus:ring-[#2E7D32] outline-none">
             <div class="text-xs text-gray-400 mt-1">
                 💡 Tip: Search by batch number (e.g., <span class="font-mono bg-gray-100 px-1 rounded">#94</span> or <span class="font-mono bg-gray-100 px-1 rounded">94</span>)
             </div>
         </div>
         <div class="flex flex-wrap gap-2 items-center">
-            <button id="advancedToggle" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1.5 rounded-lg text-sm">
+            <button id="advancedToggle" class="bg-[#E8F5E9] hover:bg-[#C8E6C9] text-[#1B5E20] px-3 py-1.5 rounded-lg text-sm font-medium transition">
                 ⚙️ Advanced
             </button>
             <button id="clearSearchBtn" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-lg text-sm hidden">
@@ -51,13 +51,13 @@
             </button>
         </div>
     </div>
-    
+
     <!-- Advanced Search Options -->
     <div id="advancedSearch" class="hidden mt-3 pt-3 border-t border-gray-200">
         <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
             <div>
                 <label class="block text-xs font-medium text-gray-700">Search Mode</label>
-                <select id="searchMode" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
+                <select id="searchMode" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:border-[#2E7D32] outline-none">
                     <option value="contains">Contains (Partial Match)</option>
                     <option value="exact">Exact Match</option>
                     <option value="starts">Starts With</option>
@@ -67,7 +67,7 @@
             </div>
             <div>
                 <label class="block text-xs font-medium text-gray-700">Search In</label>
-                <select id="searchField" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
+                <select id="searchField" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:border-[#2E7D32] outline-none">
                     <option value="all">All Fields</option>
                     <option value="name">Product Name</option>
                     <option value="brand">Brand</option>
@@ -76,19 +76,19 @@
             </div>
             <div>
                 <label class="block text-xs font-medium text-gray-700">Case Sensitive</label>
-                <select id="caseSensitive" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
+                <select id="caseSensitive" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:border-[#2E7D32] outline-none">
                     <option value="false">No</option>
                     <option value="true">Yes</option>
                 </select>
             </div>
             <div class="flex items-end">
-                <button id="applyAdvancedSearch" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg text-sm w-full">
+                <button id="applyAdvancedSearch" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-1.5 rounded-lg text-sm w-full font-medium transition">
                     🔍 Apply
                 </button>
             </div>
         </div>
         <div class="mt-2 text-xs text-gray-500">
-            💡 Tip: Use "All Words" mode to search for multiple terms (e.g., "samsung screen" finds products with both words)
+            💡 Tip: Use "All Words" mode to search for multiple terms (e.g., "bark root" finds products with both words)
         </div>
     </div>
 </div>
@@ -96,29 +96,29 @@
 <!-- Summary -->
 <div id="summary" class="mb-4">
     <div class="grid grid-cols-2 md:grid-cols-6 gap-3">
-        <div class="bg-white rounded-xl shadow-md p-3 text-center border border-gray-100"
-             title="Every accessory product record in the database. Only in-stock products appear on the sales terminal.">
+        <div class="bg-white rounded-xl shadow-md p-3 text-center border border-[#E8F5E9]"
+             title="Every product record in this group. Only in-stock products appear on the sales terminal.">
             <p class="text-xs text-gray-500">📦 Products</p>
-            <p id="totalProductsCount" class="text-xl md:text-2xl font-bold text-indigo-600">—</p>
+            <p id="totalProductsCount" class="text-xl md:text-2xl font-bold text-[#1B5E20]">—</p>
             <p id="productsInStockNote" class="text-[10px] text-gray-400 mt-0.5"></p>
         </div>
-        <div class="bg-white rounded-xl shadow-md p-3 text-center border border-gray-100">
+        <div class="bg-white rounded-xl shadow-md p-3 text-center border border-[#E8F5E9]">
             <p class="text-xs text-gray-500">📦 Batches</p>
-            <p id="totalBatchesCount" class="text-xl md:text-2xl font-bold text-blue-600">—</p>
+            <p id="totalBatchesCount" class="text-xl md:text-2xl font-bold text-emerald-600">—</p>
         </div>
-        <div class="bg-white rounded-xl shadow-md p-3 text-center border border-gray-100">
+        <div class="bg-white rounded-xl shadow-md p-3 text-center border border-[#E8F5E9]">
             <p class="text-xs text-gray-500">📦 Total Qty</p>
-            <p id="totalQuantityCount" class="text-xl md:text-2xl font-bold text-teal-600">—</p>
+            <p id="totalQuantityCount" class="text-xl md:text-2xl font-bold text-[#2E7D32]">—</p>
         </div>
-        <div class="bg-white rounded-xl shadow-md p-3 text-center border border-gray-100">
+        <div class="bg-white rounded-xl shadow-md p-3 text-center border border-[#E8F5E9]">
             <p class="text-xs text-gray-500">⚠️ Claimed</p>
             <p id="totalClaimedCount" class="text-xl md:text-2xl font-bold text-red-600">—</p>
         </div>
-        <div class="bg-white rounded-xl shadow-md p-3 text-center border border-gray-100">
+        <div class="bg-white rounded-xl shadow-md p-3 text-center border border-[#E8F5E9]">
             <p class="text-xs text-gray-500">✅ Good Stock</p>
             <p id="totalGoodCount" class="text-xl md:text-2xl font-bold text-green-600">—</p>
         </div>
-        <div class="bg-white rounded-xl shadow-md p-3 text-center border border-gray-100">
+        <div class="bg-white rounded-xl shadow-md p-3 text-center border border-[#E8F5E9]">
             <p class="text-xs text-gray-500">⚠️ Low Stock Items</p>
             <p id="lowStockCount" class="text-xl md:text-2xl font-bold text-red-600">—</p>
         </div>
@@ -126,13 +126,14 @@
     <div id="cacheStatus" class="text-xs text-gray-400 mt-2 text-center hidden"></div>
 </div>
 
-<!-- ✅ Split Low Stock Panel (everything that is NOT a Screen) -->
+<!-- Low stock split panel — only meaningful for the "Others" page -->
+{% if (group|default('others')) != 'oils' %}
 {% set low_stock_category = 'non-Screen' %}
 {% include '_low_stock_split.html' %}
+{% endif %}
 
 <!-- Products List (cards) -->
 <div id="productsList" class="space-y-4">
-    <!-- Initial loading state — shown before JS runs and while loadProducts() is fetching -->
     <div class="flex flex-col items-center justify-center py-12">
         <div class="loading-spinner"></div>
         <p class="mt-4 text-gray-500 text-sm">Loading products…</p>
@@ -141,14 +142,11 @@
 
 <!-- Modal: View Batches (GROUPED BY PRICE — v4) -->
 <div id="batchModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-60" style="align-items:center; justify-content:center; padding:1rem;">
-    <!-- Inner shell: inline styles so it doesn't depend on Tailwind -->
     <div id="batchModalInner">
-        <!-- Header -->
         <div class="bmi-modal-header">
             <h3 id="modalTitle">Batches</h3>
             <button onclick="closeBatchModal()" class="bmi-modal-close">&times;</button>
         </div>
-        <!-- Search Bar -->
         <div class="bmi-modal-searchbar">
             <div class="bmi-modal-searchbar-row">
                 <div style="flex:1 1 auto; min-width:0;">
@@ -162,9 +160,7 @@
                 </div>
             </div>
         </div>
-        <!-- Scrollable list -->
         <div id="batchList"></div>
-        <!-- Footer -->
         <div class="bmi-modal-footer">
             <div style="display:flex; gap:8px;">
                 <button onclick="selectAllBatches()" class="bmi-footer-btn bmi-footer-btn-blue">Select All</button>
@@ -181,13 +177,13 @@
 <!-- Modal: Delete Product Options -->
 <div id="deleteProductModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-60 flex items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-        <h3 class="text-xl font-bold mb-2">Delete Accessory Product</h3>
+        <h3 class="text-xl font-bold mb-2 text-[#1B5E20]" id="deleteProductModalTitle">Delete Product</h3>
         <p id="deleteProductName" class="mb-4 text-gray-600 text-sm"></p>
-        <button id="deleteKeepBtn" class="w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded mb-2 text-sm">📦 Keep History (Recommended)</button>
+        <button id="deleteKeepBtn" class="w-full bg-[#2E7D32] hover:bg-[#1B5E20] text-white py-2 rounded mb-2 text-sm font-medium transition">📦 Keep History (Recommended)</button>
         <p class="text-xs text-gray-500 mb-3">✓ Product deleted but sales/purchase history remains<br>✓ Can be restored from Archive</p>
-        <button id="deleteCleanBtn" class="w-full bg-red-600 hover:bg-red-700 text-white py-2 rounded mb-2 text-sm">⚠️ Clean Everything (Permanent)</button>
+        <button id="deleteCleanBtn" class="w-full bg-red-600 hover:bg-red-700 text-white py-2 rounded mb-2 text-sm font-medium transition">⚠️ Clean Everything (Permanent)</button>
         <p class="text-xs text-red-500 mb-3">⚠️ Product AND all history deleted – CANNOT be restored!</p>
-        <button onclick="closeDeleteProductModal()" class="w-full bg-gray-400 hover:bg-gray-500 text-white py-2 rounded text-sm">Cancel</button>
+        <button onclick="closeDeleteProductModal()" class="w-full bg-gray-400 hover:bg-gray-500 text-white py-2 rounded text-sm transition">Cancel</button>
     </div>
 </div>
 
@@ -195,12 +191,12 @@
 <div id="claimModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-60 flex items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl" style="height:90vh; max-height:90vh; display:flex; flex-direction:column; overflow:hidden;">
         <div class="bg-white p-4 border-b flex justify-between items-center flex-shrink-0">
-            <h3 class="text-xl font-bold" id="claimModalTitle">Claim Details</h3>
+            <h3 class="text-xl font-bold text-[#1B5E20]" id="claimModalTitle">Claim Details</h3>
             <button onclick="closeClaimModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
         </div>
         <div id="claimList" class="p-4 space-y-3 overflow-y-auto flex-1 min-h-0"></div>
         <div class="bg-white p-4 border-t text-right flex-shrink-0">
-            <button onclick="closeClaimModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">Close</button>
+            <button onclick="closeClaimModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm transition">Close</button>
         </div>
     </div>
 </div>
@@ -227,60 +223,36 @@
         border-radius: 2px;
     }
     .batch-highlight {
-        border: 3px solid #f59e0b !important;
-        background-color: #fffbeb !important;
+        border: 3px solid #2E7D32 !important;
+        background-color: #E8F5E9 !important;
         transition: all 0.3s ease;
     }
 
-    /* ============================================================
-       LOADING SPINNER
-       ============================================================ */
-    @keyframes loading-rotate {
-        to { transform: rotate(360deg); }
-    }
+    @keyframes loading-rotate { to { transform: rotate(360deg); } }
     .loading-spinner {
-        width: 48px;
-        height: 48px;
-        border: 4px solid #e5e7eb;
-        border-top-color: #14b8a6;
-        border-radius: 50%;
-        animation: loading-rotate 0.8s linear infinite;
+        width: 48px; height: 48px;
+        border: 4px solid #e5e7eb; border-top-color: #2E7D32;
+        border-radius: 50%; animation: loading-rotate 0.8s linear infinite;
     }
     .loading-spinner-sm {
-        display: inline-block;
-        width: 14px;
-        height: 14px;
-        border: 2px solid rgba(148, 163, 184, 0.4);
-        border-top-color: #14b8a6;
-        border-radius: 50%;
-        animation: loading-rotate 0.8s linear infinite;
+        display: inline-block; width: 14px; height: 14px;
+        border: 2px solid rgba(148, 163, 184, 0.4); border-top-color: #2E7D32;
+        border-radius: 50%; animation: loading-rotate 0.8s linear infinite;
         vertical-align: -2px;
     }
+    @keyframes loading-pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.9; } }
+    .loading-pulse { animation: loading-pulse 1.4s ease-in-out infinite; }
 
-    /* Subtle pulse for loading summary numbers */
-    @keyframes loading-pulse {
-        0%, 100% { opacity: 0.4; }
-        50% { opacity: 0.9; }
-    }
-    .loading-pulse {
-        animation: loading-pulse 1.4s ease-in-out infinite;
-    }
-
-    /* Dark theme — spinner border should adapt */
     body.dark-theme .loading-spinner {
         border-color: #334155;
-        border-top-color: #00CFCF;
+        border-top-color: #2E7D32;
     }
     body.dark-theme .loading-spinner-sm {
         border-color: rgba(100, 116, 139, 0.4);
-        border-top-color: #00CFCF;
+        border-top-color: #2E7D32;
     }
 
-    /* ============================================================
-       BATCH MODAL — BULLETPROOF v5 (flex-shrink fix + compact header)
-       Layout does not depend on Tailwind. Unique class names (bmi-*
-       / batch-*) so nothing in style.css can clash.
-       ============================================================ */
+    /* BATCH MODAL — BULLETPROOF v5 */
     #batchModal { position: fixed !important; top:0; left:0; right:0; bottom:0; }
     #batchModal.hidden { display: none !important; }
     #batchModal:not(.hidden) { display: flex !important; }
@@ -301,300 +273,108 @@
 
     .bmi-modal-header {
         flex: 0 0 auto;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 16px;
-        border-bottom: 1px solid #e5e7eb;
-        background: #fff;
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 16px; border-bottom: 1px solid #e5e7eb; background: #fff;
     }
-    .bmi-modal-header h3 { font-size: 1.25rem; font-weight: 700; margin: 0; }
-    .bmi-modal-close {
-        border: 0; background: transparent; cursor: pointer;
-        color: #6b7280; font-size: 1.75rem; line-height: 1; padding: 0 4px;
-    }
+    .bmi-modal-header h3 { font-size: 1.25rem; font-weight: 700; margin: 0; color: #1B5E20; }
+    .bmi-modal-close { border: 0; background: transparent; cursor: pointer; color: #6b7280; font-size: 1.75rem; line-height: 1; padding: 0 4px; }
     .bmi-modal-close:hover { color: #111827; }
 
-    .bmi-modal-searchbar {
-        flex: 0 0 auto;
-        padding: 16px;
-        border-bottom: 1px solid #e5e7eb;
-        background: #f9fafb;
-    }
-    .bmi-modal-searchbar-row {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        flex-wrap: wrap;
-    }
+    .bmi-modal-searchbar { flex: 0 0 auto; padding: 16px; border-bottom: 1px solid #e5e7eb; background: #f9fafb; }
+    .bmi-modal-searchbar-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     .bmi-modal-search-input {
-        width: 100%;
-        border: 1px solid #d1d5db;
-        border-radius: 8px;
-        padding: 8px 12px;
-        font-size: 0.875rem;
-        outline: none;
-        box-sizing: border-box;
+        width: 100%; border: 1px solid #d1d5db; border-radius: 8px;
+        padding: 8px 12px; font-size: 0.875rem; outline: none; box-sizing: border-box;
     }
-    .bmi-modal-search-input:focus { border-color: #60a5fa; }
+    .bmi-modal-search-input:focus { border-color: #2E7D32; }
     .bmi-modal-count { font-size: 0.875rem; color: #4b5563; font-weight: 500; }
-    .bmi-modal-clearbtn {
-        border: 0; background: transparent; cursor: pointer;
-        color: #6b7280; font-size: 0.8rem;
-        padding: 4px 6px; border-radius: 4px;
-    }
-    .bmi-modal-clearbtn:hover { color: #111827; background: #e5e7eb; }
+    .bmi-modal-clearbtn { border: 0; background: transparent; cursor: pointer; color: #6b7280; font-size: 0.8rem; padding: 4px 6px; border-radius: 4px; }
+    .bmi-modal-clearbtn:hover { color: #1B5E20; background: #E8F5E9; }
     .bmi-modal-clearbtn.hidden { display: none !important; }
 
     #batchList {
-        flex: 1 1 0 !important;
-        min-height: 0 !important;
-        overflow-y: auto !important;
-        overflow-x: hidden !important;
+        flex: 1 1 0 !important; min-height: 0 !important;
+        overflow-y: auto !important; overflow-x: hidden !important;
         padding: 16px !important;
-        display: flex !important;
-        flex-direction: column !important;
-        gap: 10px !important;
-        box-sizing: border-box !important;
-        width: 100% !important;
+        display: flex !important; flex-direction: column !important;
+        gap: 10px !important; box-sizing: border-box !important; width: 100% !important;
     }
 
-    /* ============================================================
-       PRICE GROUP — flex-shrink: 0 prevents collapse squishing
-       ============================================================ */
     .batch-group {
-        border: 1px solid #e5e7eb;
-        border-radius: 10px;
-        background: #fff;
-        overflow: hidden;
-        box-sizing: border-box;
-        width: 100%;
-        flex-shrink: 0;              /* ← critical fix */
+        border: 1px solid #e5e7eb; border-radius: 10px; background: #fff;
+        overflow: hidden; box-sizing: border-box; width: 100%; flex-shrink: 0;
     }
-
     .batch-group-header {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 10px 14px;
-        background: #f8fafc;
-        cursor: pointer;
-        user-select: none;
-        min-height: 44px;
-        box-sizing: border-box;
-        flex-wrap: wrap;
+        display: flex; align-items: center; gap: 8px;
+        padding: 10px 14px; background: #f8fafc;
+        cursor: pointer; user-select: none; min-height: 44px;
+        box-sizing: border-box; flex-wrap: wrap;
     }
-    .batch-group-header:hover { background: #f1f5f9; }
+    .batch-group-header:hover { background: #E8F5E9; }
     .batch-group:not(.is-collapsed) .batch-group-header { border-bottom: 1px solid #e5e7eb; }
-
-    .batch-group-chevron {
-        display: inline-block;
-        width: 14px;
-        text-align: center;
-        color: #64748b;
-        font-size: 0.85rem;
-        flex-shrink: 0;
-    }
-    .batch-group-title-text {
-        color: #4f46e5;
-        font-size: 0.9rem;
-        font-weight: 600;
-        flex-shrink: 1;
-        min-width: 0;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-    .batch-group-count {
-        display: inline-block;
-        font-size: 0.7rem;
-        background: #e0e7ff;
-        color: #3730a3;
-        padding: 2px 8px;
-        border-radius: 10px;
-        font-weight: 600;
-        flex-shrink: 0;
-    }
+    .batch-group-chevron { display: inline-block; width: 14px; text-align: center; color: #64748b; font-size: 0.85rem; flex-shrink: 0; }
+    .batch-group-title-text { color: #1B5E20; font-size: 0.9rem; font-weight: 600; flex-shrink: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .batch-group-count { display: inline-block; font-size: 0.7rem; background: #E8F5E9; color: #1B5E20; padding: 2px 8px; border-radius: 10px; font-weight: 600; flex-shrink: 0; }
     .batch-group-spacer { flex: 1 1 auto; min-width: 4px; }
-
-    .batch-group-body {
-        display: block;
-        padding: 10px;
-        background: #fbfdff;
-        box-sizing: border-box;
-        flex-shrink: 0;              /* ← critical fix */
-    }
+    .batch-group-body { display: block; padding: 10px; background: #fbfdff; box-sizing: border-box; flex-shrink: 0; }
     .batch-group-body.collapsed { display: none !important; }
-
-    .batch-group-stats {
-        display: grid;
-        grid-template-columns: repeat(5, minmax(0, 1fr));
-        gap: 4px;
-        margin-bottom: 10px;
-    }
-
-    .batch-group-list {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-    }
+    .batch-group-stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; margin-bottom: 10px; }
+    .batch-group-list { display: flex; flex-direction: column; gap: 8px; }
     .batch-group-list > .batch-item { flex-shrink: 0; }
 
-    /* ============================================================
-       BATCH ITEM (inside a group body)
-       ============================================================ */
     .batch-item {
-        display: grid !important;
-        grid-template-columns: 20px minmax(0, 1fr) !important;
-        column-gap: 10px !important;
-        align-items: start !important;
-        padding: 12px !important;
-        border: 1px solid #e5e7eb !important;
-        border-radius: 8px !important;
-        background: #fff !important;
-        width: 100% !important;
-        max-width: 100% !important;
-        box-sizing: border-box !important;
+        display: grid !important; grid-template-columns: 20px minmax(0, 1fr) !important;
+        column-gap: 10px !important; align-items: start !important;
+        padding: 12px !important; border: 1px solid #e5e7eb !important;
+        border-radius: 8px !important; background: #fff !important;
+        width: 100% !important; max-width: 100% !important; box-sizing: border-box !important;
     }
     .batch-item:hover { background: #f9fafb !important; }
-
-    .batch-item-checkbox {
-        width: 16px !important;
-        height: 16px !important;
-        margin: 4px 0 0 0 !important;
-        cursor: pointer;
-        align-self: start !important;
-    }
-
-    .batch-item-body {
-        min-width: 0 !important;
-        font-size: 0.875rem;
-        line-height: 1.35;
-        box-sizing: border-box;
-    }
-
-    .batch-item-header {
-        display: flex !important;
-        flex-wrap: wrap !important;
-        align-items: center !important;
-        justify-content: space-between !important;
-        gap: 6px !important;
-        margin-bottom: 6px !important;
-    }
-    .batch-item-title {
-        display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
-        min-width: 0;
-    }
-    .batch-item-title strong { color: #4f46e5; }
-    .batch-item-actions {
-        display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
-        flex-shrink: 0;
-    }
+    .batch-item-checkbox { width: 16px !important; height: 16px !important; margin: 4px 0 0 0 !important; cursor: pointer; align-self: start !important; }
+    .batch-item-body { min-width: 0 !important; font-size: 0.875rem; line-height: 1.35; box-sizing: border-box; }
+    .batch-item-header { display: flex !important; flex-wrap: wrap !important; align-items: center !important; justify-content: space-between !important; gap: 6px !important; margin-bottom: 6px !important; }
+    .batch-item-title { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+    .batch-item-title strong { color: #1B5E20; }
+    .batch-item-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; flex-shrink: 0; }
     .batch-status-pill { font-size: 0.75rem; font-weight: 600; }
-    .batch-claim-badge {
-        display: inline-block;
-        font-size: 0.7rem;
-        background: #fee2e2;
-        color: #991b1b;
-        padding: 1px 6px;
-        border-radius: 4px;
-    }
-    .batch-item-date {
-        font-size: 0.75rem;
-        color: #9ca3af;
-        margin-bottom: 6px;
-    }
-
-    .batch-item-stats {
-        display: grid !important;
-        grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
-        gap: 4px !important;
-        margin-bottom: 6px !important;
-    }
-    .batch-stat {
-        background: #f3f4f6;
-        border-radius: 4px;
-        padding: 2px 4px;
-        text-align: center;
-        min-width: 0;
-        overflow: hidden;
-        box-sizing: border-box;
-    }
-    .batch-stat-label {
-        display: block;
-        color: #6b7280;
-        font-size: 0.65rem;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
+    .batch-claim-badge { display: inline-block; font-size: 0.7rem; background: #fee2e2; color: #991b1b; padding: 1px 6px; border-radius: 4px; }
+    .batch-item-date { font-size: 0.75rem; color: #9ca3af; margin-bottom: 6px; }
+    .batch-item-stats { display: grid !important; grid-template-columns: repeat(5, minmax(0, 1fr)) !important; gap: 4px !important; margin-bottom: 6px !important; }
+    .batch-stat { background: #f3f4f6; border-radius: 4px; padding: 2px 4px; text-align: center; min-width: 0; overflow: hidden; box-sizing: border-box; }
+    .batch-stat-label { display: block; color: #6b7280; font-size: 0.65rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .batch-stat-value { font-weight: 700; white-space: nowrap; }
-    .batch-stat.sold { background: #eff6ff; }
-    .batch-stat.sold .batch-stat-value { color: #2563eb; }
+    .batch-stat.sold { background: #E8F5E9; }
+    .batch-stat.sold .batch-stat-value { color: #1B5E20; }
     .batch-stat.sold.clickable { cursor: pointer; }
-    .batch-stat.sold.clickable:hover { background: #dbeafe; }
+    .batch-stat.sold.clickable:hover { background: #C8E6C9; }
     .batch-stat.claimed { background: #fef2f2; }
     .batch-stat.claimed .batch-stat-value { color: #dc2626; }
     .batch-stat.good { background: #ecfdf5; }
     .batch-stat.good .batch-stat-value { color: #16a34a; }
-
-    .batch-item-prices {
-        display: grid !important;
-        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-        gap: 4px !important;
-    }
-    .batch-price {
-        background: #f9fafb;
-        border-radius: 4px;
-        padding: 2px 6px;
-        font-size: 0.7rem;
-        min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
+    .batch-item-prices { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 4px !important; }
+    .batch-price { background: #f9fafb; border-radius: 4px; padding: 2px 6px; font-size: 0.7rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .batch-price.full { grid-column: 1 / -1; }
-
     .batch-btn {
-        display: inline-flex !important;
-        align-items: center !important;
-        gap: 4px !important;
-        border: 0 !important;
-        border-radius: 4px !important;
-        padding: 4px 8px !important;
-        font-size: 0.75rem !important;
-        color: #fff !important;
-        cursor: pointer !important;
-        line-height: 1.1 !important;
-        font-weight: 500 !important;
+        display: inline-flex !important; align-items: center !important; gap: 4px !important;
+        border: 0 !important; border-radius: 4px !important;
+        padding: 4px 8px !important; font-size: 0.75rem !important;
+        color: #fff !important; cursor: pointer !important; line-height: 1.1 !important; font-weight: 500 !important;
     }
     .batch-btn-claims { background: #ef4444 !important; }
     .batch-btn-claims:hover { background: #dc2626 !important; }
-    .batch-btn-update { background: #eab308 !important; }
-    .batch-btn-update:hover { background: #ca8a04 !important; }
+    .batch-btn-update { background: #2E7D32 !important; }
+    .batch-btn-update:hover { background: #1B5E20 !important; }
 
     .bmi-modal-footer {
-        flex: 0 0 auto;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        justify-content: space-between;
-        padding: 16px;
-        border-top: 1px solid #e5e7eb;
-        background: #fff;
+        flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 8px;
+        justify-content: space-between; padding: 16px;
+        border-top: 1px solid #e5e7eb; background: #fff;
     }
-    .bmi-footer-btn {
-        border: 0; border-radius: 6px; padding: 8px 14px;
-        color: #fff; font-size: 0.875rem; cursor: pointer;
-    }
-    .bmi-footer-btn-blue   { background: #3b82f6; }
-    .bmi-footer-btn-blue:hover   { background: #2563eb; }
-    .bmi-footer-btn-orange { background: #f97316; }
-    .bmi-footer-btn-orange:hover { background: #ea580c; }
-    .bmi-footer-btn-red    { background: #dc2626; }
-    .bmi-footer-btn-red:hover    { background: #b91c1c; }
-    .bmi-footer-btn-gray   { background: #9ca3af; }
-    .bmi-footer-btn-gray:hover   { background: #6b7280; }
+    .bmi-footer-btn { border: 0; border-radius: 6px; padding: 8px 14px; color: #fff; font-size: 0.875rem; cursor: pointer; font-weight: 500; }
+    .bmi-footer-btn-blue   { background: #2E7D32; }  .bmi-footer-btn-blue:hover   { background: #1B5E20; }
+    .bmi-footer-btn-orange { background: #f97316; }  .bmi-footer-btn-orange:hover { background: #ea580c; }
+    .bmi-footer-btn-red    { background: #dc2626; }  .bmi-footer-btn-red:hover    { background: #b91c1c; }
+    .bmi-footer-btn-gray   { background: #9ca3af; }  .bmi-footer-btn-gray:hover   { background: #6b7280; }
 
     @media (max-width: 640px) {
         .batch-group-header { padding: 8px 10px; gap: 6px; }
@@ -607,6 +387,25 @@
 </style>
 
 <script>
+    // ============================================================
+    //  GROUP CONFIGURATION — set by app.py when rendering
+    // ============================================================
+    const GROUP        = '{{ group|default("others") }}';
+    const OIL_CATS     = ['Spiritual Oils', 'Anointing Oils', 'Essential Oils'];
+    const NON_OIL_CATS = ['Tree Roots', 'Tree Barks', 'Leaves', 'Seeds'];
+
+    const GROUP_LABEL  = GROUP === 'oils' ? 'Oils' : 'Roots, Barks & Others';
+    const GROUP_BADGE  = GROUP === 'oils' ? 'Oils' : 'Roots & Barks';
+
+    function isInGroup(category) {
+        const cat = (category || '').trim();
+        if (GROUP === 'oils') return OIL_CATS.includes(cat);
+        // 'others' = anything that isn't an oil AND isn't a legacy 'Screen' category
+        if (OIL_CATS.includes(cat)) return false;
+        if (cat === 'Screen') return false;
+        return true;
+    }
+
     // ---------- Safe number formatting ----------
     function safeToFixed(val, decimals = 2) {
         const num = parseFloat(val);
@@ -654,7 +453,7 @@
     function clearAllLocalData() {
         if (!confirm('⚠️⚠️⚠️ WARNING: This will delete ALL locally stored data.\n\nContinue?')) return;
         try {
-            const keysToKeep = ['ox_user', 'pin_unlocked', 'app_version', 'accessory_summary_collapsed'];
+            const keysToKeep = ['ox_user', 'pin_unlocked', 'app_version'];
             Object.keys(localStorage).forEach(key => { if (!keysToKeep.includes(key)) localStorage.removeItem(key); });
             if (db) db.delete().catch(()=>{});
             sessionStorage.removeItem('autoOpenBatches');
@@ -677,7 +476,7 @@
     let currentBatchModalProductName = "";
     let currentBatches = [];
     let batchLookup = {};
-    let currentGroups = [];              // last rendered groups (for expand/collapse-all)
+    let currentGroups = [];
     let isLoading = false;
     let searchMode = 'contains';
     let searchField = 'all';
@@ -696,15 +495,19 @@
         });
     }
 
+    // ============================================================
+    //  GROUP-AWARE NAVIGATION
+    // ============================================================
     function navigateToPurchase(batchId) {
-        window.open(`/purchases?edit_batch=${batchId}`, '_blank');
+        const basePath = GROUP === 'oils' ? '/purchases/oils' : '/purchases';
+        window.open(`${basePath}?edit_batch=${batchId}`, '_blank');
     }
     function navigateToBatchSales(batchId) {
         if (!batchId) return;
-        window.open(`/today-sales?batch_id=${batchId}`, '_blank');
+        const basePath = GROUP === 'oils' ? '/today-sales/oils' : '/today-sales';
+        window.open(`${basePath}?batch_id=${batchId}`, '_blank');
     }
 
-    // Turn a group key ("12|25") into a DOM-safe id fragment ("12_25")
     function groupKeyToDomId(groupKey) {
         return String(groupKey).replace(/[^0-9]/g, '_');
     }
@@ -741,16 +544,12 @@
                 <div class="flex flex-col items-center justify-center py-12">
                     <div class="loading-spinner"></div>
                     <p class="mt-4 text-gray-500 text-sm">Loading products…</p>
-                </div>
-            `;
+                </div>`;
         }
         const summaryIds = ['totalProductsCount','totalBatchesCount','totalQuantityCount','totalClaimedCount','totalGoodCount','lowStockCount'];
         summaryIds.forEach(id => {
             const el = document.getElementById(id);
-            if (el) {
-                el.textContent = '—';
-                el.classList.add('loading-pulse');
-            }
+            if (el) { el.textContent = '—'; el.classList.add('loading-pulse'); }
         });
         const noteEl = document.getElementById('productsInStockNote');
         if (noteEl) noteEl.textContent = '';
@@ -768,7 +567,9 @@
     function renderProducts(products, batchKeyword = null) {
         const container = document.getElementById('productsList');
         if (!products || products.length === 0) {
-            const msg = batchKeyword ? `No products found with batch #${batchKeyword.replace('#', '')}` : 'No accessory products found.';
+            const msg = batchKeyword
+                ? `No ${GROUP_LABEL} products found with batch #${batchKeyword.replace('#', '')}`
+                : `No ${GROUP_LABEL} products found.`;
             container.innerHTML = `<div class="text-center text-gray-400 py-8">${msg}</div>`;
             return;
         }
@@ -790,40 +591,40 @@
             }
             const displayGood = totalStock - totalClaimed;
             const status = totalStock > 0 ? "In Stock" : "Out of Stock";
-            const statusColor = totalStock > 0 ? "text-green-600" : "text-red-600";
+            const statusColor = totalStock > 0 ? "text-[#2E7D32]" : "text-red-600";
             const faultyBadge = hasFaulty ? `<span class="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded ml-2">⚠️ ${totalClaimed} Claimed</span>` : '';
-            const batchMatchBadge = hasSearchedBatch ? `<span class="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded ml-2 border border-yellow-400">🔍 Batch Match</span>` : '';
+            const batchMatchBadge = hasSearchedBatch ? `<span class="text-xs bg-[#E8F5E9] text-[#1B5E20] px-2 py-0.5 rounded ml-2 border border-[#2E7D32]">🔍 Batch Match</span>` : '';
             const productId = p.product_id || p.id;
 
             return `
-                <div class="bg-white rounded-xl shadow-md p-4 border hover:shadow-lg transition-shadow duration-200 ${hasSearchedBatch ? 'border-yellow-400 border-2' : ''}">
+                <div class="bg-white rounded-xl shadow-md p-4 border hover:shadow-lg transition-shadow duration-200 ${hasSearchedBatch ? 'border-[#2E7D32] border-2' : ''}">
                     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
                         <div class="flex-1 w-full sm:w-auto">
                             <div class="flex items-center flex-wrap gap-2">
-                                <h3 class="text-lg md:text-xl font-bold text-indigo-700">${escapeHtml(p.name)} (${escapeHtml(p.brand)})</h3>
+                                <h3 class="text-lg md:text-xl font-bold text-[#1B5E20]">${escapeHtml(p.name)} (${escapeHtml(p.brand)})</h3>
+                                <span class="text-xs bg-[#E8F5E9] text-[#1B5E20] px-1.5 py-0.5 rounded font-medium">${escapeHtml(p.category || '')}</span>
                                 ${faultyBadge}
                                 ${batchMatchBadge}
                             </div>
                             <p class="text-gray-600 text-sm">Category: ${escapeHtml(p.category)} | Total Stock: ${totalStock}</p>
                             <p class="text-xs md:text-sm">Cost: ₵${safeToFixed(p.cost_price)} | Selling: ₵${safeToFixed(p.selling_price)} | Discount: ₵${safeToFixed(p.discount)}</p>
                             ${hasFaulty ? `<p class="text-xs text-red-500 mt-1">⚠️ ${totalClaimed} units claimed as faulty</p>` : ''}
-                            <p class="text-xs text-green-600 font-bold mt-1">✅ ${Math.max(displayGood, 0)} good units available</p>
-                            ${hasSearchedBatch ? `<p class="text-xs text-yellow-600 mt-1">🔍 Contains batch #${batchKeyword.replace('#', '')}</p>` : ''}
+                            <p class="text-xs text-[#2E7D32] font-bold mt-1">✅ ${Math.max(displayGood, 0)} good units available</p>
+                            ${hasSearchedBatch ? `<p class="text-xs text-[#1B5E20] mt-1">🔍 Contains batch #${batchKeyword.replace('#', '')}</p>` : ''}
                         </div>
                         <div class="flex flex-wrap items-center gap-2">
                             <span class="font-semibold ${statusColor} text-sm">● ${status}</span>
                         </div>
                     </div>
                     <div class="mt-3 flex flex-wrap justify-end gap-2">
-                        <button onclick="viewBatchesWithData(${productId})" 
-                                class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm">
+                        <button onclick="viewBatchesWithData(${productId})"
+                                class="bg-[#2E7D32] hover:bg-[#1B5E20] text-white px-3 py-1 rounded text-sm font-medium transition">
                             View Batches
                         </button>
-                        <button onclick="confirmDeleteProduct(${productId})" 
-                                class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">Delete Product</button>
+                        <button onclick="confirmDeleteProduct(${productId})"
+                                class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm transition">Delete Product</button>
                     </div>
-                </div>
-            `;
+                </div>`;
         }).join('');
     }
 
@@ -839,7 +640,6 @@
         currentBatches = batches || [];
         currentBatchModalProductName = productName;
         const totalBatches = batches ? batches.length : 0;
-        // Pre-compute group count for the header subtitle
         const groupCount = (window.groupBatchesByPrice && totalBatches > 0)
             ? window.groupBatchesByPrice(batches).length
             : totalBatches;
@@ -868,10 +668,8 @@
             return;
         }
 
-        // Lookup table for every REAL batch — used by viewBatchClaims etc.
         batches.forEach(b => { batchLookup[b.batch_id] = b; });
 
-        // Guard: if the helper isn't loaded, fall back to flat rendering
         if (typeof window.groupBatchesByPrice !== 'function') {
             console.warn('groupBatchesByPrice helper not loaded — falling back to flat batch list');
             let html = '';
@@ -901,61 +699,41 @@
                         <span class="batch-group-count">${group.batches.length} batch${group.batches.length !== 1 ? 'es' : ''}</span>
                         ${groupBadge}
                         <span class="batch-group-spacer"></span>
-                        <span class="batch-status-pill" style="color:${anyInStock ? '#16a34a' : '#dc2626'};">${anyInStock ? '● In Stock' : '● Depleted'}</span>
+                        <span class="batch-status-pill" style="color:${anyInStock ? '#2E7D32' : '#dc2626'};">${anyInStock ? '● In Stock' : '● Depleted'}</span>
                     </div>
                     <div class="batch-group-body ${collapsedClass}" id="body-${domId}">
                         <div class="batch-group-stats">
-                            <div class="batch-stat">
-                                <span class="batch-stat-label">Total</span>
-                                <span class="batch-stat-value">${group.totals.quantity}</span>
-                            </div>
-                            <div class="batch-stat sold">
-                                <span class="batch-stat-label">Sold</span>
-                                <span class="batch-stat-value">${group.totals.sold}</span>
-                            </div>
-                            <div class="batch-stat">
-                                <span class="batch-stat-label">Remaining</span>
-                                <span class="batch-stat-value">${group.totals.remaining}</span>
-                            </div>
-                            <div class="batch-stat claimed">
-                                <span class="batch-stat-label">Claimed</span>
-                                <span class="batch-stat-value">${group.totals.claimed}</span>
-                            </div>
-                            <div class="batch-stat good">
-                                <span class="batch-stat-label">✅ Good</span>
-                                <span class="batch-stat-value">${group.totals.good}</span>
-                            </div>
+                            <div class="batch-stat"><span class="batch-stat-label">Total</span><span class="batch-stat-value">${group.totals.quantity}</span></div>
+                            <div class="batch-stat sold"><span class="batch-stat-label">Sold</span><span class="batch-stat-value">${group.totals.sold}</span></div>
+                            <div class="batch-stat"><span class="batch-stat-label">Remaining</span><span class="batch-stat-value">${group.totals.remaining}</span></div>
+                            <div class="batch-stat claimed"><span class="batch-stat-label">Claimed</span><span class="batch-stat-value">${group.totals.claimed}</span></div>
+                            <div class="batch-stat good"><span class="batch-stat-label">✅ Good</span><span class="batch-stat-value">${group.totals.good}</span></div>
                         </div>
                         <div class="batch-group-list">
                             ${group.batches.map(b => renderSingleBatchHtml(b)).join('')}
                         </div>
                     </div>
-                </div>
-            `;
+                </div>`;
         });
 
         container.innerHTML = html;
         attachBatchCheckboxListeners(container);
     }
 
-    // ---------- Single batch row markup ----------
     function renderSingleBatchHtml(batch) {
         const hasClaims = batch.claimed_quantity && batch.claimed_quantity > 0;
         const claimBadge = hasClaims ? `<span class="batch-claim-badge">⚠️ ${batch.claimed_quantity} Claimed</span>` : '';
         const inStock = batch.remaining_quantity > 0;
-        const statusColor = inStock ? '#16a34a' : '#dc2626';
+        const statusColor = inStock ? '#2E7D32' : '#dc2626';
         const statusText = inStock ? '● In Stock' : '● Depleted';
         const totalQty = batch.quantity || 0;
         const remainingQty = batch.remaining_quantity || 0;
         const claimedQty = batch.claimed_quantity || 0;
         const goodQty = remainingQty - claimedQty;
-
-        // Prefer API's sold_quantity (from sales_items); fall back to arithmetic
         const soldQty = (typeof batch.sold_quantity === 'number')
             ? batch.sold_quantity
             : Math.max(totalQty - remainingQty, 0);
         const canViewSales = soldQty > 0;
-
         const dateStr = batch.date ? new Date(batch.date).toLocaleString() : 'No date';
 
         return `
@@ -977,27 +755,15 @@
                     </div>
                     <div class="batch-item-date">${dateStr}</div>
                     <div class="batch-item-stats">
-                        <div class="batch-stat">
-                            <span class="batch-stat-label">Total</span>
-                            <span class="batch-stat-value">${totalQty}</span>
-                        </div>
+                        <div class="batch-stat"><span class="batch-stat-label">Total</span><span class="batch-stat-value">${totalQty}</span></div>
                         <div class="batch-stat sold ${canViewSales ? 'clickable' : ''}"
                              ${canViewSales ? `onclick="event.stopPropagation(); navigateToBatchSales(${batch.batch_id})" title="View today's sales for this batch"` : ''}>
                             <span class="batch-stat-label">Sold${canViewSales ? ' 🔍' : ''}</span>
                             <span class="batch-stat-value">${soldQty}</span>
                         </div>
-                        <div class="batch-stat">
-                            <span class="batch-stat-label">Remaining</span>
-                            <span class="batch-stat-value">${remainingQty}</span>
-                        </div>
-                        <div class="batch-stat claimed">
-                            <span class="batch-stat-label">Claimed</span>
-                            <span class="batch-stat-value">${claimedQty}</span>
-                        </div>
-                        <div class="batch-stat good">
-                            <span class="batch-stat-label">✅ Good</span>
-                            <span class="batch-stat-value">${Math.max(goodQty, 0)}</span>
-                        </div>
+                        <div class="batch-stat"><span class="batch-stat-label">Remaining</span><span class="batch-stat-value">${remainingQty}</span></div>
+                        <div class="batch-stat claimed"><span class="batch-stat-label">Claimed</span><span class="batch-stat-value">${claimedQty}</span></div>
+                        <div class="batch-stat good"><span class="batch-stat-label">✅ Good</span><span class="batch-stat-value">${Math.max(goodQty, 0)}</span></div>
                     </div>
                     <div class="batch-item-prices">
                         <span class="batch-price">Cost: <strong>₵${safeToFixed(batch.cost_price)}</strong></span>
@@ -1006,8 +772,7 @@
                     </div>
                     ${hasClaims ? `<div style="font-size:0.75rem;color:#ef4444;margin-top:6px;">⚠️ ${claimedQty} units claimed as faulty</div>` : ''}
                 </div>
-            </div>
-        `;
+            </div>`;
     }
 
     function attachBatchCheckboxListeners(container) {
@@ -1062,14 +827,13 @@
             : `${shown} of ${total} batch${total !== 1 ? 'es' : ''}`;
     }
 
-    // ---------- Batch search (inside the modal) ----------
+    // ---------- Batch search ----------
     document.getElementById('batchSearchInput').addEventListener('input', function() {
         const keyword = this.value.trim().toLowerCase();
         const clearBtn = document.getElementById('clearBatchSearchBtn');
         if (keyword) {
             clearBtn.classList.remove('hidden');
             const filtered = currentBatches.filter(b => b.batch_id && b.batch_id.toString().includes(keyword));
-            // Force-expand so the matched batches are visible inside their groups
             renderBatchList(filtered, { forceExpand: true });
             updateBatchCount(filtered.length, currentBatches.length);
         } else {
@@ -1096,7 +860,6 @@
     function selectAllBatches()   { currentBatchSelections.forEach(i => i.cb.checked = true); }
     function deselectAllBatches() { currentBatchSelections.forEach(i => i.cb.checked = false); }
 
-    // ---------- Delete selected batches ----------
     async function deleteSelectedBatches() {
         const selected = currentBatchSelections.filter(i => i.cb.checked);
         if (selected.length === 0) { alert('Please select at least one batch.'); return; }
@@ -1108,9 +871,7 @@
                 const res = await fetch(`/api/batches/${item.batchId}?type=${deleteType}`, { method: 'DELETE' });
                 if (res.ok) successCount++;
                 else { const data = await res.json(); throw new Error(data.error || 'Unknown error'); }
-            } catch (err) {
-                savePendingBatchDeletion(item.batchId, deleteType);
-            }
+            } catch (err) { savePendingBatchDeletion(item.batchId, deleteType); }
         }
         if (successCount > 0) alert(`${successCount} batch(es) deleted online.`);
         closeBatchModal();
@@ -1123,7 +884,7 @@
         const product = currentProducts.find(p => (p.product_id || p.id) === idNum);
         const productName = product ? product.name : 'Unknown';
         currentProductIdForDelete = idNum;
-        document.getElementById('deleteProductName').innerHTML = `Accessory Product: ${escapeHtml(productName)}`;
+        document.getElementById('deleteProductName').innerHTML = `Product: ${escapeHtml(productName)}`;
         document.getElementById('deleteProductModal').classList.remove('hidden');
     }
     function closeDeleteProductModal() {
@@ -1136,13 +897,13 @@
             const res = await fetch(`/api/products/${currentProductIdForDelete}?type=${deleteType}`, { method: 'DELETE' });
             const data = await res.json();
             if (data.success) {
-                alert(`Accessory product ${deleteType === 'clean' ? 'permanently deleted' : 'deleted (history kept)'}.`);
+                alert(`${GROUP_LABEL} product ${deleteType === 'clean' ? 'permanently deleted' : 'deleted (history kept)'}.`);
                 closeDeleteProductModal();
                 loadProducts(true);
             } else alert('Error: ' + data.error);
         } catch (err) {
             savePendingProductDeletion(currentProductIdForDelete, deleteType);
-            alert(`Accessory product deletion saved offline. It will be applied when you reconnect.`);
+            alert(`${GROUP_LABEL} product deletion saved offline. It will be applied when you reconnect.`);
             closeDeleteProductModal();
             loadProducts();
         }
@@ -1172,8 +933,8 @@
                         <p class="text-xs font-medium text-gray-500 mb-2">📊 Stock Breakdown for Batch #${batchId}</p>
                         <div class="stock-breakdown">
                             <div class="stock-item stock-total"><span class="text-gray-500">Total</span><p class="font-bold text-gray-700">${batchOriginal}</p></div>
-                            <div class="stock-item stock-sold"><span class="text-gray-500">Sold</span><p class="font-bold text-blue-600">${sold}</p></div>
-                            <div class="stock-item stock-good"><span class="text-gray-500">✅ Good</span><p class="font-bold text-green-600">${Math.max(goodStock,0)}</p></div>
+                            <div class="stock-item stock-sold"><span class="text-gray-500">Sold</span><p class="font-bold text-[#1B5E20]">${sold}</p></div>
+                            <div class="stock-item stock-good"><span class="text-gray-500">✅ Good</span><p class="font-bold text-[#2E7D32]">${Math.max(goodStock,0)}</p></div>
                         </div>
                     </div>`;
                 if (claims.length === 0) {
@@ -1205,14 +966,14 @@
                     }
                     const resolvedList = sortedClaims.filter(c => c.status === 'resolved');
                     if (resolvedList.length > 0) {
-                        html += `<div class="border-l-4 border-green-500 pl-3 mt-4"><p class="text-sm font-semibold text-green-600 mb-2">✅ Resolved Claims (${resolvedList.length})</p>`;
+                        html += `<div class="border-l-4 border-green-500 pl-3 mt-4"><p class="text-sm font-semibold text-[#2E7D32] mb-2">✅ Resolved Claims (${resolvedList.length})</p>`;
                         resolvedList.forEach(claim => {
                             html += `<div class="bg-green-50 rounded-lg p-3 mb-2 border border-green-200">
                                 <div class="flex justify-between items-start"><div class="flex-1">
                                     <div class="flex items-center gap-2 flex-wrap">
-                                        <span class="text-xs font-bold text-green-600 bg-green-100 px-2 py-0.5 rounded">#${claim.id}</span>
+                                        <span class="text-xs font-bold text-[#2E7D32] bg-green-100 px-2 py-0.5 rounded">#${claim.id}</span>
                                         <span class="text-xs font-semibold bg-green-100 text-green-800 px-2 py-0.5 rounded">${escapeHtml(claim.issue_type)}</span>
-                                        <span class="text-xs text-green-500 font-bold">${claim.quantity} units</span>
+                                        <span class="text-xs text-green-600 font-bold">${claim.quantity} units</span>
                                     </div>
                                     ${claim.description ? `<p class="text-sm text-gray-600 mt-1">📝 ${escapeHtml(claim.description)}</p>` : ''}
                                     <div class="text-xs text-gray-500 mt-1">📅 ${new Date(claim.created_at).toLocaleString()}</div>
@@ -1247,7 +1008,6 @@
         if (isLoading) return;
         isLoading = true;
         updateOfflineBanner();
-
         showLoadingState();
 
         let productsData = [];
@@ -1255,11 +1015,11 @@
 
         if (navigator.onLine && !forceRefresh) {
             try {
-                const res = await fetch('/api/products?exclude_category=Screen');
+                const res = await fetch(`/api/products?group=${GROUP}`);
                 if (res.ok) {
                     const data = await res.json();
-                    if (data && data.products && Array.isArray(data.products) && data.products.length > 0) {
-                        productsData = data.products;
+                    if (data && data.products && Array.isArray(data.products)) {
+                        productsData = data.products.filter(p => isInGroup(p.category));
                         if (db) await storeProductsInDexie(productsData);
                         apiSuccess = true;
                     }
@@ -1269,13 +1029,9 @@
 
         if (!apiSuccess || !navigator.onLine) {
             try {
-                let cached;
                 if (db) {
-                    try { cached = await db.products.where('category').notEqual('Screen').toArray(); }
-                    catch (e) {
-                        const all = await db.products.toArray();
-                        cached = all.filter(p => p.category !== 'Screen');
-                    }
+                    const all = await db.products.toArray();
+                    const cached = all.filter(p => isInGroup(p.category));
                     if (cached && cached.length > 0) productsData = cached;
                 }
             } catch (e) { console.warn('Failed to read from Dexie:', e); }
@@ -1284,7 +1040,6 @@
         currentProducts = productsData;
 
         clearLoadingPulse();
-
         await updateSummary(productsData);
         applyAdvancedSearch();
         await loadLowStockCount();
@@ -1367,12 +1122,11 @@
     async function loadLowStockCount() {
         try {
             if (navigator.onLine) {
-                const res = await fetch('/api/low_stock/split?category=non-Screen');
+                const res = await fetch(`/api/products/low_stock?group=${GROUP}&threshold=10`);
                 if (res.ok) {
                     const data = await res.json();
-                    if (data.success && data.product_level) {
-                        const low = data.product_level.counts.low_stock || 0;
-                        document.getElementById('lowStockCount').textContent = low;
+                    if (Array.isArray(data)) {
+                        document.getElementById('lowStockCount').textContent = data.length;
                         return;
                     }
                 }
@@ -1405,7 +1159,6 @@
                         if (product) {
                             viewBatches(product.product_id || product.id, product.name, product.batches || []);
                             setTimeout(() => {
-                                // Auto-expand the group containing the matched batch, then highlight
                                 expandGroupContainingBatch(batchNum);
                                 document.querySelectorAll('#batchList .batch-item').forEach(item => {
                                     if (item.textContent.includes(`Batch #${batchNum}`)) {
@@ -1441,7 +1194,7 @@
             for (const product of products) {
                 const nameEl = product.querySelector('h3');
                 if (nameEl && nameEl.textContent.trim().startsWith(productName)) {
-                    const viewBtn = product.querySelector('button.bg-blue-500');
+                    const viewBtn = product.querySelector('button.bg-\\[\\#2E7D32\\]') || product.querySelector('button');
                     if (viewBtn) viewBtn.click();
                     if (highlightBatchId) {
                         setTimeout(() => {
@@ -1465,7 +1218,23 @@
     }
     window.triggerAutoOpenInline = function() { autoOpenBatches(); };
 
+    function applyGroupLabels() {
+        const badge = document.getElementById('productsGroupBadge');
+        if (badge) badge.textContent = GROUP_BADGE;
+
+        const subtitle = document.getElementById('productsHeaderSubtitle');
+        if (subtitle) subtitle.textContent = `Manage your ${GROUP_LABEL} products and batches`;
+
+        const offBanner = document.getElementById('offlineBanner');
+        if (offBanner) offBanner.textContent = `⚠️ You are offline – showing cached ${GROUP_LABEL} products. Deletions will be saved and applied when you reconnect.`;
+
+        const delTitle = document.getElementById('deleteProductModalTitle');
+        if (delTitle) delTitle.textContent = `Delete ${GROUP_LABEL} Product`;
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
+        applyGroupLabels();
+
         loadProducts();
         if (typeof updatePendingBadge === 'function') updatePendingBadge();
 

@@ -1,4 +1,4 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
 
 {% block content %}
 <!-- Offline banner -->
@@ -8,54 +8,57 @@
 
 <!-- Header -->
 <div class="flex flex-wrap justify-between items-center gap-3 mb-6">
-    <div>
-        <h1 class="text-2xl md:text-3xl font-bold text-red-600">🔧 Claim Issues</h1>
-        <p class="text-gray-500 text-sm">Manage product claims for faulty or damaged items</p>
+    <div class="flex items-center gap-2 flex-wrap">
+        <div>
+            <h1 class="text-2xl md:text-3xl font-bold text-[#1B5E20]">🔧 Claim Issues</h1>
+            <p class="text-gray-500 text-sm">Manage product claims for faulty or damaged items</p>
+        </div>
+        <span class="bg-[#E8F5E9] text-[#1B5E20] text-xs font-semibold px-2.5 py-0.5 rounded self-start mt-2" id="claimsGroupBadge">All</span>
     </div>
-    <button id="newClaimBtn" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm md:text-base">
+    <button id="newClaimBtn" class="bg-[#2E7D32] hover:bg-[#1B5E20] text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm md:text-base font-medium transition">
         <i class="fas fa-plus"></i> New Claim
     </button>
 </div>
 
 <!-- Search & Filter -->
-<div class="bg-white rounded-xl shadow-md p-4 mb-6">
+<div class="bg-white rounded-xl shadow-md p-4 mb-6 border border-[#E8F5E9]">
     <div class="flex flex-wrap gap-4 items-end">
         <div class="flex-1 min-w-[200px]">
             <label class="block text-sm font-medium text-gray-700">Search Claims</label>
             <input type="text" id="searchInput" placeholder="🔍 Search by product, brand, or batch..." 
-                   class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                   class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-[#2E7D32] focus:ring-1 focus:ring-[#2E7D32] outline-none">
         </div>
         <div>
             <label class="block text-sm font-medium text-gray-700">Status Filter</label>
-            <select id="statusFilter" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+            <select id="statusFilter" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-[#2E7D32] outline-none">
                 <option value="all">All</option>
                 <option value="active">Active</option>
                 <option value="resolved">Resolved</option>
             </select>
         </div>
-        <button id="applyFilterBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">Apply Filter</button>
-        <button id="clearFilterBtn" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded-lg text-sm">Clear</button>
-        <button id="refreshBtn" class="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-lg text-sm">🔄 Refresh</button>
+        <button id="applyFilterBtn" class="bg-[#2E7D32] hover:bg-[#1B5E20] text-white px-4 py-2 rounded-lg text-sm font-medium transition">Apply Filter</button>
+        <button id="clearFilterBtn" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded-lg text-sm transition">Clear</button>
+        <button id="refreshBtn" class="bg-[#2E7D32] hover:bg-[#1B5E20] text-white px-4 py-2 rounded-lg text-sm font-medium transition">🔄 Refresh</button>
     </div>
 </div>
 
 <!-- Claims Summary -->
 <div id="claimsSummary" class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
-    <div class="bg-white rounded-xl shadow-md p-3 md:p-4 text-center border border-gray-100">
+    <div class="bg-white rounded-xl shadow-md p-3 md:p-4 text-center border border-[#E8F5E9]">
         <p class="text-xs text-gray-500">Total Claims</p>
-        <p id="totalClaims" class="text-xl md:text-2xl font-bold text-gray-800">0</p>
+        <p id="totalClaims" class="text-xl md:text-2xl font-bold text-[#1B5E20]">0</p>
     </div>
-    <div class="bg-white rounded-xl shadow-md p-3 md:p-4 text-center border border-gray-100">
+    <div class="bg-white rounded-xl shadow-md p-3 md:p-4 text-center border border-[#E8F5E9]">
         <p class="text-xs text-gray-500">Active Claims</p>
         <p id="activeClaims" class="text-xl md:text-2xl font-bold text-red-600">0</p>
     </div>
-    <div class="bg-white rounded-xl shadow-md p-3 md:p-4 text-center border border-gray-100">
+    <div class="bg-white rounded-xl shadow-md p-3 md:p-4 text-center border border-[#E8F5E9]">
         <p class="text-xs text-gray-500">Resolved</p>
-        <p id="resolvedClaims" class="text-xl md:text-2xl font-bold text-green-600">0</p>
+        <p id="resolvedClaims" class="text-xl md:text-2xl font-bold text-[#2E7D32]">0</p>
     </div>
-    <div class="bg-white rounded-xl shadow-md p-3 md:p-4 text-center border border-gray-100">
+    <div class="bg-white rounded-xl shadow-md p-3 md:p-4 text-center border border-[#E8F5E9]">
         <p class="text-xs text-gray-500">Items Claimed</p>
-        <p id="totalItemsClaimed" class="text-xl md:text-2xl font-bold text-purple-600">0</p>
+        <p id="totalItemsClaimed" class="text-xl md:text-2xl font-bold text-[#F1C40F]">0</p>
     </div>
 </div>
 
@@ -66,9 +69,9 @@
 
 <!-- ===== MODAL: NEW CLAIM ===== -->
 <div id="claimModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-[#E8F5E9]">
         <div class="sticky top-0 bg-white p-4 border-b flex justify-between items-center">
-            <h3 class="text-xl font-bold" id="claimModalTitle">New Claim</h3>
+            <h3 class="text-xl font-bold text-[#1B5E20]" id="claimModalTitle">New Claim</h3>
             <button onclick="closeClaimModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
         </div>
         <div class="p-4 space-y-4">
@@ -77,16 +80,16 @@
                 <label class="block text-sm font-medium text-gray-700 mb-1">Search Product</label>
                 <div class="relative">
                     <input type="text" id="claimProductSearch" placeholder="Type product name, brand, or category..." 
-                           class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-[#2E7D32] focus:ring-1 focus:ring-[#2E7D32] outline-none">
                     <div id="claimSearchResults" class="absolute z-10 w-full bg-white border rounded-lg shadow-lg hidden max-h-60 overflow-y-auto"></div>
                 </div>
             </div>
             
             <!-- Selected Product -->
-            <div id="selectedProductDisplay" class="hidden bg-blue-50 p-3 rounded-lg">
+            <div id="selectedProductDisplay" class="hidden bg-[#E8F5E9] p-3 rounded-lg">
                 <div class="flex justify-between items-start">
                     <div>
-                        <p class="font-bold text-indigo-700" id="selectedProductName"></p>
+                        <p class="font-bold text-[#1B5E20]" id="selectedProductName"></p>
                         <p class="text-sm text-gray-600" id="selectedProductDetails"></p>
                         <p class="text-sm text-gray-500">Available Stock: <span id="selectedProductStock">0</span></p>
                     </div>
@@ -97,7 +100,7 @@
             <!-- Batch Selection -->
             <div id="batchSelectionContainer" class="hidden">
                 <label class="block text-sm font-medium text-gray-700 mb-1">Select Batch</label>
-                <select id="claimBatchSelect" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                <select id="claimBatchSelect" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-[#2E7D32] outline-none">
                     <option value="">Select a batch...</option>
                 </select>
                 <div id="batchInfoDisplay" class="mt-2 text-sm text-gray-500 hidden"></div>
@@ -106,7 +109,7 @@
             <!-- Issue Details -->
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Issue Type</label>
-                <select id="claimIssueType" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                <select id="claimIssueType" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-[#2E7D32] outline-none">
                     <option value="Damaged">Damaged</option>
                     <option value="Faulty">Faulty / Defective</option>
                     <option value="Expired">Expired</option>
@@ -118,18 +121,18 @@
             
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Quantity to Claim</label>
-                <input type="number" id="claimQuantity" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" min="1" placeholder="Enter quantity">
+                <input type="number" id="claimQuantity" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-[#2E7D32] outline-none" min="1" placeholder="Enter quantity">
                 <p class="text-xs text-gray-500 mt-1">⚠️ This will be deducted from the batch's good stock</p>
             </div>
             
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                <textarea id="claimDescription" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" rows="3" placeholder="Describe the issue..."></textarea>
+                <textarea id="claimDescription" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-[#2E7D32] outline-none" rows="3" placeholder="Describe the issue..."></textarea>
             </div>
 
             <!-- Stock Impact Preview -->
-            <div id="stockImpact" class="hidden bg-yellow-50 p-3 rounded-lg border border-yellow-200">
-                <p class="text-sm font-medium text-yellow-800">📊 Stock Impact Preview</p>
+            <div id="stockImpact" class="hidden bg-amber-50 p-3 rounded-lg border border-amber-200">
+                <p class="text-sm font-medium text-amber-800">📊 Stock Impact Preview</p>
                 <div class="grid grid-cols-2 gap-2 mt-2 text-sm">
                     <div>
                         <span class="text-gray-600">Current Good Stock:</span>
@@ -140,28 +143,28 @@
                         <span id="afterStockDisplay" class="font-bold text-red-600">0</span>
                     </div>
                 </div>
-                <p class="text-xs text-yellow-600 mt-1">💡 Claimed items are removed from good stock</p>
+                <p class="text-xs text-amber-600 mt-1">💡 Claimed items are removed from good stock</p>
             </div>
         </div>
         <div class="sticky bottom-0 bg-white p-4 border-t flex justify-end gap-3">
-            <button onclick="closeClaimModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded-lg">Cancel</button>
-            <button id="saveClaimBtn" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg">Save Claim</button>
+            <button onclick="closeClaimModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded-lg transition">Cancel</button>
+            <button id="saveClaimBtn" class="bg-[#2E7D32] hover:bg-[#1B5E20] text-white px-4 py-2 rounded-lg font-medium transition">Save Claim</button>
         </div>
     </div>
 </div>
 
 <!-- ===== MODAL: VIEW CLAIM ===== -->
 <div id="viewClaimModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-[#E8F5E9]">
         <div class="sticky top-0 bg-white p-4 border-b flex justify-between items-center">
-            <h3 class="text-xl font-bold" id="viewClaimTitle">Claim Details</h3>
+            <h3 class="text-xl font-bold text-[#1B5E20]" id="viewClaimTitle">Claim Details</h3>
             <button onclick="closeViewClaimModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
         </div>
         <div id="viewClaimContent" class="p-4 space-y-4">
             <!-- dynamically loaded -->
         </div>
         <div class="sticky bottom-0 bg-white p-4 border-t flex justify-end gap-3">
-            <button onclick="closeViewClaimModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded-lg">Close</button>
+            <button onclick="closeViewClaimModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded-lg transition">Close</button>
         </div>
     </div>
 </div>
@@ -178,11 +181,11 @@
         text-align: center;
         font-size: 0.65rem;
     }
-    .stock-total { background: #f3f4f6; }
-    .stock-sold { background: #dbeafe; }
-    .stock-physical { background: #e0e7ff; }
-    .stock-claimed { background: #fee2e2; }
-    .stock-good { background: #d1fae5; }
+    .stock-total    { background: #f3f4f6; }
+    .stock-sold     { background: #E8F5E9; }
+    .stock-physical { background: #C8E6C9; }
+    .stock-claimed  { background: #fee2e2; }
+    .stock-good     { background: #d1fae5; }
     
     @media (max-width: 640px) {
         .stock-breakdown {
@@ -226,8 +229,42 @@
 </style>
 
 <script>
+    // ============================================================
+    //  GROUP CONFIGURATION — set by app.py when rendering
+    //  'others' → Roots, Barks, Leaves & Seeds (default if passed)
+    //  'oils'   → Spiritual / Anointing / Essential Oils
+    //  'all'    → no filtering (backward-compatible default)
+    // ============================================================
+    const GROUP        = '{{ group|default("all") }}';
+    const OIL_CATS     = ['Spiritual Oils', 'Anointing Oils', 'Essential Oils'];
+    const NON_OIL_CATS = ['Tree Roots', 'Tree Barks', 'Leaves', 'Seeds'];
+
+    const GROUP_LABEL  = GROUP === 'oils' ? 'Oils'
+                       : GROUP === 'others' ? 'Roots, Barks & Others'
+                       : 'All Categories';
+    const GROUP_BADGE  = GROUP === 'oils' ? 'Oils'
+                       : GROUP === 'others' ? 'Others'
+                       : 'All';
+
+    function isInGroup(category) {
+        if (GROUP === 'all') return true;
+        const cat = (category || '').trim();
+        if (GROUP === 'oils') return OIL_CATS.includes(cat);
+        // 'others'
+        if (OIL_CATS.includes(cat)) return false;
+        if (cat === 'Screen') return false;
+        return true;
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
-        console.log("DOM loaded – initializing Claims with Dexie (db.claims)");
+        console.log(`DOM loaded – initializing Claims (${GROUP_LABEL}) with Dexie (db.claims)`);
+
+        // ---------- Group badge ----------
+        const groupBadgeEl = document.getElementById('claimsGroupBadge');
+        if (groupBadgeEl) {
+            groupBadgeEl.textContent = GROUP_BADGE;
+            if (GROUP === 'all') groupBadgeEl.classList.add('hidden');
+        }
 
         // ---------- Offline banner ----------
         function updateOfflineBanner() {
@@ -242,19 +279,12 @@
         window.addEventListener('offline', updateOfflineBanner);
 
         // ========== DEXIE HELPERS (using db.claims directly) ==========
-        // We'll store claims in db.claims table – each claim as a separate record.
-        // We'll also use db.pending_ops from sync.js for pending operations.
-
-        // Helper to ensure pending_ops table exists (it should be defined in sync.js)
-        // If sync.js hasn't defined it, we'll create it here as fallback.
         async function ensurePendingOps() {
             if (!db) return false;
             try {
-                // Check if pending_ops table exists by trying to count
                 await db.pending_ops.count();
                 return true;
             } catch (e) {
-                // Table doesn't exist – create it
                 try {
                     db.version(db.verno).stores({ pending_ops: '++id, table, operation, record_id, payload, timestamp, attempts, synced' });
                     console.log('✅ pending_ops table created (fallback)');
@@ -266,14 +296,13 @@
             }
         }
 
-        // ---------- Pending operations using db.pending_ops ----------
         async function savePendingClaimOperation(table, operation, recordId, payload) {
             if (!db) return;
             await ensurePendingOps();
             try {
                 await db.pending_ops.add({
-                    table: table,           // 'claims'
-                    operation: operation,   // 'add', 'update', 'delete', 'resolve'
+                    table: table,
+                    operation: operation,
                     record_id: recordId,
                     payload: payload,
                     timestamp: new Date().toISOString(),
@@ -300,16 +329,12 @@
 
         async function markPendingSynced(opId) {
             if (!db) return;
-            try {
-                await db.pending_ops.update(opId, { synced: 1 });
-            } catch (e) {}
+            try { await db.pending_ops.update(opId, { synced: 1 }); } catch (e) {}
         }
 
         async function deletePendingOp(opId) {
             if (!db) return;
-            try {
-                await db.pending_ops.delete(opId);
-            } catch (e) {}
+            try { await db.pending_ops.delete(opId); } catch (e) {}
         }
 
         async function updatePendingBadge() {
@@ -329,7 +354,7 @@
             } catch (e) {}
         }
 
-        // ---------- Load claims (Dexie-first) ----------
+        // ---------- Load claims (Dexie-first, group-filtered) ----------
         async function loadClaims() {
             updateOfflineBanner();
             const container = document.getElementById('claimsList');
@@ -341,7 +366,9 @@
             if (db) {
                 try {
                     claims = await db.claims.toArray();
-                    console.log(`📦 Loaded ${claims.length} claims from Dexie`);
+                    // Group filter
+                    claims = claims.filter(c => isInGroup(c.category));
+                    console.log(`📦 Loaded ${claims.length} ${GROUP_LABEL} claims from Dexie`);
                 } catch (e) {
                     console.warn('Failed to read claims from Dexie', e);
                 }
@@ -353,8 +380,7 @@
                 applyFilters();
                 updateSummary();
             } else {
-                // No claims in Dexie – show empty state
-                container.innerHTML = '<div class="text-center text-gray-400 py-8">No claims available offline. Please connect to the internet.</div>';
+                container.innerHTML = `<div class="text-center text-gray-400 py-8">No ${GROUP_LABEL} claims available offline. Please connect to the internet.</div>`;
                 currentClaims = [];
                 updateSummary();
             }
@@ -365,29 +391,29 @@
             }
         }
 
-        // ---------- Refresh from API ----------
+        // ---------- Refresh from API (group-filtered) ----------
         async function refreshClaimsFromAPI() {
             try {
-                const res = await fetch('/api/claims');
+                const url = GROUP === 'all' ? '/api/claims' : `/api/claims?group=${GROUP}`;
+                const res = await fetch(url);
                 if (!res.ok) throw new Error('Network error');
                 const data = await res.json();
                 if (data.success) {
-                    const freshClaims = data.claims;
-                    // Store in Dexie (upsert)
+                    // Client-side group filter (safety net even if server supports ?group=)
+                    const freshClaims = (data.claims || []).filter(c => isInGroup(c.category));
+
                     if (db) {
                         for (const claim of freshClaims) {
                             await db.claims.put(claim);
                         }
-                        console.log(`✅ ${freshClaims.length} claims stored in Dexie`);
+                        console.log(`✅ ${freshClaims.length} ${GROUP_LABEL} claims stored in Dexie`);
                     }
-                    // Update currentClaims and re-render
                     currentClaims = freshClaims;
                     applyFilters();
                     updateSummary();
                 }
             } catch (e) {
                 console.warn('Failed to refresh claims from API', e);
-                // If we had no cached data before, show error
                 if (currentClaims.length === 0) {
                     document.getElementById('claimsList').innerHTML = '<div class="text-center text-red-500 py-8">Failed to load claims. Please try again.</div>';
                 }
@@ -416,8 +442,8 @@
 
             if (searchTerm) {
                 filtered = filtered.filter(c =>
-                    c.product_name.toLowerCase().includes(searchTerm) ||
-                    c.brand.toLowerCase().includes(searchTerm) ||
+                    (c.product_name || '').toLowerCase().includes(searchTerm) ||
+                    (c.brand || '').toLowerCase().includes(searchTerm) ||
                     c.batch_id.toString().includes(searchTerm)
                 );
             }
@@ -433,7 +459,7 @@
         function renderClaims(claims) {
             const container = document.getElementById('claimsList');
             if (!claims || claims.length === 0) {
-                container.innerHTML = '<div class="text-center text-gray-400 py-8">No claims found.</div>';
+                container.innerHTML = `<div class="text-center text-gray-400 py-8">No ${GROUP_LABEL} claims found.</div>`;
                 return;
             }
 
@@ -444,11 +470,11 @@
                 const sold = originalStock - physicalStock;
 
                 return `
-                <div class="claim-card bg-white rounded-xl shadow-md border p-3 md:p-4 ${claim.status === 'resolved' ? 'border-green-200' : 'border-red-200'}">
+                <div class="claim-card bg-white rounded-xl shadow-md border p-3 md:p-4 ${claim.status === 'resolved' ? 'border-[#E8F5E9]' : 'border-red-200'}">
                     <div class="flex flex-wrap justify-between items-start gap-2">
                         <div class="flex-1 min-w-0">
                             <div class="claim-header">
-                                <h3 class="font-bold text-base md:text-lg text-indigo-700 truncate">${escapeHtml(claim.product_name)}</h3>
+                                <h3 class="font-bold text-base md:text-lg text-[#1B5E20] truncate">${escapeHtml(claim.product_name)}</h3>
                                 ${getStatusBadge(claim.status)}
                                 ${getIssueBadge(claim.issue_type)}
                             </div>
@@ -466,11 +492,11 @@
                                     </div>
                                     <div class="stock-item stock-sold">
                                         <span class="text-gray-500">Sold</span>
-                                        <p class="font-bold text-blue-600 text-xs">${sold}</p>
+                                        <p class="font-bold text-[#1B5E20] text-xs">${sold}</p>
                                     </div>
                                     <div class="stock-item stock-physical">
                                         <span class="text-gray-500">Physical</span>
-                                        <p class="font-bold text-indigo-600 text-xs">${physicalStock}</p>
+                                        <p class="font-bold text-[#2E7D32] text-xs">${physicalStock}</p>
                                     </div>
                                     <div class="stock-item stock-good">
                                         <span class="text-gray-500">✅ Good</span>
@@ -485,14 +511,14 @@
                             <p class="text-xs text-gray-400 mt-1">Created: ${formatDate(claim.created_at)}</p>
                         </div>
                         <div class="claim-actions">
-                            <button onclick="viewClaim(${claim.id})" class="bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs">👁 View</button>
+                            <button onclick="viewClaim(${claim.id})" class="bg-[#2E7D32] hover:bg-[#1B5E20] text-white px-2 py-1 rounded text-xs transition">👁 View</button>
                             ${claim.status === 'active' ? `
-                                <button onclick="resolveClaim(${claim.id})" class="bg-green-500 hover:bg-green-600 text-white px-2 py-1 rounded text-xs">✅ Resolve</button>
-                                <button onclick="editClaim(${claim.id})" class="bg-yellow-500 hover:bg-yellow-600 text-white px-2 py-1 rounded text-xs">✏️ Edit</button>
+                                <button onclick="resolveClaim(${claim.id})" class="bg-[#2E7D32] hover:bg-[#1B5E20] text-white px-2 py-1 rounded text-xs transition">✅ Resolve</button>
+                                <button onclick="editClaim(${claim.id})" class="bg-amber-500 hover:bg-amber-600 text-white px-2 py-1 rounded text-xs transition">✏️ Edit</button>
                             ` : `
-                                <span class="text-xs text-green-600 text-center">✓ Resolved</span>
+                                <span class="text-xs text-[#2E7D32] text-center">✓ Resolved</span>
                             `}
-                            <button onclick="deleteClaim(${claim.id})" class="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-xs">🗑️ Delete</button>
+                            <button onclick="deleteClaim(${claim.id})" class="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs transition">🗑️ Delete</button>
                         </div>
                     </div>
                 </div>
@@ -520,19 +546,19 @@
 
         function getStatusBadge(status) {
             if (status === 'resolved') {
-                return '<span class="inline-flex items-center bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs font-medium">✅ Resolved</span>';
+                return '<span class="inline-flex items-center bg-[#E8F5E9] text-[#1B5E20] px-2 py-0.5 rounded text-xs font-medium">✅ Resolved</span>';
             }
             return '<span class="inline-flex items-center bg-red-100 text-red-800 px-2 py-0.5 rounded text-xs font-medium">⚠️ Active</span>';
         }
 
         function getIssueBadge(issueType) {
             const colors = {
-                'Damaged': 'bg-orange-100 text-orange-800',
-                'Faulty': 'bg-red-100 text-red-800',
-                'Expired': 'bg-yellow-100 text-yellow-800',
-                'Wrong Item': 'bg-blue-100 text-blue-800',
-                'Quality Issue': 'bg-purple-100 text-purple-800',
-                'Other': 'bg-gray-100 text-gray-800'
+                'Damaged':       'bg-orange-100 text-orange-800',
+                'Faulty':        'bg-red-100 text-red-800',
+                'Expired':       'bg-yellow-100 text-yellow-800',
+                'Wrong Item':    'bg-blue-100 text-blue-800',
+                'Quality Issue': 'bg-amber-100 text-amber-800',
+                'Other':         'bg-gray-100 text-gray-800'
             };
             const color = colors[issueType] || 'bg-gray-100 text-gray-800';
             return `<span class="inline-flex items-center ${color} px-2 py-0.5 rounded text-xs font-medium">${escapeHtml(issueType)}</span>`;
@@ -548,7 +574,6 @@
 
         // ---------- View claim ----------
         async function viewClaim(claimId) {
-            // Find claim from currentClaims (which is already from Dexie)
             const claim = currentClaims.find(c => c.id === claimId);
             if (!claim) {
                 alert('Claim not found');
@@ -566,7 +591,7 @@
                     <div class="grid grid-cols-2 gap-3">
                         <div class="bg-gray-50 p-3 rounded">
                             <p class="text-xs text-gray-500">Product</p>
-                            <p class="font-bold text-indigo-700">${escapeHtml(claim.product_name)}</p>
+                            <p class="font-bold text-[#1B5E20]">${escapeHtml(claim.product_name)}</p>
                             <p class="text-sm text-gray-600">${escapeHtml(claim.brand)} | ${escapeHtml(claim.category)}</p>
                         </div>
                         <div class="bg-gray-50 p-3 rounded">
@@ -584,11 +609,11 @@
                             </div>
                             <div class="stock-item stock-sold">
                                 <span class="text-xs text-gray-500">Sold</span>
-                                <p class="font-bold text-blue-600">${sold}</p>
+                                <p class="font-bold text-[#1B5E20]">${sold}</p>
                             </div>
                             <div class="stock-item stock-physical">
                                 <span class="text-xs text-gray-500">Physical</span>
-                                <p class="font-bold text-indigo-600">${physicalStock}</p>
+                                <p class="font-bold text-[#2E7D32]">${physicalStock}</p>
                             </div>
                             <div class="stock-item stock-good">
                                 <span class="text-xs text-gray-500">✅ Good</span>
@@ -627,8 +652,8 @@
                             <p class="text-sm">${formatDate(claim.updated_at)}</p>
                         </div>
                     ` : ''}
-                    <div class="bg-blue-50 p-3 rounded border border-blue-200">
-                        <p class="text-xs text-blue-700">💡 Claimed items are removed from good stock. Resolving marks the claim as complete without restoring stock. Deleting restores stock.</p>
+                    <div class="bg-[#E8F5E9] p-3 rounded border border-[#C8E6C9] text-[#1B5E20]">
+                        <p class="text-xs">💡 Claimed items are removed from good stock. Resolving marks the claim as complete without restoring stock. Deleting restores stock.</p>
                     </div>
                 </div>
             `;
@@ -644,14 +669,11 @@
             if (!confirm('Mark this claim as resolved? The claimed items will remain deducted from stock.')) return;
 
             if (!navigator.onLine) {
-                // Save pending resolve operation
                 await savePendingClaimOperation('claims', 'resolve', claimId, { claimId });
                 alert('📶 You are offline. The resolution will be synced when you reconnect.');
-                // Update local claim status optimistically
                 const claim = currentClaims.find(c => c.id === claimId);
                 if (claim) {
                     claim.status = 'resolved';
-                    // Update in Dexie
                     if (db) await db.claims.put(claim);
                     applyFilters();
                     updateSummary();
@@ -665,14 +687,12 @@
                 const data = await res.json();
                 if (data.success) {
                     alert('✅ Claim resolved successfully!');
-                    // Remove any pending ops for this claim (if any)
                     const pending = await getPendingClaimOps();
                     for (const op of pending) {
                         if (op.operation === 'resolve' && op.record_id === claimId) {
                             await deletePendingOp(op.id);
                         }
                     }
-                    // Refresh from server (will also update Dexie)
                     await refreshClaimsFromAPI();
                 } else {
                     alert('Error: ' + data.error);
@@ -693,13 +713,10 @@
             if (!confirm(message)) return;
 
             if (!navigator.onLine) {
-                // Save pending delete operation
                 await savePendingClaimOperation('claims', 'delete', claimId, { claimId });
                 alert('📶 You are offline. The deletion will be synced when you reconnect.');
-                // Remove from local list optimistically
                 currentClaims = currentClaims.filter(c => c.id !== claimId);
                 if (db) {
-                    // Delete from Dexie (locally)
                     await db.claims.delete(claimId);
                 }
                 applyFilters();
@@ -713,7 +730,6 @@
                 const data = await res.json();
                 if (data.success) {
                     alert(`✅ Claim deleted successfully. ${claim.quantity} units restored to inventory.`);
-                    // Remove pending ops if any
                     const pending = await getPendingClaimOps();
                     for (const op of pending) {
                         if (op.operation === 'delete' && op.record_id === claimId) {
@@ -811,7 +827,7 @@
             searchResultsCache = [];
         }
 
-        // ---------- Search products ----------
+        // ---------- Search products (group-filtered) ----------
         async function searchProducts(keyword) {
             if (!keyword || keyword.length < 2) {
                 document.getElementById('claimSearchResults').classList.add('hidden');
@@ -820,23 +836,29 @@
             }
 
             try {
-                const res = await fetch(`/api/claims/search?q=${encodeURIComponent(keyword)}`);
+                const url = GROUP === 'all'
+                    ? `/api/claims/search?q=${encodeURIComponent(keyword)}`
+                    : `/api/claims/search?q=${encodeURIComponent(keyword)}&group=${GROUP}`;
+                const res = await fetch(url);
                 const data = await res.json();
 
-                searchResultsCache = data.success ? (data.products || []) : [];
+                // Client-side group filter (safety net)
+                searchResultsCache = data.success
+                    ? (data.products || []).filter(p => isInGroup(p.category))
+                    : [];
 
-                if (data.success && searchResultsCache.length > 0) {
+                if (searchResultsCache.length > 0) {
                     const results = document.getElementById('claimSearchResults');
                     results.innerHTML = searchResultsCache.map(p => `
-                        <div class="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b" onclick="selectProduct(${p.id})">
-                            <div class="font-medium text-indigo-700">${escapeHtml(p.name)}</div>
+                        <div class="px-3 py-2 hover:bg-[#E8F5E9] cursor-pointer border-b" onclick="selectProduct(${p.id})">
+                            <div class="font-medium text-[#1B5E20]">${escapeHtml(p.name)}</div>
                             <div class="text-xs text-gray-500">${escapeHtml(p.brand)} | ${escapeHtml(p.category)} | Stock: ${p.stock}</div>
                         </div>
                     `).join('');
                     results.classList.remove('hidden');
                 } else {
                     document.getElementById('claimSearchResults').innerHTML = `
-                        <div class="px-3 py-2 text-gray-500">No products found</div>
+                        <div class="px-3 py-2 text-gray-500">No ${GROUP_LABEL} products found</div>
                     `;
                     document.getElementById('claimSearchResults').classList.remove('hidden');
                 }
@@ -990,13 +1012,9 @@
                 quantity: quantity
             };
 
-            // Offline handling
             if (!navigator.onLine) {
-                // Generate a temporary ID for the claim
                 const tempId = 'temp_' + Date.now();
-                // Save the pending operation with the full payload
                 await savePendingClaimOperation('claims', 'add', tempId, payload);
-                // Also create a local claim object to display immediately
                 const newClaim = {
                     id: tempId,
                     product_name: selectedProduct.name,
@@ -1013,11 +1031,9 @@
                     remaining_good: selectedBatch.remaining_quantity - quantity,
                     batch_original: selectedBatch.quantity || selectedBatch.remaining_quantity + (selectedBatch.claimed_quantity || 0)
                 };
-                // Store in Dexie locally
                 if (db) {
                     await db.claims.put(newClaim);
                 }
-                // Add to currentClaims
                 currentClaims.push(newClaim);
                 applyFilters();
                 updateSummary();
@@ -1044,7 +1060,6 @@
                 const data = await res.json();
                 if (data.success) {
                     alert(editClaimId ? '✅ Claim updated successfully!' : '✅ Claim created successfully!');
-                    // Remove any pending ops for this claim if it was pending
                     if (editClaimId) {
                         const pending = await getPendingClaimOps();
                         for (const op of pending) {
@@ -1099,11 +1114,9 @@
                         body: body ? JSON.stringify(body) : undefined
                     });
                     if (res.ok) {
-                        // Mark as synced
                         await markPendingSynced(op.id);
                         synced++;
                     } else {
-                        // Increment attempts
                         await db.pending_ops.update(op.id, { attempts: (op.attempts || 0) + 1 });
                     }
                 } catch (e) {
@@ -1114,7 +1127,6 @@
 
             if (synced > 0) {
                 console.log(`✅ ${synced} pending claim operations synced.`);
-                // Refresh after sync to get server updates
                 await refreshClaimsFromAPI();
                 updatePendingBadge();
             }
@@ -1125,7 +1137,6 @@
         updateOfflineBanner();
         updatePendingBadge();
 
-        // Sync pending claims when online
         if (navigator.onLine) {
             syncPendingClaims();
         }

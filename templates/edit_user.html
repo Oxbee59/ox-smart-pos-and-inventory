@@ -1,4 +1,4 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
 
 {% block content %}
 <!-- Offline banner -->
@@ -7,30 +7,30 @@
 </div>
 
 <div class="flex items-center gap-2 mb-6">
-    <a href="/admin/users" class="text-indigo-600 hover:text-indigo-800 hover:underline">← Back to Users</a>
-    <h1 class="text-3xl font-bold text-gray-800 ml-4">✏️ Edit User</h1>
+    <a href="/admin/users" class="text-[#2E7D32] hover:text-[#1B5E20] hover:underline font-medium">← Back to Users</a>
+    <h1 class="text-3xl font-bold text-[#1B5E20] ml-4">✏️ Edit User</h1>
 </div>
 
 <!-- Self-edit banner -->
 {% if is_self %}
-<div class="mb-4 max-w-2xl bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded-lg text-sm">
+<div class="mb-4 max-w-2xl bg-[#E8F5E9] border border-[#C8E6C9] text-[#1B5E20] px-4 py-3 rounded-lg text-sm">
     👤 <strong>You are editing your own account.</strong>
     You can change your password, but you cannot change your own role or delete yourself.
 </div>
 {% endif %}
 
-<div class="bg-white rounded-lg shadow p-6 max-w-2xl">
+<div class="bg-white rounded-lg shadow p-6 max-w-2xl border border-[#E8F5E9]">
     <!-- User Info -->
     <div id="userInfo" class="mb-6">
-        <div class="flex items-center gap-3 mb-3">
+        <div class="flex items-center gap-3 mb-3 flex-wrap">
             <span class="text-lg font-semibold text-gray-700">User:</span>
-            <span id="userName" class="text-lg font-bold text-indigo-700"></span>
+            <span id="userName" class="text-lg font-bold text-[#1B5E20]"></span>
             <span id="userRoleBadge" class="px-2 py-1 text-xs font-semibold rounded-full"></span>
             {% if is_oxbee %}
             <span class="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">🔒 System Protected</span>
             {% endif %}
             {% if is_self %}
-            <span class="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">👤 You</span>
+            <span class="px-2 py-1 text-xs font-semibold rounded-full bg-[#E8F5E9] text-[#1B5E20]">👤 You</span>
             {% endif %}
         </div>
         <p class="text-sm text-gray-500">Joined: <span id="userCreated"></span></p>
@@ -42,17 +42,17 @@
     <div class="border-t pt-4 mt-4">
         <h3 class="font-semibold text-gray-700 mb-3">👤 Change Role</h3>
         <div class="flex flex-wrap gap-3 items-center">
-            <select id="roleSelect" class="border rounded-lg px-3 py-2 bg-white" {% if role_locked %}disabled{% endif %}>
+            <select id="roleSelect" class="border border-gray-300 rounded-lg px-3 py-2 bg-white focus:border-[#2E7D32] outline-none" {% if role_locked %}disabled{% endif %}>
                 <option value="user">User</option>
                 <option value="admin">Admin</option>
             </select>
             <button id="updateRoleBtn"
-                    class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition {% if role_locked %}opacity-50 cursor-not-allowed{% endif %}"
+                    class="bg-[#2E7D32] hover:bg-[#1B5E20] text-white px-4 py-2 rounded-lg font-medium transition {% if role_locked %}opacity-50 cursor-not-allowed{% endif %}"
                     {% if role_locked %}disabled{% endif %}>
                 Update Role
             </button>
             {% if is_self %}
-            <span class="text-blue-500 text-sm">👤 You cannot change your own role</span>
+            <span class="text-[#2E7D32] text-sm">👤 You cannot change your own role</span>
             {% elif is_oxbee %}
             <span class="text-red-500 text-sm">🔒 Cannot modify system administrator</span>
             {% endif %}
@@ -66,16 +66,16 @@
         <div class="flex flex-wrap gap-3 items-end">
             <div class="flex-1 min-w-[200px]">
                 <label class="block text-sm text-gray-600 mb-1">New Password</label>
-                <input type="password" id="newPassword" class="w-full border rounded-lg px-3 py-2"
+                <input type="password" id="newPassword" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:border-[#2E7D32] focus:ring-1 focus:ring-[#2E7D32] outline-none"
                        placeholder="Enter new password" {% if password_locked %}disabled{% endif %}>
             </div>
             <button id="resetPasswordBtn"
-                    class="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg transition {% if password_locked %}opacity-50 cursor-not-allowed{% endif %}"
+                    class="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg font-medium transition {% if password_locked %}opacity-50 cursor-not-allowed{% endif %}"
                     {% if password_locked %}disabled{% endif %}>
                 {% if is_self %}Reset My Password{% else %}Reset Password{% endif %}
             </button>
             {% if is_self %}
-            <span class="text-blue-500 text-sm">✓ You can change your own password</span>
+            <span class="text-[#2E7D32] text-sm">✓ You can change your own password</span>
             {% elif is_oxbee %}
             <span class="text-red-500 text-sm">🔒 Cannot modify system administrator</span>
             {% endif %}
@@ -100,12 +100,12 @@
         <h3 class="font-semibold text-red-600 mb-3">⚠️ Danger Zone</h3>
         <div class="flex flex-wrap gap-3 items-center">
             <button id="deleteUserBtn"
-                    class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition {% if delete_locked %}opacity-50 cursor-not-allowed{% endif %}"
+                    class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium transition {% if delete_locked %}opacity-50 cursor-not-allowed{% endif %}"
                     {% if delete_locked %}disabled{% endif %}>
                 🗑️ Delete User
             </button>
             {% if is_self %}
-            <span class="text-blue-500 text-sm">👤 You cannot delete your own account</span>
+            <span class="text-[#2E7D32] text-sm">👤 You cannot delete your own account</span>
             {% elif is_oxbee %}
             <span class="text-red-500 text-sm">🔒 Cannot delete system administrator</span>
             {% endif %}
@@ -117,11 +117,11 @@
 
 <!-- ========== ERROR MODAL ========== -->
 <div id="errorModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
-    <div class="bg-white rounded-xl shadow-xl w-96 max-w-lg p-6">
+    <div class="bg-white rounded-xl shadow-xl w-96 max-w-lg p-6 border border-[#E8F5E9]">
         <div class="flex items-start gap-3">
             <div class="text-3xl text-red-500">❌</div>
             <div class="flex-1">
-                <h3 class="text-lg font-bold text-gray-800">Cannot Delete User</h3>
+                <h3 class="text-lg font-bold text-[#1B5E20]">Cannot Delete User</h3>
                 <p id="errorModalMessage" class="text-sm text-gray-700 mt-1"></p>
                 <div id="errorModalDetails" class="text-xs text-gray-500 mt-2 border-t pt-2 hidden">
                     <strong>Details:</strong> <span id="errorModalDetailsText"></span>
@@ -129,7 +129,7 @@
             </div>
         </div>
         <div class="flex justify-end mt-4">
-            <button onclick="closeErrorModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded">
+            <button onclick="closeErrorModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded transition">
                 OK
             </button>
         </div>
@@ -328,7 +328,7 @@
                 badge.className = 'px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800';
             } else {
                 badge.textContent = 'User';
-                badge.className = 'px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800';
+                badge.className = 'px-2 py-1 text-xs font-semibold rounded-full bg-[#E8F5E9] text-[#1B5E20]';
             }
             document.getElementById('roleSelect').value = user.role;
 
@@ -340,11 +340,17 @@
             }
         }
 
-        // ---------- Show inline message ----------
+        // ---------- Show inline message (herbal-friendly) ----------
         function showMessage(msg, color) {
             const el = document.getElementById('actionMessage');
             el.textContent = msg;
-            el.className = `mt-4 text-sm text-${color}-500`;
+            if (color === 'green') {
+                el.className = 'mt-4 text-sm text-[#2E7D32] font-medium';
+            } else if (color === 'red') {
+                el.className = 'mt-4 text-sm text-red-500';
+            } else {
+                el.className = 'mt-4 text-sm text-gray-500';
+            }
             setTimeout(() => { el.textContent = ''; }, 5000);
         }
 

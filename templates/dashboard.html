@@ -2,119 +2,211 @@
 
 {% block content %}
 <!-- Offline banner (hidden by default) -->
-<div id="offlineBanner" class="mb-3 md:mb-4 bg-red-100 border border-red-400 text-red-700 px-3 py-2 md:px-4 md:py-3 rounded text-sm md:text-base hidden">
-    ⚠️ You are offline – showing cached data. Data will update when you reconnect.
+<div id="offlineBanner" class="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg text-sm hidden shadow-sm">
+    <i class="fas fa-wifi mr-2"></i> You are offline – showing cached data. Data will update when you reconnect.
 </div>
 
 <!-- Header with date range, time range and real-time clock -->
-<div class="flex flex-wrap justify-between items-center gap-3 md:gap-4 mb-4 md:mb-6">
-    <h1 class="text-2xl md:text-3xl font-bold text-gray-800">Dashboard</h1>
-    <div class="flex flex-wrap items-center gap-2 md:gap-4">
+<div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+    <div>
+        <h1 class="text-2xl font-bold text-[#1B5E20] flex items-center gap-2">
+            <i class="fas fa-leaf text-[#2E7D32]"></i> Dashboard
+        </h1>
+        <p class="text-sm text-gray-500 mt-1">Welcome back! Here's your shop overview.</p>
+    </div>
+    
+    <div class="flex flex-wrap items-center gap-3 bg-white p-2 rounded-xl shadow-sm border border-[#E8F5E9]">
         <!-- Date Range Picker -->
-        <div class="flex items-center gap-1 md:gap-2">
-            <input type="date" id="startDate" class="border border-gray-300 rounded-lg px-2 py-1 md:px-3 md:py-2 text-xs md:text-sm">
-            <span class="text-gray-500 text-xs md:text-sm">to</span>
-            <input type="date" id="endDate" class="border border-gray-300 rounded-lg px-2 py-1 md:px-3 md:py-2 text-xs md:text-sm">
+        <div class="flex items-center gap-2">
+            <input type="date" id="startDate" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm outline-none focus:border-[#2E7D32]">
+            <span class="text-gray-400 text-sm">to</span>
+            <input type="date" id="endDate" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm outline-none focus:border-[#2E7D32]">
         </div>
         <!-- Time Range Picker -->
-        <div class="flex items-center gap-1 md:gap-2">
-            <input type="time" id="startTime" class="border border-gray-300 rounded-lg px-2 py-1 md:px-3 md:py-2 text-xs md:text-sm" step="60">
-            <span class="text-gray-500 text-xs md:text-sm">to</span>
-            <input type="time" id="endTime" class="border border-gray-300 rounded-lg px-2 py-1 md:px-3 md:py-2 text-xs md:text-sm" step="60">
+        <div class="flex items-center gap-2 border-l border-gray-200 pl-3">
+            <input type="time" id="startTime" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm outline-none focus:border-[#2E7D32]" step="60">
+            <span class="text-gray-400 text-sm">to</span>
+            <input type="time" id="endTime" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm outline-none focus:border-[#2E7D32]" step="60">
         </div>
-        <button id="applyFilterBtn" class="bg-teal-500 hover:bg-teal-600 text-white px-2.5 py-1 md:px-4 md:py-2 rounded-lg text-xs md:text-sm">Apply Filter</button>
-        <span id="clock" class="text-gray-500 font-mono text-xs md:text-sm"></span>
+        <button id="applyFilterBtn" class="bg-[#2E7D32] hover:bg-[#1B5E20] text-white px-5 py-2 rounded-lg text-sm font-bold shadow transition ml-2">
+            <i class="fas fa-filter mr-1"></i> Apply
+        </button>
+        <span id="clock" class="text-gray-600 font-mono text-sm font-semibold ml-2 hidden md:block"></span>
     </div>
 </div>
 
-<!-- KPI Cards – 5 columns (2 on mobile) -->
-<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 md:gap-4 mb-4 md:mb-6">
-    <div class="bg-white rounded-xl shadow-md p-2 md:p-4">
-        <p class="text-gray-500 text-[10px] md:text-sm">Total Sales</p>
-        <p id="salesValue" class="text-base md:text-2xl font-bold text-indigo-600">₵0</p>
+<!-- KPI Cards -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+    <!-- Total Sales -->
+    <div class="bg-white rounded-2xl shadow-sm p-4 border border-gray-100 hover:shadow-md transition">
+        <div class="flex justify-between items-start">
+            <div class="w-12 h-12 rounded-xl bg-[#E8F5E9] flex items-center justify-center text-[#1B5E20] text-xl">
+                <i class="fas fa-shopping-cart"></i>
+            </div>
+            <div class="text-right">
+                <p class="text-sm font-medium text-gray-500">Total Sales</p>
+                <p id="salesValue" class="text-2xl font-bold text-[#1B5E20] mt-1">₵0</p>
+            </div>
+        </div>
+        <div class="mt-3 text-xs text-[#2E7D32] font-semibold flex items-center gap-1">
+            <i class="fas fa-arrow-up"></i> +12% vs last period
+        </div>
     </div>
-    <div class="bg-white rounded-xl shadow-md p-2 md:p-4">
-        <p class="text-gray-500 text-[10px] md:text-sm">Total Profit</p>
-        <p id="profitValue" class="text-base md:text-2xl font-bold text-green-600">₵0</p>
+
+    <!-- Total Profit -->
+    <div class="bg-white rounded-2xl shadow-sm p-4 border border-gray-100 border-l-4 border-l-[#2E7D32] hover:shadow-md transition">
+        <div class="flex justify-between items-start">
+            <div class="w-12 h-12 rounded-xl bg-[#E8F5E9] flex items-center justify-center text-[#2E7D32] text-xl">
+                <i class="fas fa-chart-line"></i>
+            </div>
+            <div class="text-right">
+                <p class="text-sm font-medium text-gray-500">Total Profit</p>
+                <p id="profitValue" class="text-2xl font-bold text-[#2E7D32] mt-1">₵0</p>
+            </div>
+        </div>
+        <div class="mt-3 text-xs text-[#2E7D32] font-semibold flex items-center gap-1">
+            <i class="fas fa-arrow-up"></i> +8% vs last period
+        </div>
     </div>
-    <div class="bg-white rounded-xl shadow-md p-2 md:p-4">
-        <p class="text-gray-500 text-[10px] md:text-sm">Total Products</p>
-        <p id="productsValue" class="text-base md:text-2xl font-bold text-blue-600">0</p>
+
+    <!-- Total Products -->
+    <div class="bg-white rounded-2xl shadow-sm p-4 border border-gray-100 hover:shadow-md transition">
+        <div class="flex justify-between items-start">
+            <div class="w-12 h-12 rounded-xl bg-[#0D2B1D] flex items-center justify-center text-[#F1C40F] text-xl">
+                <i class="fas fa-cube"></i>
+            </div>
+            <div class="text-right">
+                <p class="text-sm font-medium text-gray-500">Total Products</p>
+                <p id="productsValue" class="text-2xl font-bold text-[#0D2B1D] mt-1">0</p>
+            </div>
+        </div>
+        <div class="mt-3 text-xs text-gray-400 font-semibold flex items-center gap-1">
+            <i class="fas fa-minus"></i> +0% vs last period
+        </div>
     </div>
-    <div class="bg-white rounded-xl shadow-md p-2 md:p-4">
-        <p class="text-gray-500 text-[10px] md:text-sm">Total Batches</p>
-        <p id="batchesValue" class="text-base md:text-2xl font-bold text-purple-600">0</p>
+
+    <!-- Total Batches -->
+    <div class="bg-white rounded-2xl shadow-sm p-4 border border-gray-100 hover:shadow-md transition">
+        <div class="flex justify-between items-start">
+            <div class="w-12 h-12 rounded-xl bg-yellow-50 flex items-center justify-center text-[#F1C40F] text-xl">
+                <i class="fas fa-box-open"></i>
+            </div>
+            <div class="text-right">
+                <p class="text-sm font-medium text-gray-500">Total Batches</p>
+                <p id="batchesValue" class="text-2xl font-bold text-gray-800 mt-1">0</p>
+            </div>
+        </div>
+        <div class="mt-3 text-xs text-[#2E7D32] font-semibold flex items-center gap-1">
+            <i class="fas fa-arrow-up"></i> +5% vs last period
+        </div>
     </div>
-    <div class="bg-white rounded-xl shadow-md p-2 md:p-4 col-span-2 md:col-span-1">
-        <p class="text-gray-500 text-[10px] md:text-sm">Low Stock Items</p>
-        <p id="lowStockValue" class="text-base md:text-2xl font-bold text-red-600">0</p>
-        <p class="text-[9px] text-gray-400 mt-0.5">Products with 1–10 units</p>
+
+    <!-- Low Stock -->
+    <div class="bg-white rounded-2xl shadow-sm p-4 border border-gray-100 border-l-4 border-l-red-500 hover:shadow-md transition">
+        <div class="flex justify-between items-start">
+            <div class="w-12 h-12 rounded-xl bg-red-50 flex items-center justify-center text-red-600 text-xl">
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <div class="text-right">
+                <p class="text-sm font-medium text-gray-500">Low Stock Items</p>
+                <p id="lowStockValue" class="text-2xl font-bold text-red-600 mt-1">0</p>
+            </div>
+        </div>
+        <div class="mt-3 text-xs text-red-500 font-semibold flex items-center gap-1">
+            <i class="fas fa-arrow-down"></i> Products < 10 units
+        </div>
     </div>
 </div>
 
-<!-- Top Products & Low Stock Split -->
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 mb-4 md:mb-6">
-    <div class="bg-white rounded-xl shadow-md p-3 md:p-4 flex flex-col">
-        <h2 class="text-base md:text-xl font-semibold mb-2 md:mb-3">🏆 Top Products</h2>
-        <div id="topProductsList" class="flex-1 max-h-60 md:max-h-80 overflow-y-auto space-y-1 md:space-y-2 pr-2"></div>
-        <p class="text-[10px] md:text-xs text-gray-400 mt-1 md:mt-2">* Based on total quantity sold for selected period</p>
+<!-- Middle Section: Charts & Alerts -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+    
+    <!-- Sales Overview Line Chart -->
+    <div class="bg-white rounded-2xl shadow-sm p-5 border border-gray-100 lg:col-span-2 flex flex-col">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="font-bold text-[#1B5E20] flex items-center gap-2">
+                <i class="fas fa-chart-area text-[#2E7D32]"></i> Sales Overview
+            </h2>
+            <div class="flex bg-[#E8F5E9] rounded-lg p-1 text-xs font-semibold">
+                <button class="px-3 py-1 rounded text-[#1B5E20] hover:bg-[#C8E6C9] transition" id="todayHistoryBtn">Today</button>
+            </div>
+        </div>
+        <div class="flex-1 w-full relative min-h-[250px]">
+            <canvas id="salesChart"></canvas>
+            <div id="chartOfflineMsg" class="absolute inset-0 flex items-center justify-center text-gray-400 text-sm hidden bg-white/80">
+                Offline – chart unavailable
+            </div>
+        </div>
     </div>
 
-    <!-- ✅ Split Low Stock Panel (Dashboard = all categories) -->
+    <!-- Low Stock Alert List -->
     {% set low_stock_category = 'all' %}
     {% include '_low_stock_split.html' %}
 </div>
 
-<!-- Pie Chart & Sales History (with Calendar) -->
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
-    <!-- Pie Chart -->
-    <div class="bg-white rounded-xl shadow-md p-3 md:p-4">
-        <h2 class="text-base md:text-xl font-semibold mb-2 md:mb-3">🥧 Product Distribution</h2>
-        <div id="pieChartContainer" class="w-full max-w-[300px] md:max-w-full mx-auto">
-            <canvas id="pieChart" class="w-full h-auto"></canvas>
+<!-- Bottom Section: Top Products & Sales History Calendar -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    
+    <!-- Top Products -->
+    <div class="bg-white rounded-2xl shadow-sm p-5 border border-gray-100">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="font-bold text-[#1B5E20] flex items-center gap-2">
+                <i class="fas fa-trophy text-[#F1C40F]"></i> Top Products
+            </h2>
+            <a href="/analytics" class="text-xs text-[#2E7D32] font-bold hover:underline">View All →</a>
         </div>
-        <div id="pieChartOfflineMsg" class="text-gray-500 text-center text-sm hidden">Offline – pie chart unavailable</div>
+        
+        <div id="topProductsList" class="space-y-4">
+            <!-- Dynamic content -->
+        </div>
     </div>
-    <!-- Sales History with Calendar -->
-    <div class="bg-white rounded-xl shadow-md p-3 md:p-4 flex flex-col">
-        <div class="flex justify-between items-center mb-2 md:mb-3">
-            <h2 class="text-base md:text-xl font-semibold">📊 Sales History</h2>
-            <div class="flex items-center gap-1 md:gap-2">
-                <button id="todayHistoryBtn" class="bg-teal-500 hover:bg-teal-600 text-white px-2 py-0.5 md:px-3 md:py-1 rounded-lg text-xs md:text-sm">Today</button>
+
+    <!-- Sales History & Calendar (Replaced Promo Banner) -->
+    <div class="lg:col-span-2 bg-white rounded-2xl shadow-sm p-5 border border-gray-100 flex flex-col">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="font-bold text-[#1B5E20] flex items-center gap-2">
+                <i class="fas fa-calendar-alt text-[#2E7D32]"></i> Sales History
+            </h2>
+            <div class="flex items-center gap-2">
+                <button id="calTodayBtn" class="bg-[#E8F5E9] hover:bg-[#C8E6C9] text-[#1B5E20] px-3 py-1 rounded-lg text-xs font-bold transition">Today</button>
             </div>
         </div>
+        
         <!-- Calendar -->
-        <div id="calendarContainer" class="mb-3 md:mb-4">
-            <div class="flex justify-between items-center mb-1 md:mb-2">
-                <button id="prevMonthBtn" class="bg-gray-200 hover:bg-gray-300 px-2 py-0.5 md:px-3 md:py-1 rounded text-xs md:text-sm">&larr;</button>
-                <span id="calendarMonthYear" class="font-semibold text-sm md:text-base"></span>
-                <button id="nextMonthBtn" class="bg-gray-200 hover:bg-gray-300 px-2 py-0.5 md:px-3 md:py-1 rounded text-xs md:text-sm">&rarr;</button>
+        <div id="calendarContainer" class="mb-4">
+            <div class="flex justify-between items-center mb-2">
+                <button id="prevMonthBtn" class="bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 py-1 rounded transition"><i class="fas fa-chevron-left text-xs"></i></button>
+                <span id="calendarMonthYear" class="font-bold text-[#1B5E20] text-sm md:text-base"></span>
+                <button id="nextMonthBtn" class="bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 py-1 rounded transition"><i class="fas fa-chevron-right text-xs"></i></button>
             </div>
             <table class="w-full text-center border-collapse">
                 <thead>
                     <tr>
-                        <th class="text-[8px] md:text-xs text-gray-500 py-0.5 md:py-1">Su</th>
-                        <th class="text-[8px] md:text-xs text-gray-500 py-0.5 md:py-1">Mo</th>
-                        <th class="text-[8px] md:text-xs text-gray-500 py-0.5 md:py-1">Tu</th>
-                        <th class="text-[8px] md:text-xs text-gray-500 py-0.5 md:py-1">We</th>
-                        <th class="text-[8px] md:text-xs text-gray-500 py-0.5 md:py-1">Th</th>
-                        <th class="text-[8px] md:text-xs text-gray-500 py-0.5 md:py-1">Fr</th>
-                        <th class="text-[8px] md:text-xs text-gray-500 py-0.5 md:py-1">Sa</th>
+                        <th class="text-[10px] md:text-xs text-gray-400 font-semibold py-2">Su</th>
+                        <th class="text-[10px] md:text-xs text-gray-400 font-semibold py-2">Mo</th>
+                        <th class="text-[10px] md:text-xs text-gray-400 font-semibold py-2">Tu</th>
+                        <th class="text-[10px] md:text-xs text-gray-400 font-semibold py-2">We</th>
+                        <th class="text-[10px] md:text-xs text-gray-400 font-semibold py-2">Th</th>
+                        <th class="text-[10px] md:text-xs text-gray-400 font-semibold py-2">Fr</th>
+                        <th class="text-[10px] md:text-xs text-gray-400 font-semibold py-2">Sa</th>
                     </tr>
                 </thead>
                 <tbody id="calendarBody"></tbody>
             </table>
         </div>
-        <div id="salesHistoryList" class="flex-1 max-h-48 md:max-h-72 overflow-y-auto space-y-1 md:space-y-2 pr-2">
+
+        <!-- Sales History List -->
+        <div id="salesHistoryList" class="flex-1 max-h-48 md:max-h-72 overflow-y-auto space-y-2 pr-2">
             <!-- dynamic content -->
         </div>
     </div>
+
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        console.log("DOM loaded – Dashboard with API‑first rendering");
+        console.log("DOM loaded – Dashboard with herbal theme & calendar");
 
         // ---------- Offline banner ----------
         function updateOfflineBanner() {
@@ -129,13 +221,14 @@
         window.addEventListener('offline', updateOfflineBanner);
 
         // ---------- Helpers ----------
-        let pieChart = null;
-        let lowStockShown = false;
+        let salesChart = null;
         let startDate = null;
         let endDate = null;
         let startTime = null;
         let endTime = null;
         let selectedDate = null;
+        
+        // Calendar state
         let calendarYear = new Date().getFullYear();
         let calendarMonth = new Date().getMonth();
 
@@ -173,7 +266,7 @@
             return { start_datetime: startDateTime, end_datetime: endDateTime };
         }
 
-        // Calendar rendering
+        // ---------- Calendar Rendering ----------
         function renderCalendar(year, month) {
             const monthNames = ['January','February','March','April','May','June',
                                 'July','August','September','October','November','December'];
@@ -191,9 +284,16 @@
                 const dateStr = dateObj.toISOString().split('T')[0];
                 const isSelected = (selectedDate === dateStr);
                 const isToday = (dateStr === new Date().toISOString().split('T')[0]);
-                let cls = 'p-0.5 md:p-1 rounded cursor-pointer hover:bg-blue-100 text-xs md:text-sm ';
-                if (isSelected) cls += 'bg-blue-500 text-white hover:bg-blue-600 ';
-                else if (isToday) cls += 'bg-gray-200 font-bold ';
+                
+                let cls = 'p-1 md:p-2 rounded-lg cursor-pointer hover:bg-[#E8F5E9] text-xs md:text-sm transition '; 
+                if (isSelected) {
+                    cls += 'bg-[#2E7D32] text-white font-bold hover:bg-[#1B5E20] '; 
+                } else if (isToday) {
+                    cls += 'bg-[#E8F5E9] text-[#1B5E20] font-bold '; 
+                } else {
+                    cls += 'text-gray-700 ';
+                }
+                
                 html += `<td class="${cls}" data-date="${dateStr}">${d}</td>`;
                 if ((firstDay + d) % 7 === 0) {
                     html += '</tr><tr>';
@@ -210,10 +310,12 @@
                     startTime = '';
                     endTime = '';
                     selectedDate = newDate;
+                    
                     document.getElementById('startDate').value = newDate;
                     document.getElementById('endDate').value = newDate;
                     document.getElementById('startTime').value = '';
                     document.getElementById('endTime').value = '';
+                    
                     loadDashboard();
                     renderCalendar(calendarYear, calendarMonth);
                 });
@@ -230,24 +332,31 @@
             else { calendarMonth++; }
             renderCalendar(calendarYear, calendarMonth);
         });
-        document.getElementById('todayHistoryBtn').addEventListener('click', function() {
+        
+        // Both "Today" buttons sync to today's date
+        function setTodayFilter() {
             const today = new Date().toISOString().split('T')[0];
             startDate = today; endDate = today; startTime = ''; endTime = '';
             selectedDate = today;
+            
             document.getElementById('startDate').value = today;
             document.getElementById('endDate').value = today;
             document.getElementById('startTime').value = '';
             document.getElementById('endTime').value = '';
+            
             const now = new Date();
             calendarYear = now.getFullYear();
             calendarMonth = now.getMonth();
             renderCalendar(calendarYear, calendarMonth);
             loadDashboard();
-        });
+        }
+        
+        document.getElementById('calTodayBtn').addEventListener('click', setTodayFilter);
+        document.getElementById('todayHistoryBtn').addEventListener('click', setTodayFilter);
 
         // ========== MAIN DASHBOARD LOAD – API‑FIRST ==========
         async function loadDashboard() {
-            if (!db) {
+            if (typeof db === 'undefined' || !db) {
                 console.warn('Dexie not available – showing empty');
                 return;
             }
@@ -316,13 +425,11 @@
                     const cachedHistory = await db.cache.get('dashboard_sales_history');
                     if (cachedHistory) salesHistory = cachedHistory.value;
 
-                    // ✅ Read split data with legacy fallback
                     const cachedSplit = await db.cache.get('dashboard_low_stock_split');
                     if (cachedSplit && cachedSplit.value && cachedSplit.value.product_level) {
                         lowStockSplit = cachedSplit.value;
                         lowStock = lowStockSplit.product_level.low_stock || [];
                     } else {
-                        // Legacy: old key that stored just an array
                         const cachedLowStock = await db.cache.get('dashboard_low_stock');
                         if (cachedLowStock) lowStock = cachedLowStock.value || [];
                     }
@@ -341,75 +448,117 @@
                 document.getElementById('lowStockValue').innerText = lowStock ? lowStock.length : 0;
             }
 
-            // Render top products
+            // 4. Render Sales Chart (Line Chart) with Herbal Colors
+            const chartCanvas = document.getElementById('salesChart');
+            const chartOfflineMsg = document.getElementById('chartOfflineMsg');
+            
+            if (salesChart) {
+                salesChart.destroy();
+                salesChart = null;
+            }
+
+            if (salesHistory && salesHistory.length > 0) {
+                chartCanvas.classList.remove('hidden');
+                chartOfflineMsg.classList.add('hidden');
+                
+                // Reverse to show chronological order
+                const sortedHistory = [...salesHistory].reverse();
+                const labels = sortedHistory.map(item => {
+                    const d = new Date(item.date);
+                    return isNaN(d) ? item.date : d.toLocaleDateString('en-GB', { month: 'short', day: 'numeric' });
+                });
+                const salesData = sortedHistory.map(item => item.total_sales);
+                const profitData = sortedHistory.map(item => item.profit);
+
+                salesChart = new Chart(chartCanvas, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'Sales',
+                                data: salesData,
+                                borderColor: '#2E7D32', // Herbal Green
+                                backgroundColor: 'rgba(46, 125, 50, 0.1)',
+                                borderWidth: 3,
+                                pointBackgroundColor: '#ffffff',
+                                pointBorderColor: '#2E7D32',
+                                pointBorderWidth: 2,
+                                pointRadius: 4,
+                                fill: true,
+                                tension: 0.4
+                            },
+                            {
+                                label: 'Profit',
+                                data: profitData,
+                                borderColor: '#F1C40F', // Herbal Gold
+                                backgroundColor: 'rgba(241, 196, 15, 0.1)',
+                                borderWidth: 3,
+                                pointBackgroundColor: '#ffffff',
+                                pointBorderColor: '#F1C40F',
+                                pointBorderWidth: 2,
+                                pointRadius: 4,
+                                fill: true,
+                                tension: 0.4
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'top', labels: { usePointStyle: true, boxWidth: 8, font: { family: 'inherit' } } }
+                        },
+                        scales: {
+                            y: { beginAtZero: true, grid: { borderDash: [5, 5], color: '#f3f4f6' } },
+                            x: { grid: { display: false } }
+                        }
+                    }
+                });
+            } else {
+                chartCanvas.classList.add('hidden');
+                chartOfflineMsg.classList.remove('hidden');
+            }
+
+            // 5. Render Top Products
             const topContainer = document.getElementById('topProductsList');
             topContainer.innerHTML = '';
             if (topProducts && topProducts.length) {
-                topProducts.forEach((p, index) => {
+                const maxQty = Math.max(...topProducts.map(p => p.qty || 0)) || 1;
+
+                topProducts.slice(0, 5).forEach((p, index) => {
+                    const percent = Math.round(((p.qty || 0) / maxQty) * 100);
                     const div = document.createElement('div');
-                    div.className = 'border-b pb-1 flex justify-between items-center hover:bg-gray-50 p-1 rounded transition-colors text-xs md:text-sm';
-                    let medal = '';
-                    if (index === 0) medal = '🥇 ';
-                    else if (index === 1) medal = '🥈 ';
-                    else if (index === 2) medal = '🥉 ';
                     div.innerHTML = `
-                        <span>${medal}<strong class="text-indigo-700">${escapeHtml(p.name)}</strong> <span class="text-gray-600 text-[10px] md:text-xs">(${escapeHtml(p.brand)} | ${escapeHtml(p.category)})</span></span>
-                        <span class="font-bold text-indigo-600 text-xs md:text-sm">${p.qty || 0} sold</span>
+                        <div class="flex justify-between text-sm mb-1">
+                            <span class="font-semibold text-gray-700 truncate mr-2">${escapeHtml(p.name)}</span>
+                            <span class="font-bold text-[#1B5E20]">${p.qty || 0} sold</span>
+                        </div>
+                        <div class="w-full bg-gray-100 rounded-full h-2">
+                            <div class="bg-[#2E7D32] h-2 rounded-full" style="width: ${percent}%"></div>
+                        </div>
                     `;
                     topContainer.appendChild(div);
                 });
             } else {
-                topContainer.innerHTML = '<div class="text-gray-400 text-center py-4 text-sm">📊 No sales data for this period.</div>';
+                topContainer.innerHTML = '<div class="text-gray-400 text-center py-4 text-sm">No sales data for this period.</div>';
             }
 
-            // Pie chart
-            if (pieChart) pieChart.destroy();
-            const ctx = document.getElementById('pieChart');
-            const container = document.getElementById('pieChartContainer');
-            const offlineMsg = document.getElementById('pieChartOfflineMsg');
-            if (topProducts && topProducts.length > 0) {
-                container.classList.remove('hidden');
-                offlineMsg.classList.add('hidden');
-                let labels = topProducts.map(p => `${p.name.substring(0, 15)}${p.name.length > 15 ? '...' : ''}`);
-                let values = topProducts.map(p => p.qty || 0);
-                if (values.length > 8) {
-                    const top8Values = values.slice(0,8);
-                    const top8Labels = labels.slice(0,8);
-                    const othersSum = values.slice(8).reduce((a,b) => a+b, 0);
-                    top8Values.push(othersSum);
-                    top8Labels.push('Others');
-                    pieChart = new Chart(ctx, {
-                        type: 'pie',
-                        data: { labels: top8Labels, datasets: [{ data: top8Values, backgroundColor: generateColors(top8Labels.length) }] },
-                        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } } }
-                    });
-                } else {
-                    pieChart = new Chart(ctx, {
-                        type: 'pie',
-                        data: { labels: labels, datasets: [{ data: values, backgroundColor: generateColors(labels.length) }] },
-                        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } } }
-                    });
-                }
-            } else {
-                container.classList.add('hidden');
-                offlineMsg.classList.remove('hidden');
-            }
-
-            // Sales history
+            // 6. Render Sales History List (for the Calendar card)
             const historyContainer = document.getElementById('salesHistoryList');
             historyContainer.innerHTML = '';
             if (salesHistory && salesHistory.length) {
                 salesHistory.forEach(item => {
                     const div = document.createElement('div');
-                    div.className = 'border-b pb-1 md:pb-2 mb-1 md:mb-2 hover:bg-gray-50 p-1 rounded transition-colors';
+                    div.className = 'border-b border-gray-100 pb-2 mb-2 hover:bg-[#F4F9F4] p-2 rounded transition-colors';
                     div.innerHTML = `
                         <div class="flex justify-between items-center">
                             <span class="font-medium text-gray-700 text-xs md:text-sm">${item.date}</span>
-                            <span class="font-bold text-green-600 text-xs md:text-base">${formatMoney(item.total_sales)}</span>
+                            <span class="font-bold text-[#1B5E20] text-xs md:text-base">${formatMoney(item.total_sales)}</span>
                         </div>
                         <div class="text-[10px] md:text-sm text-gray-500 flex justify-between">
-                            <span>Profit: ${formatMoney(item.profit)}</span>
-                            <span>Discount: ${formatMoney(item.discount)}</span>
+                            <span>Profit: <span class="text-[#2E7D32] font-semibold">${formatMoney(item.profit)}</span></span>
+                            <span>Discount: <span class="text-red-400">${formatMoney(item.discount)}</span></span>
                         </div>
                     `;
                     historyContainer.appendChild(div);
@@ -421,34 +570,8 @@
                     historyContainer.appendChild(note);
                 }
             } else {
-                historyContainer.innerHTML = '<div class="text-gray-400 text-center py-4 text-sm">📅 No sales history found for this period.</div>';
+                historyContainer.innerHTML = '<div class="text-gray-400 text-center py-4 text-sm">No sales history found for this period.</div>';
             }
-
-            // Low stock alert (once per session, non-blocking)
-            if (!lowStockShown && lowStock && lowStock.length > 0) {
-                // ✅ Non-blocking: show for 5 items max, no product detail alert
-                const previewList = lowStock.slice(0, 5).map(item => {
-                    return `• ${item.name} (${item.brand}) - ${item.total_remaining} left`;
-                }).join('\n');
-                const moreCount = lowStock.length > 5 ? `\n\n... and ${lowStock.length - 5} more items` : '';
-
-                // Use setTimeout so it doesn't block the initial render
-                setTimeout(() => {
-                    alert(`⚠️ LOW STOCK ALERT ⚠️\n\n${lowStock.length} product(s) are running low:\n\n${previewList}${moreCount}\n\nPlease restock soon!`);
-                }, 100);
-
-                lowStockShown = true;
-            }
-        }
-
-        // Generate colors for pie chart
-        function generateColors(n) {
-            const colors = [];
-            for (let i = 0; i < n; i++) {
-                const hue = (i * 360 / n) % 360;
-                colors.push(`hsl(${hue}, 70%, 60%)`);
-            }
-            return colors;
         }
 
         // ---------- Apply filter ----------
@@ -465,17 +588,20 @@
             endDate = end || null;
             startTime = st || null;
             endTime = et || null;
+            
             if (startDate && startDate === endDate) {
                 selectedDate = startDate;
             } else {
                 selectedDate = null;
             }
+            
             if (startDate) {
                 const d = new Date(startDate);
                 calendarYear = d.getFullYear();
                 calendarMonth = d.getMonth();
                 renderCalendar(calendarYear, calendarMonth);
             }
+            
             loadDashboard();
         }
 
@@ -497,11 +623,6 @@
         calendarYear = now.getFullYear();
         calendarMonth = now.getMonth();
         renderCalendar(calendarYear, calendarMonth);
-
-        // Reset lowStockShown when page is reloaded
-        window.addEventListener('beforeunload', function() {
-            lowStockShown = false;
-        });
 
         // Initial load
         loadDashboard();

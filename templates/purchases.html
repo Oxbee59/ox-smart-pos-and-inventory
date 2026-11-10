@@ -3,20 +3,20 @@
 {% block content %}
 <!-- Offline banner -->
 <div id="offlineBanner" class="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded hidden">
-    ⚠️ You are offline – showing cached accessory purchases. New purchases will be saved and synced when you reconnect.
+    ⚠️ You are offline – showing cached purchases. New purchases will be saved and synced when you reconnect.
 </div>
 
 <!-- Force Refresh / Clear Cache Banner -->
-<div class="bg-white rounded-xl shadow-md p-4 mb-4">
+<div class="bg-white rounded-xl shadow-md p-4 mb-4 border border-[#E8F5E9]">
     <div class="flex items-center justify-between flex-wrap gap-2">
         <div>
             <span class="text-sm text-gray-500">💡 Having issues loading data?</span>
         </div>
         <div class="flex gap-2 flex-wrap">
-            <button onclick="forceRefresh()" class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm">
+            <button onclick="forceRefresh()" class="bg-[#2E7D32] hover:bg-[#1B5E20] text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium transition">
                 🔄 Force Refresh
             </button>
-            <button onclick="clearAllLocalData()" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm">
+            <button onclick="clearAllLocalData()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium transition">
                 🗑️ Clear All Data
             </button>
         </div>
@@ -24,98 +24,98 @@
 </div>
 
 <!-- ADD / EDIT FORM -->
-<div class="bg-white rounded-xl shadow-md p-6 mb-6">
+<div class="bg-white rounded-xl shadow-md p-6 mb-6 border border-[#E8F5E9]">
     <div class="flex items-center gap-2 mb-4">
-        <h2 class="text-xl font-bold" id="formTitle">➕ Add Accessory Purchase</h2>
-        <span class="bg-green-100 text-green-800 text-xs font-semibold px-2.5 py-0.5 rounded">Accessories</span>
+        <h2 class="text-xl font-bold text-[#1B5E20]" id="formTitle">➕ Add Purchase</h2>
+        <span class="bg-[#E8F5E9] text-[#1B5E20] text-xs font-semibold px-2.5 py-0.5 rounded" id="formGroupBadge">Others</span>
     </div>
     <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-8 gap-3">
         <div>
             <label class="block text-sm font-medium text-gray-700">Product Name</label>
-            <input type="text" id="name" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" autocomplete="off">
+            <input type="text" id="name" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 focus:border-[#2E7D32] focus:ring-1 focus:ring-[#2E7D32] outline-none" autocomplete="off">
             <div id="nameSuggestions" class="absolute z-10 bg-white border rounded-lg shadow-lg hidden max-h-60 overflow-y-auto w-full"></div>
         </div>
         <div>
             <label class="block text-sm font-medium text-gray-700">Brand</label>
-            <input type="text" id="brand" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" autocomplete="off">
+            <input type="text" id="brand" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 focus:border-[#2E7D32] focus:ring-1 focus:ring-[#2E7D32] outline-none" autocomplete="off">
             <div id="brandSuggestions" class="absolute z-10 bg-white border rounded-lg shadow-lg hidden max-h-60 overflow-y-auto w-full"></div>
         </div>
         <div>
             <label class="block text-sm font-medium text-gray-700">Category</label>
-            <input type="text" id="category" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" autocomplete="off" placeholder="e.g. Accessory, Phone" value="Accessory">
+            <input type="text" id="category" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 focus:border-[#2E7D32] focus:ring-1 focus:ring-[#2E7D32] outline-none" autocomplete="off">
             <div id="categorySuggestions" class="absolute z-10 bg-white border rounded-lg shadow-lg hidden max-h-60 overflow-y-auto w-full"></div>
         </div>
         <div>
             <label class="block text-sm font-medium text-gray-700">Quantity</label>
-            <input type="number" id="quantity" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
+            <input type="number" id="quantity" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 focus:border-[#2E7D32] focus:ring-1 focus:ring-[#2E7D32] outline-none">
         </div>
         <div>
             <label class="block text-sm font-medium text-gray-700">Cost Price (₵)</label>
-            <input type="number" step="0.01" id="cost_price" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
+            <input type="number" step="0.01" id="cost_price" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 focus:border-[#2E7D32] focus:ring-1 focus:ring-[#2E7D32] outline-none">
         </div>
         <div>
             <label class="block text-sm font-medium text-gray-700">Discount (₵)</label>
-            <input type="number" step="0.01" id="discount" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
+            <input type="number" step="0.01" id="discount" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 focus:border-[#2E7D32] focus:ring-1 focus:ring-[#2E7D32] outline-none">
         </div>
         <div>
             <label class="block text-sm font-medium text-gray-700">Selling Price (₵)</label>
-            <input type="number" step="0.01" id="selling_price" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
+            <input type="number" step="0.01" id="selling_price" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 focus:border-[#2E7D32] focus:ring-1 focus:ring-[#2E7D32] outline-none">
         </div>
         <div>
             <label class="block text-sm font-medium text-gray-700">Source</label>
-            <input type="text" id="source" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="e.g. Supplier, Wholesaler" autocomplete="off">
+            <input type="text" id="source" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 focus:border-[#2E7D32] focus:ring-1 focus:ring-[#2E7D32] outline-none" placeholder="e.g. Supplier" autocomplete="off">
             <div id="sourceSuggestions" class="absolute z-10 bg-white border rounded-lg shadow-lg hidden"></div>
         </div>
     </div>
     <div class="mt-4 flex gap-3">
-        <button id="submitBtn" class="bg-teal-500 hover:bg-teal-600 text-white px-6 py-2 rounded-lg">➕ Add Accessory Purchase</button>
-        <button id="cancelBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-6 py-2 rounded-lg hidden">Cancel Edit</button>
+        <button id="submitBtn" class="bg-[#2E7D32] hover:bg-[#1B5E20] text-white px-6 py-2 rounded-lg font-medium transition">➕ Add Purchase</button>
+        <button id="cancelBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-6 py-2 rounded-lg hidden transition">Cancel Edit</button>
     </div>
 </div>
 
 <!-- SEARCH & FILTER BAR -->
-<div class="bg-white rounded-xl shadow-md p-4 mb-6 flex flex-wrap gap-4 items-end">
+<div class="bg-white rounded-xl shadow-md p-4 mb-6 flex flex-wrap gap-4 items-end border border-[#E8F5E9]">
     <div class="flex-1 min-w-[200px]">
         <label class="block text-sm font-medium text-gray-700">Search (name/brand/category/source/batch #)</label>
-        <input type="text" id="searchInput" placeholder="🔍 Type to filter or enter batch # (e.g. #94)..." class="w-full border border-gray-300 rounded-lg px-3 py-2">
+        <input type="text" id="searchInput" placeholder="🔍 Type to filter or enter batch # (e.g. #94)..." class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:border-[#2E7D32] focus:ring-1 focus:ring-[#2E7D32] outline-none">
         <div class="text-xs text-gray-400 mt-1">
             💡 Tip: Search by batch number (e.g., <span class="font-mono bg-gray-100 px-1 rounded">#94</span> or <span class="font-mono bg-gray-100 px-1 rounded">94</span>)
         </div>
     </div>
     <div>
         <label class="block text-sm font-medium text-gray-700">From Date</label>
-        <input type="date" id="fromDate" class="border border-gray-300 rounded-lg px-3 py-2">
+        <input type="date" id="fromDate" class="border border-gray-300 rounded-lg px-3 py-2 focus:border-[#2E7D32] outline-none">
     </div>
     <div>
         <label class="block text-sm font-medium text-gray-700">To Date</label>
-        <input type="date" id="toDate" class="border border-gray-300 rounded-lg px-3 py-2">
+        <input type="date" id="toDate" class="border border-gray-300 rounded-lg px-3 py-2 focus:border-[#2E7D32] outline-none">
     </div>
     <div>
         <label class="block text-sm font-medium text-gray-700">Date Type</label>
-        <select id="dateType" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+        <select id="dateType" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-[#2E7D32] outline-none">
             <option value="original">Original Purchase Date</option>
             <option value="updated">Last Update Date</option>
         </select>
     </div>
     <div class="flex items-center gap-2">
-        <input type="checkbox" id="showUpdatedOnly" class="h-4 w-4 text-blue-600 rounded">
+        <input type="checkbox" id="showUpdatedOnly" class="h-4 w-4 text-[#2E7D32] rounded focus:ring-[#2E7D32]">
         <label for="showUpdatedOnly" class="text-sm text-gray-700 whitespace-nowrap">Show only updated</label>
     </div>
-    <button id="filterBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg">🔍 Filter</button>
-    <button id="clearFilterBtn" class="bg-gray-400 hover:bg-gray-500 text-white px-5 py-2 rounded-lg">✕ Clear</button>
-    <button id="pdfBtn" class="bg-teal-500 hover:bg-teal-600 text-white px-5 py-2 rounded-lg">🧾 PDF Report</button>
-    <button id="viewPendingBtn" class="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2 rounded-lg flex items-center gap-2">
+    <button id="filterBtn" class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-lg font-medium transition">🔍 Filter</button>
+    <button id="clearFilterBtn" class="bg-gray-400 hover:bg-gray-500 text-white px-5 py-2 rounded-lg transition">✕ Clear</button>
+    <button id="pdfBtn" class="bg-[#1B5E20] hover:bg-[#0D2B1D] text-white px-5 py-2 rounded-lg font-medium transition">🧾 PDF Report</button>
+    <button id="viewPendingBtn" class="bg-amber-500 hover:bg-amber-600 text-white px-5 py-2 rounded-lg flex items-center gap-2 font-medium transition">
         <span>⏳ Pending</span>
         <span id="pendingCount" class="bg-red-500 text-white text-xs rounded-full px-2 py-0.5 hidden">0</span>
     </button>
 </div>
 
 <!-- Advanced Search Options -->
-<div id="advancedSearch" class="bg-white rounded-xl shadow-md p-4 mb-6 hidden">
+<div id="advancedSearch" class="bg-white rounded-xl shadow-md p-4 mb-6 hidden border border-[#E8F5E9]">
     <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div>
             <label class="block text-sm font-medium text-gray-700">Search Mode</label>
-            <select id="searchMode" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+            <select id="searchMode" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-[#2E7D32] outline-none">
                 <option value="contains">Contains (Partial Match)</option>
                 <option value="exact">Exact Match</option>
                 <option value="starts">Starts With</option>
@@ -125,7 +125,7 @@
         </div>
         <div>
             <label class="block text-sm font-medium text-gray-700">Search In</label>
-            <select id="searchField" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+            <select id="searchField" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-[#2E7D32] outline-none">
                 <option value="all">All Fields</option>
                 <option value="name">Product Name</option>
                 <option value="brand">Brand</option>
@@ -135,36 +135,35 @@
         </div>
         <div>
             <label class="block text-sm font-medium text-gray-700">Case Sensitive</label>
-            <select id="caseSensitive" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+            <select id="caseSensitive" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-[#2E7D32] outline-none">
                 <option value="false">No</option>
                 <option value="true">Yes</option>
             </select>
         </div>
         <div class="flex items-end">
-            <button id="applyAdvancedSearch" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm w-full">
+            <button id="applyAdvancedSearch" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm w-full font-medium transition">
                 🔍 Apply
             </button>
         </div>
     </div>
     <div class="mt-2 text-xs text-gray-500">
-        💡 Tip: Use "All Words" mode to search for multiple terms (e.g., "samsung screen" finds products with both words)
+        💡 Tip: Use "All Words" mode to search for multiple terms (e.g., "bark root" finds products with both words)
     </div>
 </div>
 
 <!-- Advanced Search Toggle -->
 <div class="mb-4">
-    <button id="advancedToggle" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm">
+    <button id="advancedToggle" class="bg-[#E8F5E9] hover:bg-[#C8E6C9] text-[#1B5E20] px-4 py-2 rounded-lg text-sm font-medium transition">
         ⚙️ Advanced Search
     </button>
-    <button id="clearSearchBtn" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm ml-2 hidden">
+    <button id="clearSearchBtn" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm ml-2 hidden transition">
         ✕ Clear Search
     </button>
 </div>
 
 <!-- PURCHASES LIST (scrollable) -->
-<div class="bg-white rounded-xl shadow-md p-4" style="margin-bottom: 120px;">
+<div class="bg-white rounded-xl shadow-md p-4 border border-[#E8F5E9]" style="margin-bottom: 120px;">
     <div id="purchasesList" class="max-h-[500px] overflow-y-auto space-y-3">
-        <!-- Initial loading state — shown before JS runs and while loadPurchases() is fetching -->
         <div class="flex flex-col items-center justify-center py-12">
             <div class="loading-spinner"></div>
             <p class="mt-4 text-gray-500 text-sm">Loading purchases…</p>
@@ -173,27 +172,22 @@
 </div>
 
 <!-- ============================================================ -->
-<!-- COLLAPSIBLE SUMMARY – Sticky at bottom with toggle            -->
+<!-- COLLAPSIBLE SUMMARY                                          -->
 <!-- ============================================================ -->
-<div id="summary" class="fixed bottom-0 left-0 right-0 z-50 bg-gray-900 rounded-none md:rounded-t-xl shadow-lg" style="border-top: 2px solid #2d3748;">
-
-    <!-- Toggle header – always visible -->
-    <div id="summaryToggle" class="flex items-center justify-between px-3 py-1.5 cursor-pointer hover:bg-gray-800 transition-colors select-none">
-        <span class="text-gray-400 text-xs font-medium flex items-center gap-1.5">
+<div id="summary" class="fixed bottom-0 left-0 right-0 z-50 bg-[#0D2B1D] rounded-none md:rounded-t-xl shadow-lg" style="border-top: 2px solid #1A3F2B;">
+    <div id="summaryToggle" class="flex items-center justify-between px-3 py-1.5 cursor-pointer hover:bg-[#1A3F2B] transition-colors select-none">
+        <span class="text-[#A5D6A7] text-xs font-medium flex items-center gap-1.5">
             <span>📊</span> Inventory Summary
-            <span id="summaryStatusBadge" class="text-[10px] text-gray-500 ml-1"></span>
+            <span id="summaryStatusBadge" class="text-[10px] text-[#6B7280] ml-1"></span>
         </span>
-        <button id="summaryArrowBtn" class="text-gray-400 hover:text-white transition-transform duration-300 focus:outline-none" title="Toggle summary">
+        <button id="summaryArrowBtn" class="text-[#A5D6A7] hover:text-white transition-transform duration-300 focus:outline-none" title="Toggle summary">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" id="summaryArrowIcon">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
             </svg>
         </button>
     </div>
-
-    <!-- Collapsible content – scrollable if content overflows -->
-    <div id="summaryContent" class="p-3 md:p-4 text-teal-400 text-center font-bold text-xs md:text-sm overflow-y-auto" style="border-top: 1px solid #374151; max-height: 220px;">
-        <!-- Initial loading state for summary -->
-        <div class="flex items-center justify-center gap-2 text-gray-400">
+    <div id="summaryContent" class="p-3 md:p-4 text-[#A5D6A7] text-center font-bold text-xs md:text-sm overflow-y-auto" style="border-top: 1px solid #1A3F2B; max-height: 220px;">
+        <div class="flex items-center justify-center gap-2 text-[#A5D6A7]">
             <span class="loading-spinner-sm"></span>
             <span>Loading summary…</span>
         </div>
@@ -201,74 +195,72 @@
 </div>
 
 <!-- ============================================================ -->
-<!-- PENDING PURCHASES MODAL                                       -->
+<!-- PENDING PURCHASES MODAL                                      -->
 <!-- ============================================================ -->
 <div id="pendingModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
         <div class="flex-shrink-0 p-4 border-b flex justify-between items-center bg-white rounded-t-xl">
-            <h3 class="text-xl font-bold">⏳ Pending Purchases</h3>
+            <h3 class="text-xl font-bold text-[#1B5E20]">⏳ Pending Purchases</h3>
             <button onclick="closePendingModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
         </div>
-        <div id="pendingList" class="flex-1 overflow-y-auto p-4 space-y-3"><!-- dynamically loaded --></div>
+        <div id="pendingList" class="flex-1 overflow-y-auto p-4 space-y-3"></div>
         <div class="flex-shrink-0 p-4 border-t flex justify-between bg-white rounded-b-xl">
             <div>
-                <button onclick="syncAllPending()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">🔄 Sync All</button>
-                <button onclick="clearAllPending()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded ml-2">🗑️ Clear All</button>
+                <button onclick="syncAllPending()" class="bg-[#2E7D32] hover:bg-[#1B5E20] text-white px-4 py-2 rounded transition font-medium">🔄 Sync All</button>
+                <button onclick="clearAllPending()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded ml-2 transition">🗑️ Clear All</button>
             </div>
-            <button onclick="closePendingModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded">Close</button>
+            <button onclick="closePendingModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded transition">Close</button>
         </div>
     </div>
 </div>
 
 <!-- ============================================================ -->
-<!-- PURCHASE HISTORY MODAL – fixed flex layout, fully scrollable -->
+<!-- PURCHASE HISTORY MODAL                                       -->
 <!-- ============================================================ -->
 <div id="historyModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
         <div class="flex-shrink-0 p-4 border-b flex justify-between items-center bg-white">
-            <h3 class="text-xl font-bold" id="historyModalTitle">📋 Batch History</h3>
+            <h3 class="text-xl font-bold text-[#1B5E20]" id="historyModalTitle">📋 Batch History</h3>
             <button onclick="closeHistoryModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
         </div>
-        <div id="historyContent" class="flex-1 overflow-y-auto overflow-x-auto p-4 space-y-4 min-h-0">
-            <!-- dynamically loaded -->
-        </div>
+        <div id="historyContent" class="flex-1 overflow-y-auto overflow-x-auto p-4 space-y-4 min-h-0"></div>
         <div class="flex-shrink-0 p-4 border-t text-right bg-white rounded-b-xl">
-            <button onclick="closeHistoryModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">Close</button>
+            <button onclick="closeHistoryModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm transition">Close</button>
         </div>
     </div>
 </div>
 
 <!-- ============================================================ -->
-<!-- UPDATE MODE CONFIRM MODAL                                     -->
+<!-- UPDATE MODE CONFIRM MODAL                                    -->
 <!-- ============================================================ -->
 <div id="updateModeModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-60 flex items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-        <h3 class="text-xl font-bold mb-2">🔄 Update Mode</h3>
+        <h3 class="text-xl font-bold mb-2 text-[#1B5E20]">🔄 Update Mode</h3>
         <p class="text-gray-600 text-sm mb-4">You are changing the price or identity of this batch. How would you like to proceed?</p>
-        <button id="updateModeUpdateBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded mb-2 text-sm">
+        <button id="updateModeUpdateBtn" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded mb-2 text-sm font-medium transition">
             ✏️ Update this batch (keep same batch ID)
         </button>
         <p class="text-xs text-gray-500 mb-3">✓ Existing sales history stays linked to this batch<br>✓ Batch ID remains the same</p>
-        <button id="updateModeCreateBtn" class="w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded mb-2 text-sm">
+        <button id="updateModeCreateBtn" class="w-full bg-[#2E7D32] hover:bg-[#1B5E20] text-white py-2 rounded mb-2 text-sm font-medium transition">
             ➕ Create new batch (with new values)
         </button>
         <p class="text-xs text-gray-500 mb-3">✓ Old batch is preserved with original data<br>✓ A new batch ID is created for the new values</p>
-        <button id="updateModeCancelBtn" class="w-full bg-gray-400 hover:bg-gray-500 text-white py-2 rounded text-sm">Cancel</button>
+        <button id="updateModeCancelBtn" class="w-full bg-gray-400 hover:bg-gray-500 text-white py-2 rounded text-sm transition">Cancel</button>
     </div>
 </div>
 
 <!-- ============================================================ -->
-<!-- CREATE NEW BATCH OPTIONS MODAL                                -->
+<!-- CREATE NEW BATCH OPTIONS MODAL                               -->
 <!-- ============================================================ -->
 <div id="createBatchModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-70 flex items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-        <h3 class="text-xl font-bold mb-2">📦 Create New Batch</h3>
+        <h3 class="text-xl font-bold mb-2 text-[#1B5E20]">📦 Create New Batch</h3>
         <p class="text-gray-600 text-sm mb-4">
             You are creating a new batch with the updated data. How would you like to handle sold items?
         </p>
         <div class="mb-4">
             <label class="flex items-start gap-2 cursor-pointer">
-                <input type="checkbox" id="keepSoldWithOld" checked class="mt-1 h-4 w-4 text-blue-600 rounded">
+                <input type="checkbox" id="keepSoldWithOld" checked class="mt-1 h-4 w-4 text-[#2E7D32] rounded focus:ring-[#2E7D32]">
                 <span class="text-sm text-gray-700">
                     <span class="font-medium">Keep sold items with original batch</span><br>
                     <span class="text-xs text-gray-500">New batch will contain only unsold stock (remaining quantity).</span>
@@ -279,10 +271,10 @@
             </div>
         </div>
         <div class="flex gap-2">
-            <button id="createBatchProceedBtn" class="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded text-sm">
+            <button id="createBatchProceedBtn" class="flex-1 bg-[#2E7D32] hover:bg-[#1B5E20] text-white py-2 rounded text-sm font-medium transition">
                 ✅ Proceed
             </button>
-            <button id="createBatchCancelBtn" class="flex-1 bg-gray-400 hover:bg-gray-500 text-white py-2 rounded text-sm">
+            <button id="createBatchCancelBtn" class="flex-1 bg-gray-400 hover:bg-gray-500 text-white py-2 rounded text-sm transition">
                 Cancel
             </button>
         </div>
@@ -290,17 +282,9 @@
 </div>
 
 <style>
-    /* Ensure main content has padding at the bottom so the fixed summary doesn't overlap */
-    .main-content {
-        padding-bottom: 160px !important;
-    }
-    @media (max-width: 768px) {
-        .main-content {
-            padding-bottom: 200px !important;
-        }
-    }
+    .main-content { padding-bottom: 160px !important; }
+    @media (max-width: 768px) { .main-content { padding-bottom: 200px !important; } }
 
-    /* Smooth transitions for summary – and allow vertical scroll when expanded */
     #summaryContent {
         transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.25s ease;
         overflow-y: auto;
@@ -315,91 +299,60 @@
         overflow: hidden !important;
     }
 
-    /* Modal body scrollbar styling */
     #historyContent::-webkit-scrollbar,
-    #pendingList::-webkit-scrollbar {
-        width: 6px;
-    }
+    #pendingList::-webkit-scrollbar { width: 6px; }
     #historyContent::-webkit-scrollbar-track,
-    #pendingList::-webkit-scrollbar-track {
-        background: #f1f1f1;
-        border-radius: 4px;
-    }
+    #pendingList::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
     #historyContent::-webkit-scrollbar-thumb,
-    #pendingList::-webkit-scrollbar-thumb {
-        background: #c1c1c1;
-        border-radius: 4px;
-    }
+    #pendingList::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
     #historyContent::-webkit-scrollbar-thumb:hover,
-    #pendingList::-webkit-scrollbar-thumb:hover {
-        background: #a8a8a8;
-    }
+    #pendingList::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
 
-    /* Summary grid items */
-    #summaryContent .grid .bg-gray-800 {
-        background: rgba(31, 41, 55, 0.6);
-        backdrop-filter: blur(2px);
-    }
+    #historyModal .flex-1 { min-height: 0; }
+    #historyContent { min-height: 0; }
+    @media (max-width: 640px) { #historyModal > div { max-height: 95vh !important; } }
 
-    /* Ensure history modal content area can shrink and scroll */
-    #historyModal .flex-1 {
-        min-height: 0;
-    }
-    #historyContent {
-        min-height: 0;
-    }
-
-    /* Force modal to respect max-height on small screens */
-    @media (max-width: 640px) {
-        #historyModal > div {
-            max-height: 95vh !important;
-        }
-    }
-
-    /* ---------- Loading spinners ---------- */
-    @keyframes loading-rotate {
-        to { transform: rotate(360deg); }
-    }
+    @keyframes loading-rotate { to { transform: rotate(360deg); } }
     .loading-spinner {
-        width: 48px;
-        height: 48px;
-        border: 4px solid #e5e7eb;
-        border-top-color: #14b8a6;
-        border-radius: 50%;
-        animation: loading-rotate 0.8s linear infinite;
+        width: 48px; height: 48px;
+        border: 4px solid #e5e7eb; border-top-color: #2E7D32;
+        border-radius: 50%; animation: loading-rotate 0.8s linear infinite;
     }
     .loading-spinner-sm {
-        display: inline-block;
-        width: 14px;
-        height: 14px;
-        border: 2px solid rgba(148, 163, 184, 0.4);
-        border-top-color: #14b8a6;
-        border-radius: 50%;
-        animation: loading-rotate 0.8s linear infinite;
+        display: inline-block; width: 14px; height: 14px;
+        border: 2px solid rgba(148, 163, 184, 0.4); border-top-color: #2E7D32;
+        border-radius: 50%; animation: loading-rotate 0.8s linear infinite;
         vertical-align: -2px;
     }
-
-    /* Subtle pulse for loading skeleton blocks */
-    @keyframes loading-pulse {
-        0%, 100% { opacity: 0.4; }
-        50% { opacity: 0.9; }
-    }
-    .loading-pulse {
-        animation: loading-pulse 1.4s ease-in-out infinite;
-    }
+    @keyframes loading-pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.9; } }
+    .loading-pulse { animation: loading-pulse 1.4s ease-in-out infinite; }
 </style>
 
 <script>
-    // ---------- Safe number formatting helper ----------
+    // ============================================================
+    //  GROUP CONFIGURATION
+    // ============================================================
+    const GROUP       = '{{ group|default("others") }}';
+    const OIL_CATS    = ['Spiritual Oils', 'Anointing Oils', 'Essential Oils'];
+    const NON_OIL_CATS = ['Tree Roots', 'Tree Barks', 'Leaves', 'Seeds'];
+    const ALLOWED_CATS = GROUP === 'oils' ? OIL_CATS : NON_OIL_CATS;
+
+    const GROUP_LABEL  = GROUP === 'oils' ? 'Oils' : 'Roots, Barks & Others';
+    const GROUP_BADGE  = GROUP === 'oils' ? 'Oils' : 'Roots & Barks';
+    const DEFAULT_CAT  = ALLOWED_CATS[0];
+
+    function isInGroup(category) {
+        const cat = (category || '').trim();
+        if (GROUP === 'oils') return OIL_CATS.includes(cat);
+        return !OIL_CATS.includes(cat);
+    }
+
+    // ---------- Helpers ----------
     function safeToFixed(val, decimals = 2) {
         const num = parseFloat(val);
         return isNaN(num) ? '0.00' : num.toFixed(decimals);
     }
 
-    // ---------- Real-sold helper ----------
-    // Uses the API-provided `sold_quantity` (from sales_items) when present.
-    // Falls back to `quantity - remaining` only when the field is missing
-    // (older Dexie cache from before the backend change).
     function getRealSold(p) {
         if (p && typeof p.sold_quantity === 'number') return p.sold_quantity;
         const qty = (p && p.quantity) || 0;
@@ -407,16 +360,6 @@
         return Math.max(qty - rem, 0);
     }
 
-    // ---------- Delta-based remaining calculator ----------
-    // Mirrors the server's in-place update rule exactly:
-    //     new_remaining = max(old_remaining + (new_quantity − old_quantity), 0)
-    //
-    // This is the universally-correct formula for an in-place edit. It
-    // preserves the current remaining and only shifts it by however much
-    // the user changed the quantity. Crucially, for batches whose stock
-    // was moved to a successor (remaining = 0 but no real sales), it does
-    // NOT resurrect units — the bug that previously double-counted stock
-    // on batch 1461 against batch 1550.
     function computeNewRemaining(purchase, newQuantity) {
         const oldQty = parseInt(purchase.quantity || 0, 10);
         const oldRem = parseInt(purchase.remaining_quantity || 0, 10);
@@ -424,7 +367,6 @@
         return Math.max(oldRem + (newQty - oldQty), 0);
     }
 
-    // ---------- Offline banner helpers ----------
     function updateOfflineBanner() {
         const banner = document.getElementById('offlineBanner');
         if (!navigator.onLine) banner.classList.remove('hidden');
@@ -433,7 +375,6 @@
     window.addEventListener('online', updateOfflineBanner);
     window.addEventListener('offline', updateOfflineBanner);
 
-    // ---------- FORCE REFRESH & CLEAR CACHE ----------
     function forceRefresh() {
         if (!confirm('⚠️ This will clear your local cache and reload all data from the server.\n\nContinue?')) return;
         try {
@@ -459,17 +400,13 @@
                 '- Cached products\n- Cached purchases\n- Pending sales\n- Pending purchases\n- Pending deletions\n\n' +
                 'Are you sure you want to continue?')) return;
         try {
-            const keysToKeep = ['ox_user', 'pin_unlocked', 'app_version', 'summary_collapsed_accessory'];
-            const allKeys = Object.keys(localStorage);
-            allKeys.forEach(key => {
-                if (!keysToKeep.includes(key)) {
-                    localStorage.removeItem(key);
-                }
+            const keysToKeep = ['ox_user', 'pin_unlocked', 'app_version'];
+            Object.keys(localStorage).forEach(key => {
+                if (!keysToKeep.includes(key)) localStorage.removeItem(key);
             });
             if (db) {
-                db.delete().then(() => {
-                    console.log('🗑️ Dexie database deleted');
-                }).catch(err => console.warn('Error deleting Dexie:', err));
+                db.delete().then(() => console.log('🗑️ Dexie database deleted'))
+                    .catch(err => console.warn('Error deleting Dexie:', err));
             }
             alert('✅ All local data cleared. Refreshing page...');
             location.reload();
@@ -482,12 +419,10 @@
     window.forceRefresh = forceRefresh;
     window.clearAllLocalData = clearAllLocalData;
 
-    // ---------- Main variables ----------
     let currentPurchases = [];
     let currentFilteredData = [];
     let editMode = false;
     let editBatchId = null;
-    let isDataFresh = false;
     let isLoading = false;
     let searchMode = 'contains';
     let searchField = 'all';
@@ -497,11 +432,9 @@
     let pendingCreatePayload = null;
     let pendingCreateBatchId = null;
 
-    // ---------- Summary toggle state ----------
-    const SUMMARY_STATE_KEY = 'accessory_summary_collapsed';
+    const SUMMARY_STATE_KEY = 'purchases_summary_collapsed_' + GROUP;
     let summaryCollapsed = false;
 
-    // ---------- Helper functions ----------
     function escapeHtml(str) {
         if (!str) return '';
         return String(str).replace(/[&<>"']/g, function(m) {
@@ -513,18 +446,12 @@
             return m;
         });
     }
-
     function formatDate(dateStr) {
         if (!dateStr) return '';
-        const d = new Date(dateStr);
-        return d.toLocaleString();
+        return new Date(dateStr).toLocaleString();
     }
+    function formatMoney(amount) { return '₵' + safeToFixed(amount); }
 
-    function formatMoney(amount) {
-        return '₵' + safeToFixed(amount);
-    }
-
-    // ---------- Loading state helpers ----------
     function showLoadingState() {
         const list = document.getElementById('purchasesList');
         if (list) {
@@ -532,21 +459,18 @@
                 <div class="flex flex-col items-center justify-center py-12">
                     <div class="loading-spinner"></div>
                     <p class="mt-4 text-gray-500 text-sm">Loading purchases…</p>
-                </div>
-            `;
+                </div>`;
         }
         const summary = document.getElementById('summaryContent');
         if (summary) {
             summary.innerHTML = `
-                <div class="flex items-center justify-center gap-2 text-gray-400">
+                <div class="flex items-center justify-center gap-2 text-[#A5D6A7]">
                     <span class="loading-spinner-sm"></span>
                     <span>Loading summary…</span>
-                </div>
-            `;
+                </div>`;
         }
     }
 
-    // ---------- Summary toggle logic ----------
     function initSummaryToggle() {
         const toggle = document.getElementById('summaryToggle');
         const content = document.getElementById('summaryContent');
@@ -554,9 +478,7 @@
         const badge = document.getElementById('summaryStatusBadge');
 
         try {
-            const saved = localStorage.getItem(SUMMARY_STATE_KEY);
-            if (saved === 'true') summaryCollapsed = true;
-            else summaryCollapsed = false;
+            summaryCollapsed = localStorage.getItem(SUMMARY_STATE_KEY) === 'true';
         } catch (e) { summaryCollapsed = false; }
 
         function applyState(collapsed) {
@@ -585,25 +507,24 @@
         applyState(summaryCollapsed);
     }
 
-    // ---------- Advanced Search ----------
     function matchesSearch(value, searchTerm, mode, caseSensitive) {
         if (!value) return false;
-        let searchValue = value, term = searchTerm;
-        if (!caseSensitive) { searchValue = searchValue.toLowerCase(); term = term.toLowerCase(); }
-        switch(mode) {
-            case 'exact': return searchValue === term;
-            case 'starts': return searchValue.startsWith(term);
-            case 'ends': return searchValue.endsWith(term);
+        let sv = value, term = searchTerm;
+        if (!caseSensitive) { sv = sv.toLowerCase(); term = term.toLowerCase(); }
+        switch (mode) {
+            case 'exact': return sv === term;
+            case 'starts': return sv.startsWith(term);
+            case 'ends': return sv.endsWith(term);
             case 'words': {
                 const words = term.split(/\s+/).filter(w => w.length > 0);
-                return words.every(word => searchValue.includes(word));
+                return words.every(word => sv.includes(word));
             }
-            default: return searchValue.includes(term);
+            default: return sv.includes(term);
         }
     }
 
     function getSearchableText(purchase, field) {
-        switch(field) {
+        switch (field) {
             case 'name': return purchase.name || '';
             case 'brand': return purchase.brand || '';
             case 'category': return purchase.category || '';
@@ -617,6 +538,7 @@
         searchMode = document.getElementById('searchMode').value;
         searchField = document.getElementById('searchField').value;
         caseSensitive = document.getElementById('caseSensitive').value === 'true';
+
         let filtered = currentPurchases;
         if (keyword) {
             const isBatchSearch = /^#?\d+$/.test(keyword);
@@ -627,11 +549,10 @@
                     currentFilteredData = filtered;
                     renderList(filtered);
                     setTimeout(() => {
-                        const items = document.querySelectorAll('#purchasesList .border');
-                        items.forEach(item => {
+                        document.querySelectorAll('#purchasesList .border').forEach(item => {
                             if (item.textContent.includes(`Batch #${batchNum}`)) {
-                                item.style.border = '3px solid #f59e0b';
-                                item.style.backgroundColor = '#fffbeb';
+                                item.style.border = '3px solid #2E7D32';
+                                item.style.backgroundColor = '#E8F5E9';
                                 item.scrollIntoView({ behavior: 'smooth', block: 'center' });
                                 setTimeout(() => {
                                     item.style.border = '1px solid #e5e7eb';
@@ -645,8 +566,8 @@
                 }
             }
             filtered = currentPurchases.filter(p => {
-                const searchableText = getSearchableText(p, searchField);
-                return matchesSearch(searchableText, keyword, searchMode, caseSensitive);
+                const text = getSearchableText(p, searchField);
+                return matchesSearch(text, keyword, searchMode, caseSensitive);
             });
         }
         currentFilteredData = filtered;
@@ -656,7 +577,7 @@
         else clearBtn.classList.add('hidden');
     }
 
-    // ---------- PENDING PURCHASES (using Dexie pending_ops) ----------
+    // ---------- PENDING (Dexie) ----------
     async function getPendingPurchases() {
         if (!db) return [];
         try {
@@ -668,10 +589,7 @@
                 data: op.payload,
                 timestamp: op.timestamp
             }));
-        } catch (e) {
-            console.warn('Error reading pending ops:', e);
-            return [];
-        }
+        } catch (e) { console.warn('Error reading pending ops:', e); return []; }
     }
 
     async function updatePendingBadge() {
@@ -684,53 +602,54 @@
                 if (count === 0) badge.classList.add('hidden');
                 else badge.classList.remove('hidden');
             }
-        } catch (e) {
-            console.warn('Error updating pending badge:', e);
-        }
+        } catch (e) { console.warn('Error updating pending badge:', e); }
     }
 
     async function viewPendingPurchases() {
         const pending = await getPendingPurchases();
         const container = document.getElementById('pendingList');
         const modal = document.getElementById('pendingModal');
-        if (pending.length === 0) {
-            container.innerHTML = `<div class="text-center text-gray-400 py-8"><p class="text-2xl mb-2">📭</p><p>No pending purchases.</p><p class="text-sm">All purchases have been synced to the server.</p></div>`;
+
+        const visible = pending.filter(p => isInGroup(p.data.category));
+
+        if (visible.length === 0) {
+            container.innerHTML = `<div class="text-center text-gray-400 py-8"><p class="text-2xl mb-2">📭</p><p>No pending purchases for this page.</p></div>`;
         } else {
-            container.innerHTML = pending.map((p, index) => `
+            container.innerHTML = visible.map((p) => {
+                const realIndex = pending.indexOf(p);
+                return `
                 <div class="border rounded-lg p-4 hover:shadow transition">
                     <div class="flex justify-between items-start">
                         <div>
                             <div class="flex items-center gap-2">
-                                <span class="text-sm font-semibold ${p.type === 'add' ? 'text-green-600' : 'text-yellow-600'}">
+                                <span class="text-sm font-semibold ${p.type === 'add' ? 'text-[#2E7D32]' : 'text-amber-600'}">
                                     ${p.type === 'add' ? '➕ Add' : '✏️ Update'}
                                 </span>
                                 <span class="text-xs text-gray-400">${new Date(p.timestamp).toLocaleString()}</span>
                                 ${p.batchId ? `<span class="text-xs bg-gray-100 px-2 py-0.5 rounded">Batch #${p.batchId}</span>` : ''}
-                                ${p.data.update_mode ? `<span class="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">mode: ${p.data.update_mode}</span>` : ''}
+                                ${p.data.update_mode ? `<span class="text-xs bg-[#E8F5E9] text-[#1B5E20] px-2 py-0.5 rounded">mode: ${p.data.update_mode}</span>` : ''}
                             </div>
                             <h3 class="font-bold text-lg mt-1">${escapeHtml(p.data.name)} (${escapeHtml(p.data.brand)})</h3>
                             <p class="text-sm text-gray-600">
                                 Qty: ${p.data.quantity} | Cost: ₵${safeToFixed(p.data.cost_price)} | Selling: ₵${safeToFixed(p.data.selling_price)}
                                 ${p.data.discount ? `| Discount: ₵${safeToFixed(p.data.discount)}` : ''}
                             </p>
-                            <p class="text-sm text-gray-500">Category: ${p.data.category || 'Accessory'}</p>
+                            <p class="text-sm text-gray-500">Category: ${p.data.category || DEFAULT_CAT}</p>
                             <p class="text-sm text-gray-500">Source: ${p.data.source || 'Unknown'}</p>
                         </div>
                         <div class="flex flex-col gap-1">
-                            <button onclick="syncPendingItem(${index})" class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm">🔄 Sync</button>
-                            <button onclick="removePendingItem(${index})" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">🗑️ Remove</button>
+                            <button onclick="syncPendingItem(${realIndex})" class="bg-[#2E7D32] hover:bg-[#1B5E20] text-white px-3 py-1 rounded text-sm transition">🔄 Sync</button>
+                            <button onclick="removePendingItem(${realIndex})" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm transition">🗑️ Remove</button>
                         </div>
                     </div>
-                </div>
-            `).join('');
+                </div>`;
+            }).join('');
         }
         updatePendingBadge();
         modal.classList.remove('hidden');
     }
 
-    function closePendingModal() {
-        document.getElementById('pendingModal').classList.add('hidden');
-    }
+    function closePendingModal() { document.getElementById('pendingModal').classList.add('hidden'); }
 
     async function syncPendingItem(index) {
         const pending = await getPendingPurchases();
@@ -738,24 +657,15 @@
         if (!item) return;
         if (!confirm(`Sync this ${item.type === 'add' ? 'addition' : 'update'} for "${item.data.name}"?`)) return;
         try {
-            // ============================================================
-            // ✅ FIX: Route by record_id shape, matching sync.js pushPending().
-            //    A stale op.operation='add' row with a numeric record_id must
-            //    go to PUT, not POST — otherwise the manual Sync button can
-            //    create a duplicate batch.
-            // ============================================================
             const rawId = String(item.batchId || '');
             const isNumeric = /^\d+$/.test(rawId);
             let url, method;
             if (item.type === 'add' && !isNumeric) {
-                url = '/api/purchases';
-                method = 'POST';
+                url = '/api/purchases'; method = 'POST';
             } else if (isNumeric) {
-                // Ensure the outgoing body carries the update directive.
                 if (!item.data.update_mode) item.data.update_mode = 'update';
                 if (item.data.batch_id === undefined) item.data.batch_id = parseInt(rawId, 10);
-                url = `/api/purchases/${rawId}`;
-                method = 'PUT';
+                url = `/api/purchases/${rawId}`; method = 'PUT';
             } else {
                 throw new Error('Cannot route pending item: no numeric batch id');
             }
@@ -786,22 +696,15 @@
         let successCount = 0, failCount = 0;
         for (const item of pending) {
             try {
-                // ✅ FIX: same record_id-shape routing as syncPendingItem()
                 const rawId = String(item.batchId || '');
                 const isNumeric = /^\d+$/.test(rawId);
                 let url, method;
-                if (item.type === 'add' && !isNumeric) {
-                    url = '/api/purchases';
-                    method = 'POST';
-                } else if (isNumeric) {
+                if (item.type === 'add' && !isNumeric) { url = '/api/purchases'; method = 'POST'; }
+                else if (isNumeric) {
                     if (!item.data.update_mode) item.data.update_mode = 'update';
                     if (item.data.batch_id === undefined) item.data.batch_id = parseInt(rawId, 10);
-                    url = `/api/purchases/${rawId}`;
-                    method = 'PUT';
-                } else {
-                    failCount++;
-                    continue;
-                }
+                    url = `/api/purchases/${rawId}`; method = 'PUT';
+                } else { failCount++; continue; }
                 const res = await fetch(url, {
                     method: method,
                     headers: { 'Content-Type': 'application/json' },
@@ -809,11 +712,9 @@
                 });
                 if (res.ok) {
                     const data = await res.json();
-                    if (data.success) {
-                        await db.pending_ops.delete(item.id);
-                        successCount++;
-                    } else { failCount++; }
-                } else { failCount++; }
+                    if (data.success) { await db.pending_ops.delete(item.id); successCount++; }
+                    else failCount++;
+                } else failCount++;
             } catch (error) { failCount++; }
         }
         updatePendingBadge();
@@ -835,184 +736,146 @@
         const pending = await getPendingPurchases();
         if (pending.length === 0) { alert('No pending items to clear.'); return; }
         if (!confirm(`Delete all ${pending.length} pending purchase(s)? This cannot be undone.`)) return;
-        for (const item of pending) {
-            await db.pending_ops.delete(item.id);
-        }
+        for (const item of pending) await db.pending_ops.delete(item.id);
         updatePendingBadge();
         viewPendingPurchases();
     }
 
-    // ---------- Check for batch edit from URL ----------
     function checkForBatchEdit() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const batchId = urlParams.get('edit_batch');
-        if (batchId) {
-            console.log('🔍 Batch edit requested for:', batchId);
-            setTimeout(function() {
-                const purchase = currentPurchases.find(p => p.batch_id === parseInt(batchId));
-                if (purchase) {
-                    console.log('✅ Found purchase:', purchase);
-                    editPurchase(parseInt(batchId));
-                    const form = document.querySelector('.bg-white.rounded-xl.shadow-md.p-6.mb-6');
-                    if (form) {
-                        form.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                        form.style.border = '3px solid #f59e0b';
-                        form.style.transition = 'border-color 0.5s';
-                        setTimeout(() => { form.style.border = 'none'; }, 3000);
-                    }
-                } else {
-                    console.warn('⚠️ Batch #' + batchId + ' not found');
-                    alert('Batch #' + batchId + ' not found. It may have been deleted.');
+        const batchId = new URLSearchParams(window.location.search).get('edit_batch');
+        if (!batchId) return;
+        setTimeout(function() {
+            const purchase = currentPurchases.find(p => p.batch_id === parseInt(batchId));
+            if (purchase) {
+                editPurchase(parseInt(batchId));
+                const form = document.querySelector('.bg-white.rounded-xl.shadow-md.p-6.mb-6');
+                if (form) {
+                    form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    form.style.border = '3px solid #2E7D32';
+                    setTimeout(() => { form.style.border = 'none'; }, 3000);
                 }
-            }, 1500);
-        }
+            } else {
+                alert('Batch #' + batchId + ' not found. It may have been deleted.');
+            }
+        }, 1500);
     }
 
-    // ---------- Check for show_history parameter ----------
     function checkForShowHistory() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const batchId = urlParams.get('show_history');
-        if (batchId) {
-            console.log('📋 show_history requested for batch:', batchId);
-            setTimeout(function() {
-                const purchase = currentPurchases.find(p => p.batch_id === parseInt(batchId));
-                if (purchase) {
-                    console.log('✅ Found purchase, opening history modal');
-                    viewPurchaseHistory(parseInt(batchId));
-                    const items = document.querySelectorAll('#purchasesList .border');
-                    items.forEach(item => {
-                        if (item.textContent.includes(`Batch #${batchId}`)) {
-                            item.style.border = '3px solid #f59e0b';
-                            item.style.backgroundColor = '#fffbeb';
-                            item.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            setTimeout(() => {
-                                item.style.border = '1px solid #e5e7eb';
-                                item.style.backgroundColor = '';
-                            }, 4000);
-                        }
-                    });
-                } else {
-                    console.warn('⚠️ Batch #' + batchId + ' not found for history view');
-                    alert('Batch #' + batchId + ' not found. It may have been deleted.');
-                }
-            }, 1500);
-        }
+        const batchId = new URLSearchParams(window.location.search).get('show_history');
+        if (!batchId) return;
+        setTimeout(function() {
+            const purchase = currentPurchases.find(p => p.batch_id === parseInt(batchId));
+            if (purchase) {
+                viewPurchaseHistory(parseInt(batchId));
+                document.querySelectorAll('#purchasesList .border').forEach(item => {
+                    if (item.textContent.includes(`Batch #${batchId}`)) {
+                        item.style.border = '3px solid #2E7D32';
+                        item.style.backgroundColor = '#E8F5E9';
+                        item.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        setTimeout(() => {
+                            item.style.border = '1px solid #e5e7eb';
+                            item.style.backgroundColor = '';
+                        }, 4000);
+                    }
+                });
+            } else {
+                alert('Batch #' + batchId + ' not found.');
+            }
+        }, 1500);
     }
 
-    // ============ VIEW PURCHASE HISTORY (with update history) ============
+    // ---------- History modal ----------
     async function viewPurchaseHistory(batchId) {
         try {
             const res = await fetch(`/api/purchases/${batchId}/history`);
             if (!res.ok) throw new Error('Failed to fetch history');
             const data = await res.json();
-            if (!data.success) {
-                alert('Error: ' + data.error);
-                return;
-            }
+            if (!data.success) { alert('Error: ' + data.error); return; }
             const purchase = data.purchase;
             const soldItems = data.sold_items || [];
             const totalSold = data.total_sold || 0;
             const updateHistory = data.update_history || [];
 
             let html = `
-                    <!-- Purchase Info -->
-                    <div class="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                        <h4 class="font-bold text-blue-700 mb-2">📦 Original Purchase</h4>
-                        <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
-                            <div><span class="text-gray-500">Date:</span> <strong>${formatDate(purchase.original_date)}</strong></div>
-                            <div><span class="text-gray-500">Quantity:</span> <strong>${purchase.original_quantity}</strong></div>
-                            <div><span class="text-gray-500">Cost:</span> <strong>₵${safeToFixed(purchase.original_cost_price)}</strong></div>
-                            <div><span class="text-gray-500">Selling:</span> <strong>₵${safeToFixed(purchase.original_selling_price)}</strong></div>
-                        </div>
-                        ${purchase.current_quantity !== purchase.original_quantity ? `
-                            <div class="mt-2 text-xs text-blue-600">
-                                📝 Updated: Qty ${purchase.current_quantity} | Cost ₵${safeToFixed(purchase.current_cost_price)} | Selling ₵${safeToFixed(purchase.current_selling_price)}
-                            </div>
-                        ` : ''}
-                        <div class="mt-2 text-xs text-gray-500">Source: ${escapeHtml(purchase.source)} | Category: ${escapeHtml(purchase.category)}</div>
-                        <div class="mt-1 text-xs text-gray-400">Batch #${purchase.batch_id} | ${escapeHtml(purchase.name)} (${escapeHtml(purchase.brand)})</div>
-                        <div class="mt-1 text-xs text-gray-400">Last updated: ${formatDate(purchase.last_updated)}</div>
+                <div class="bg-[#E8F5E9] rounded-lg p-4 border border-[#C8E6C9]">
+                    <h4 class="font-bold text-[#1B5E20] mb-2">📦 Original Purchase</h4>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                        <div><span class="text-gray-500">Date:</span> <strong>${formatDate(purchase.original_date)}</strong></div>
+                        <div><span class="text-gray-500">Quantity:</span> <strong>${purchase.original_quantity}</strong></div>
+                        <div><span class="text-gray-500">Cost:</span> <strong>₵${safeToFixed(purchase.original_cost_price)}</strong></div>
+                        <div><span class="text-gray-500">Selling:</span> <strong>₵${safeToFixed(purchase.original_selling_price)}</strong></div>
                     </div>
-
-                    <!-- Sold History -->
-                    <div class="bg-green-50 rounded-lg p-4 border border-green-200">
-                        <div class="flex justify-between items-center mb-2">
-                            <h4 class="font-bold text-green-700">📊 Sold History (${totalSold} units)</h4>
-                        </div>
-                        ${soldItems.length === 0 ? `
-                            <div class="text-center text-gray-400 py-4">No sales recorded for this batch yet.</div>
-                        ` : `
-                            <div class="space-y-2 max-h-60 overflow-y-auto">
-                                ${soldItems.map(item => `
-                                    <div class="bg-white rounded-lg p-3 border border-gray-200 flex flex-wrap justify-between items-center">
-                                        <div>
-                                            <span class="font-medium">${item.quantity} units</span>
-                                            <span class="text-sm text-gray-500 ml-2">@ ₵${safeToFixed(item.selling_price)}</span>
-                                            <span class="text-xs text-gray-400 block">Profit: ₵${safeToFixed(item.profit)}</span>
-                                        </div>
-                                        <div class="text-right text-xs">
-                                            <div class="text-gray-600">${formatDate(item.sale_date)}</div>
-                                            <div class="text-gray-400">Sale #${item.sale_id}</div>
-                                            ${item.username ? `<div class="text-gray-400">👤 ${escapeHtml(item.username)}</div>` : ''}
-                                        </div>
+                    ${purchase.current_quantity !== purchase.original_quantity ? `
+                        <div class="mt-2 text-xs text-[#1B5E20]">
+                            📝 Updated: Qty ${purchase.current_quantity} | Cost ₵${safeToFixed(purchase.current_cost_price)} | Selling ₵${safeToFixed(purchase.current_selling_price)}
+                        </div>` : ''}
+                    <div class="mt-2 text-xs text-gray-500">Source: ${escapeHtml(purchase.source)} | Category: ${escapeHtml(purchase.category)}</div>
+                    <div class="mt-1 text-xs text-gray-400">Batch #${purchase.batch_id} | ${escapeHtml(purchase.name)} (${escapeHtml(purchase.brand)})</div>
+                    <div class="mt-1 text-xs text-gray-400">Last updated: ${formatDate(purchase.last_updated)}</div>
+                </div>
+                <div class="bg-green-50 rounded-lg p-4 border border-green-200 mt-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <h4 class="font-bold text-[#1B5E20]">📊 Sold History (${totalSold} units)</h4>
+                    </div>
+                    ${soldItems.length === 0 ? `
+                        <div class="text-center text-gray-400 py-4">No sales recorded for this batch yet.</div>` : `
+                        <div class="space-y-2 max-h-60 overflow-y-auto">
+                            ${soldItems.map(item => `
+                                <div class="bg-white rounded-lg p-3 border border-gray-200 flex flex-wrap justify-between items-center">
+                                    <div>
+                                        <span class="font-medium">${item.quantity} units</span>
+                                        <span class="text-sm text-gray-500 ml-2">@ ₵${safeToFixed(item.selling_price)}</span>
+                                        <span class="text-xs text-gray-400 block">Profit: ₵${safeToFixed(item.profit)}</span>
                                     </div>
-                                `).join('')}
-                            </div>
-                        `}
+                                    <div class="text-right text-xs">
+                                        <div class="text-gray-600">${formatDate(item.sale_date)}</div>
+                                        <div class="text-gray-400">Sale #${item.sale_id}</div>
+                                        ${item.username ? `<div class="text-gray-400">👤 ${escapeHtml(item.username)}</div>` : ''}
+                                    </div>
+                                </div>`).join('')}
+                        </div>`}
+                </div>
+                <div class="bg-amber-50 rounded-lg p-4 border border-amber-200 mt-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <h4 class="font-bold text-amber-700">📝 Update History (${updateHistory.length})</h4>
+                        ${updateHistory.length > 2 ? `<button onclick="toggleUpdateHistory()" class="text-sm text-[#1B5E20] underline">Show All</button>` : ''}
                     </div>
-
-                    <!-- Update History -->
-                    <div class="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
-                        <div class="flex justify-between items-center mb-2">
-                            <h4 class="font-bold text-yellow-700">📝 Update History (${updateHistory.length})</h4>
-                            ${updateHistory.length > 2 ? `<button onclick="toggleUpdateHistory()" class="text-sm text-blue-600 underline">Show All</button>` : ''}
-                        </div>
-                        <div id="updatesList" class="space-y-2 max-h-40 overflow-y-auto">
-                            ${updateHistory.slice(0, 2).map(u => `
-                                <div class="text-xs text-gray-600 border-b pb-1">
-                                    <span class="font-medium">${formatDate(u.date)}</span>
-                                    <ul class="ml-2 mt-1">
-                                        ${Object.entries(u.changes).map(([key, val]) => `
-                                            <li>${key}: ${val.old} → ${val.new}</li>
-                                        `).join('')}
-                                    </ul>
-                                </div>
-                            `).join('')}
-                            ${updateHistory.length > 2 ? `<div id="moreUpdates" class="hidden">${updateHistory.slice(2).map(u => `
-                                <div class="text-xs text-gray-600 border-b pb-1 mt-1">
-                                    <span class="font-medium">${formatDate(u.date)}</span>
-                                    <ul class="ml-2 mt-1">
-                                        ${Object.entries(u.changes).map(([key, val]) => `
-                                            <li>${key}: ${val.old} → ${val.new}</li>
-                                        `).join('')}
-                                    </ul>
-                                </div>
-                            `).join('')}</div>` : ''}
-                        </div>
+                    <div id="updatesList" class="space-y-2 max-h-40 overflow-y-auto">
+                        ${updateHistory.slice(0, 2).map(u => `
+                            <div class="text-xs text-gray-600 border-b pb-1">
+                                <span class="font-medium">${formatDate(u.date)}</span>
+                                <ul class="ml-2 mt-1">
+                                    ${Object.entries(u.changes).map(([key, val]) => `<li>${key}: ${val.old} → ${val.new}</li>`).join('')}
+                                </ul>
+                            </div>`).join('')}
+                        ${updateHistory.length > 2 ? `<div id="moreUpdates" class="hidden">${updateHistory.slice(2).map(u => `
+                            <div class="text-xs text-gray-600 border-b pb-1 mt-1">
+                                <span class="font-medium">${formatDate(u.date)}</span>
+                                <ul class="ml-2 mt-1">
+                                    ${Object.entries(u.changes).map(([key, val]) => `<li>${key}: ${val.old} → ${val.new}</li>`).join('')}
+                                </ul>
+                            </div>`).join('')}</div>` : ''}
                     </div>
-
-                    <!-- Summary -->
-                    <div class="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                        <div class="grid grid-cols-3 md:grid-cols-5 gap-2 text-sm text-center">
-                            <div><span class="text-gray-500 block">Original</span><span class="font-bold">${purchase.original_quantity}</span></div>
-                            <div><span class="text-gray-500 block">Sold</span><span class="font-bold text-blue-600">${totalSold}</span></div>
-                            <div><span class="text-gray-500 block">Remaining</span><span class="font-bold text-green-600">${purchase.remaining_quantity || 0}</span></div>
-                            <div><span class="text-gray-500 block">Current</span><span class="font-bold">${purchase.current_quantity}</span></div>
-                            <div>
-                                <span class="text-gray-500 block">Status</span>
-                                <span class="font-bold ${purchase.remaining_quantity > 0 ? 'text-green-600' : 'text-red-600'}">
-                                    ${purchase.remaining_quantity > 0 ? '✅ In Stock' : '❌ Depleted'}
-                                </span>
-                            </div>
+                </div>
+                <div class="bg-gray-50 rounded-lg p-3 border border-gray-200 mt-4">
+                    <div class="grid grid-cols-3 md:grid-cols-5 gap-2 text-sm text-center">
+                        <div><span class="text-gray-500 block">Original</span><span class="font-bold">${purchase.original_quantity}</span></div>
+                        <div><span class="text-gray-500 block">Sold</span><span class="font-bold text-[#1B5E20]">${totalSold}</span></div>
+                        <div><span class="text-gray-500 block">Remaining</span><span class="font-bold text-[#2E7D32]">${purchase.remaining_quantity || 0}</span></div>
+                        <div><span class="text-gray-500 block">Current</span><span class="font-bold">${purchase.current_quantity}</span></div>
+                        <div>
+                            <span class="text-gray-500 block">Status</span>
+                            <span class="font-bold ${purchase.remaining_quantity > 0 ? 'text-[#2E7D32]' : 'text-red-600'}">
+                                ${purchase.remaining_quantity > 0 ? '✅ In Stock' : '❌ Depleted'}
+                            </span>
                         </div>
                     </div>
-                `;
+                </div>`;
 
             document.getElementById('historyContent').innerHTML = html;
             document.getElementById('historyModalTitle').textContent = `📋 Batch #${batchId} - ${escapeHtml(purchase.name)}`;
             document.getElementById('historyModal').classList.remove('hidden');
             document.body.style.overflow = 'hidden';
-
             window._updateHistory = updateHistory;
         } catch (error) {
             alert('Error loading history: ' + error.message);
@@ -1023,7 +886,7 @@
         const more = document.getElementById('moreUpdates');
         if (more) {
             more.classList.toggle('hidden');
-            const btn = document.querySelector('#historyContent .bg-yellow-50 .text-blue-600');
+            const btn = document.querySelector('#historyContent .bg-amber-50 .text-\\[\\#1B5E20\\]');
             if (btn) btn.textContent = more.classList.contains('hidden') ? 'Show All' : 'Show Less';
         }
     }
@@ -1033,22 +896,19 @@
         document.body.style.overflow = '';
     }
 
-    // ======================== LOAD PURCHASES (API-FIRST) ========================
+    // ======================== LOAD PURCHASES ========================
     async function loadPurchases(forceRefresh = false) {
         if (isLoading) return;
         isLoading = true;
         updateOfflineBanner();
-
-        // ✅ Show loading state immediately so the user sees activity
         showLoadingState();
 
         let purchases = [];
         let apiSuccess = false;
 
-        // 1. Try API first (if online)
         if (navigator.onLine && !forceRefresh) {
             try {
-                const res = await fetch('/api/purchases?exclude_category=Screen');
+                const res = await fetch(`/api/purchases?group=${GROUP}`);
                 if (res.ok) {
                     const apiPurchases = await res.json();
                     if (Array.isArray(apiPurchases) && apiPurchases.length > 0) {
@@ -1071,13 +931,14 @@
                             original_date: p.original_date || p.date,
                             original_cost_price: p.original_cost_price || p.cost_price,
                             original_selling_price: p.original_selling_price || p.selling_price,
-                            // ✅ Real sold count from sales_items (backend).
                             sold_quantity: (typeof p.sold_quantity === 'number') ? p.sold_quantity : null
                         }));
-                        // Store in Dexie
                         await storePurchasesInDexie(apiPurchases);
                         apiSuccess = true;
                         console.log('📦 Loaded from API:', purchases.length);
+                    } else if (Array.isArray(apiPurchases)) {
+                        apiSuccess = true;
+                        purchases = [];
                     }
                 }
             } catch (e) {
@@ -1085,7 +946,6 @@
             }
         }
 
-        // 2. If API failed or offline, read from Dexie
         if (!apiSuccess || !navigator.onLine) {
             try {
                 const batches = await db.batches.toArray();
@@ -1093,8 +953,9 @@
                 const products = await db.products.where('id').anyOf(productIds).toArray();
                 const productMap = {};
                 products.forEach(p => productMap[p.id] = p);
+
                 purchases = batches
-                    .filter(b => (productMap[b.product_id]?.category || '') !== 'Screen')
+                    .filter(b => isInGroup(productMap[b.product_id]?.category))
                     .map(b => ({
                         batch_id: b.id,
                         name: productMap[b.product_id]?.name || 'Unknown',
@@ -1114,7 +975,6 @@
                         original_date: b.original_date || b.date,
                         original_cost_price: b.original_cost_price || b.cost_price,
                         original_selling_price: b.original_selling_price || b.selling_price,
-                        // ✅ From Dexie if the batch carried it; else null.
                         sold_quantity: (typeof b.sold_quantity === 'number') ? b.sold_quantity : null
                     }));
                 console.log('📦 Loaded from Dexie:', purchases.length);
@@ -1123,25 +983,20 @@
             }
         }
 
-        // 3. Render
         currentPurchases = purchases;
         currentFilteredData = purchases;
         if (purchases.length > 0) {
             renderList(purchases);
             updateSummary(purchases);
-            setTimeout(() => {
-                checkForBatchEdit();
-                checkForShowHistory();
-            }, 300);
+            setTimeout(() => { checkForBatchEdit(); checkForShowHistory(); }, 300);
         } else {
-            document.getElementById('purchasesList').innerHTML = '<div class="text-center text-gray-400 py-8">No accessory purchases found.</div>';
+            document.getElementById('purchasesList').innerHTML = `<div class="text-center text-gray-400 py-8">No ${GROUP_LABEL} purchases found.</div>`;
             updateSummary([]);
         }
         updatePendingBadge();
         isLoading = false;
     }
 
-    // ---------- Store purchases in Dexie ----------
     async function storePurchasesInDexie(apiPurchases) {
         if (!db) return;
         try {
@@ -1151,30 +1006,19 @@
                 const productId = p.product_id || p.batch_id;
                 if (!productMap[productId]) {
                     productMap[productId] = {
-                        id: productId,
-                        name: p.name,
-                        brand: p.brand,
-                        category: p.category,
-                        cost_price: p.cost_price,
-                        selling_price: p.selling_price,
+                        id: productId, name: p.name, brand: p.brand, category: p.category,
+                        cost_price: p.cost_price, selling_price: p.selling_price,
                         stock: p.quantity - (p.remaining_quantity || 0) + (p.remaining_quantity || 0),
                         discount: p.discount || 0
                     };
                 }
                 batchMap[p.batch_id] = {
-                    id: p.batch_id,
-                    product_id: productId,
-                    quantity: p.quantity,
-                    remaining_quantity: p.remaining_quantity,
-                    cost_price: p.cost_price,
-                    selling_price: p.selling_price,
-                    discount: p.discount || 0,
-                    claimed_quantity: p.claimed_quantity || 0,
-                    // ✅ Persist real sold count so offline reads keep it
+                    id: p.batch_id, product_id: productId,
+                    quantity: p.quantity, remaining_quantity: p.remaining_quantity,
+                    cost_price: p.cost_price, selling_price: p.selling_price,
+                    discount: p.discount || 0, claimed_quantity: p.claimed_quantity || 0,
                     sold_quantity: (typeof p.sold_quantity === 'number') ? p.sold_quantity : null,
-                    date: p.date,
-                    action: p.action || 'added',
-                    source: p.source || '',
+                    date: p.date, action: p.action || 'added', source: p.source || '',
                     original_quantity: p.original_quantity || p.quantity,
                     original_date: p.original_date || p.date,
                     original_cost_price: p.original_cost_price || p.cost_price,
@@ -1185,31 +1029,27 @@
             await db.products.bulkPut(Object.values(productMap));
             await db.batches.bulkPut(Object.values(batchMap));
             console.log('✅ Stored purchases in Dexie');
-        } catch (e) {
-            console.warn('Failed to store in Dexie:', e);
-        }
+        } catch (e) { console.warn('Failed to store in Dexie:', e); }
     }
 
-    // ---------- Render list with enhanced badges ----------
     function renderList(purchases) {
         const container = document.getElementById('purchasesList');
         if (!purchases || purchases.length === 0) {
-            container.innerHTML = '<div class="text-center text-gray-400 py-8">No accessory purchase records found.</div>';
+            container.innerHTML = `<div class="text-center text-gray-400 py-8">No ${GROUP_LABEL} purchase records found.</div>`;
             updateSummary([]);
             return;
         }
 
         container.innerHTML = purchases.map(p => {
             const batchProfit = ((p.selling_price || 0) - (p.cost_price || 0)) * (p.quantity || 0);
-            const profitColor = batchProfit >= 0 ? 'text-teal-600' : 'text-red-600';
+            const profitColor = batchProfit >= 0 ? 'text-[#2E7D32]' : 'text-red-600';
             const claimedQty = p.claimed_quantity || 0;
             const goodStock = (p.remaining_quantity || 0) - claimedQty;
-            // ✅ REAL sold count (from sales_items via API)
             const soldQty = getRealSold(p);
             const claimedCost = claimedQty * (p.cost_price || 0);
-            const soldBadge = soldQty > 0 ? `<span class="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded ml-2">📊 ${soldQty} Sold</span>` : '';
+            const soldBadge = soldQty > 0 ? `<span class="text-xs bg-[#E8F5E9] text-[#1B5E20] px-2 py-0.5 rounded ml-2">📊 ${soldQty} Sold</span>` : '';
             const isUpdated = (p.action !== 'added');
-            const updatedBadge = isUpdated ? `<span class="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded ml-2">🔄 Updated</span>` : '';
+            const updatedBadge = isUpdated ? `<span class="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded ml-2">🔄 Updated</span>` : '';
 
             return `
                 <div class="border rounded-lg p-4 hover:shadow transition">
@@ -1217,6 +1057,7 @@
                         <div class="flex-1 w-full">
                             <div class="flex items-center gap-2 flex-wrap">
                                 <h3 class="font-bold text-lg">${escapeHtml(p.name)} (${escapeHtml(p.brand)})</h3>
+                                <span class="text-xs bg-[#E8F5E9] text-[#1B5E20] px-1.5 py-0.5 rounded font-medium">${escapeHtml(p.category || DEFAULT_CAT)}</span>
                                 ${claimedQty > 0 ? `<span class="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">⚠️ ${claimedQty} Claimed (₵${safeToFixed(claimedCost)})</span>` : ''}
                                 ${soldBadge}
                                 ${updatedBadge}
@@ -1224,9 +1065,9 @@
                             <p class="text-sm text-gray-600">Batch #${p.batch_id}</p>
                             <div class="grid grid-cols-2 md:grid-cols-4 gap-1 mt-1 text-xs">
                                 <span>Total: <strong>${p.quantity || 0}</strong></span>
-                                <span>Sold: <strong class="text-blue-600">${soldQty}</strong></span>
+                                <span>Sold: <strong class="text-[#1B5E20]">${soldQty}</strong></span>
                                 <span>Remaining: <strong>${p.remaining_quantity || 0}</strong></span>
-                                <span>✅ Good: <strong class="text-green-600">${Math.max(goodStock, 0)}</strong></span>
+                                <span>✅ Good: <strong class="text-[#2E7D32]">${Math.max(goodStock, 0)}</strong></span>
                             </div>
                             <p class="text-sm mt-1">Cost: ₵${safeToFixed(p.cost_price)} | Discount: ₵${safeToFixed(p.discount)} | Selling: ₵${safeToFixed(p.selling_price)}</p>
                             <p class="text-sm">Total: ₵${safeToFixed(p.total_cost)} | Date: ${formatDate(p.date)}</p>
@@ -1237,30 +1078,20 @@
                             ${isUpdated ? `<p class="text-xs text-gray-400">🔄 Last updated: ${formatDate(p.date)}</p>` : ''}
                         </div>
                         <div class="flex flex-wrap gap-1">
-                            <button onclick="viewPurchaseHistory(${p.batch_id})" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm flex items-center gap-1">📋 View History</button>
-                            <button onclick="editPurchase(${p.batch_id})" class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-sm flex items-center gap-1">✏️ Update</button>
+                            <button onclick="viewPurchaseHistory(${p.batch_id})" class="bg-[#2E7D32] hover:bg-[#1B5E20] text-white px-3 py-1 rounded text-sm flex items-center gap-1 transition">📋 View History</button>
+                            <button onclick="editPurchase(${p.batch_id})" class="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1 rounded text-sm flex items-center gap-1 transition">✏️ Update</button>
                         </div>
                     </div>
-                </div>
-            `;
+                </div>`;
         }).join('');
         updateSummary(purchases);
     }
 
-    // ---------- Summary – CORRECTED TOTAL COST & CAPITAL ----------
     function updateSummary(purchases) {
-        let totalQty = 0,
-            totalRemaining = 0,
-            totalCost = 0,
-            totalDiscount = 0,
-            totalSelling = 0,
-            totalProfit = 0;
-        let totalCapital = 0,
-            totalClaimed = 0,
-            totalGood = 0,
-            totalClaimedCost = 0,
-            totalSold = 0;
+        let totalQty = 0, totalRemaining = 0, totalCost = 0, totalDiscount = 0, totalSelling = 0, totalProfit = 0;
+        let totalCapital = 0, totalClaimed = 0, totalGood = 0, totalClaimedCost = 0, totalSold = 0;
         const totalBatches = purchases ? purchases.length : 0;
+
         if (purchases && purchases.length > 0) {
             purchases.forEach(p => {
                 const itemQty = p.quantity || 0;
@@ -1269,7 +1100,6 @@
                 const itemSelling = p.selling_price || 0;
                 const itemDiscount = p.discount || 0;
                 const claimed = p.claimed_quantity || 0;
-                // ✅ REAL sold count (from sales_items via API)
                 const sold = getRealSold(p);
                 totalQty += itemQty;
                 totalRemaining += remainingQty;
@@ -1280,44 +1110,41 @@
                 totalClaimed += claimed;
                 totalGood += remainingQty - claimed;
                 totalClaimedCost += claimed * itemCost;
-                const itemProfit = (itemSelling - itemCost) * itemQty - itemDiscount;
-                totalProfit += itemProfit;
+                totalProfit += (itemSelling - itemCost) * itemQty - itemDiscount;
             });
         }
         totalCapital = totalCost - totalClaimedCost;
 
         const isOffline = !navigator.onLine;
         const soldPercentage = totalQty > 0 ? ((totalSold / totalQty) * 100) : 0;
-        const soldColor = soldPercentage > 70 ? 'text-green-600' : (soldPercentage > 30 ? 'text-orange-600' : 'text-red-600');
+        const soldColor = soldPercentage > 70 ? 'text-[#A5D6A7]' : (soldPercentage > 30 ? 'text-amber-400' : 'text-red-400');
 
         document.getElementById('summaryContent').innerHTML = `
-                <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-10 gap-1 text-xs">
-                    <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">📦 Batches</span><br><span class="text-lg font-bold text-indigo-400">${totalBatches}</span></div>
-                    <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">🧾 Total Qty</span><br><span class="text-lg font-bold text-teal-400">${totalQty}</span></div>
-                    <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">📦 Remaining</span><br><span class="text-lg font-bold text-blue-400">${totalRemaining}</span></div>
-                    <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">📊 Sold</span><br><span class="text-lg font-bold text-purple-400">${totalSold}</span></div>
-                    <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">⚠️ Claimed</span><br><span class="text-lg font-bold text-red-400">${totalClaimed}</span></div>
-                    <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">✅ Good</span><br><span class="text-lg font-bold text-green-400">${Math.max(totalGood, 0)}</span></div>
-                    <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">💰 Total Cost</span><br><span class="text-lg font-bold text-gray-300">${formatMoney(totalCost)}</span></div>
-                    <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">📉 Claimed Cost</span><br><span class="text-lg font-bold text-red-300">${formatMoney(totalClaimedCost)}</span></div>
-                    <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">💰 Capital</span><br><span class="text-lg font-bold text-purple-300">${formatMoney(totalCapital)}</span></div>
-                    <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">📊 Sold %</span><br><span class="text-lg font-bold ${soldColor}">${soldPercentage.toFixed(0)}%</span></div>
-                </div>
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-1 text-xs mt-1">
-                    <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">📈 Total Selling</span><br><span class="text-lg font-bold text-green-400">${formatMoney(totalSelling)}</span></div>
-                    <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">📉 Total Discount</span><br><span class="text-lg font-bold text-orange-400">${formatMoney(totalDiscount)}</span></div>
-                    <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">💎 Gross Profit</span><br><span class="text-lg font-bold ${totalProfit >= 0 ? 'text-teal-400' : 'text-red-400'}">${formatMoney(totalProfit)}</span></div>
-                    <div class="bg-gray-800 rounded p-1 shadow"><span class="text-gray-400">📊 Avg Profit/Batch</span><br><span class="text-lg font-bold ${totalBatches > 0 && totalProfit / totalBatches >= 0 ? 'text-teal-400' : 'text-red-400'}">${totalBatches > 0 ? formatMoney(totalProfit / totalBatches) : '₵0.00'}</span></div>
-                </div>
-                <div class="text-xs text-gray-500 mt-1">
-                    💡 Total: ${totalQty} | Remaining: ${totalRemaining} | Sold: ${totalSold} | Claimed: ${totalClaimed} | Good: ${Math.max(totalGood, 0)} | Capital: ${formatMoney(totalCapital)}
-                    ${isOffline ? ' | ⚠️ Offline mode' : ''}
-                    ${totalQty > 0 ? ` | 📊 ${soldPercentage.toFixed(0)}% sold` : ''}
-                </div>
-            `;
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-10 gap-1 text-xs">
+                <div class="bg-[#1A3F2B] rounded p-1 shadow"><span class="text-[#A5D6A7]">📦 Batches</span><br><span class="text-lg font-bold text-[#81C784]">${totalBatches}</span></div>
+                <div class="bg-[#1A3F2B] rounded p-1 shadow"><span class="text-[#A5D6A7]">🧾 Total Qty</span><br><span class="text-lg font-bold text-[#A5D6A7]">${totalQty}</span></div>
+                <div class="bg-[#1A3F2B] rounded p-1 shadow"><span class="text-[#A5D6A7]">📦 Remaining</span><br><span class="text-lg font-bold text-blue-300">${totalRemaining}</span></div>
+                <div class="bg-[#1A3F2B] rounded p-1 shadow"><span class="text-[#A5D6A7]">📊 Sold</span><br><span class="text-lg font-bold text-purple-300">${totalSold}</span></div>
+                <div class="bg-[#1A3F2B] rounded p-1 shadow"><span class="text-[#A5D6A7]">⚠️ Claimed</span><br><span class="text-lg font-bold text-red-300">${totalClaimed}</span></div>
+                <div class="bg-[#1A3F2B] rounded p-1 shadow"><span class="text-[#A5D6A7]">✅ Good</span><br><span class="text-lg font-bold text-[#A5D6A7]">${Math.max(totalGood, 0)}</span></div>
+                <div class="bg-[#1A3F2B] rounded p-1 shadow"><span class="text-[#A5D6A7]">💰 Total Cost</span><br><span class="text-lg font-bold text-gray-200">${formatMoney(totalCost)}</span></div>
+                <div class="bg-[#1A3F2B] rounded p-1 shadow"><span class="text-[#A5D6A7]">📉 Claimed Cost</span><br><span class="text-lg font-bold text-red-300">${formatMoney(totalClaimedCost)}</span></div>
+                <div class="bg-[#1A3F2B] rounded p-1 shadow"><span class="text-[#A5D6A7]">💰 Capital</span><br><span class="text-lg font-bold text-purple-200">${formatMoney(totalCapital)}</span></div>
+                <div class="bg-[#1A3F2B] rounded p-1 shadow"><span class="text-[#A5D6A7]">📊 Sold %</span><br><span class="text-lg font-bold ${soldColor}">${soldPercentage.toFixed(0)}%</span></div>
+            </div>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-1 text-xs mt-1">
+                <div class="bg-[#1A3F2B] rounded p-1 shadow"><span class="text-[#A5D6A7]">📈 Total Selling</span><br><span class="text-lg font-bold text-[#A5D6A7]">${formatMoney(totalSelling)}</span></div>
+                <div class="bg-[#1A3F2B] rounded p-1 shadow"><span class="text-[#A5D6A7]">📉 Total Discount</span><br><span class="text-lg font-bold text-amber-300">${formatMoney(totalDiscount)}</span></div>
+                <div class="bg-[#1A3F2B] rounded p-1 shadow"><span class="text-[#A5D6A7]">💎 Gross Profit</span><br><span class="text-lg font-bold ${totalProfit >= 0 ? 'text-[#A5D6A7]' : 'text-red-300'}">${formatMoney(totalProfit)}</span></div>
+                <div class="bg-[#1A3F2B] rounded p-1 shadow"><span class="text-[#A5D6A7]">📊 Avg Profit/Batch</span><br><span class="text-lg font-bold ${totalBatches > 0 && totalProfit / totalBatches >= 0 ? 'text-[#A5D6A7]' : 'text-red-300'}">${totalBatches > 0 ? formatMoney(totalProfit / totalBatches) : '₵0.00'}</span></div>
+            </div>
+            <div class="text-xs text-[#A5D6A7] mt-1">
+                💡 Total: ${totalQty} | Remaining: ${totalRemaining} | Sold: ${totalSold} | Claimed: ${totalClaimed} | Good: ${Math.max(totalGood, 0)} | Capital: ${formatMoney(totalCapital)}
+                ${isOffline ? ' | ⚠️ Offline mode' : ''}
+                ${totalQty > 0 ? ` | 📊 ${soldPercentage.toFixed(0)}% sold` : ''}
+            </div>`;
     }
 
-    // ---------- Save pending purchase (Dexie) ----------
     async function savePendingPurchase(payload, actionType, batchId) {
         if (!db) return;
         try {
@@ -1331,18 +1158,15 @@
                 synced: 0
             });
             updatePendingBadge();
-            console.log('💾 Saved pending purchase:', payload);
-        } catch (e) {
-            console.error('Error saving pending purchase:', e);
-        }
+        } catch (e) { console.error('Error saving pending purchase:', e); }
     }
 
-    // ---------- Submit / Update with mode selection ----------
     async function submitPurchase() {
+        const categoryInput = document.getElementById('category').value.trim() || DEFAULT_CAT;
         const payload = {
             name: document.getElementById('name').value.trim(),
             brand: document.getElementById('brand').value.trim(),
-            category: document.getElementById('category').value.trim() || 'Accessory',
+            category: categoryInput,
             quantity: parseInt(document.getElementById('quantity').value),
             cost_price: parseFloat(document.getElementById('cost_price').value),
             discount: parseFloat(document.getElementById('discount').value) || 0,
@@ -1355,13 +1179,16 @@
             return;
         }
 
-        let updateMode = 'auto';
+        if (!isInGroup(payload.category) && !editMode) {
+            if (!confirm(`⚠️ Category "${payload.category}" is not part of "${GROUP_LABEL}".\n\nSaving it here will store the row, but it will NOT appear on this page (it will appear on the other page's list).\n\nUse one of: ${ALLOWED_CATS.join(', ')}\n\nContinue anyway?`)) {
+                return;
+            }
+        }
+
         if (editMode && editBatchId) {
             const purchase = currentPurchases.find(p => p.batch_id === editBatchId);
             if (purchase) {
-                // ✅ REAL sold count for oversell checks
                 const soldQty = getRealSold(purchase);
-                // ✅ New remaining using the delta rule (matches server)
                 const newRemaining = computeNewRemaining(purchase, payload.quantity);
                 const newQty = payload.quantity;
 
@@ -1395,44 +1222,24 @@
             }
         }
 
-        // ============================================================
-        // ✅ FIX: In edit mode, default to 'update' (in-place). The Update
-        //    Mode modal is the ONLY path to 'create'. Previously this
-        //    passed 'auto', which could still hit the server's create
-        //    branch if the price changed and the user somehow bypassed
-        //    the modal.
-        // ============================================================
         await doSubmitPurchase(payload, editMode ? 'update' : 'add', editBatchId);
     }
 
-    // ---------- Core submit logic (Dexie-first) ----------
     async function doSubmitPurchase(payload, actionType, batchId) {
-        // ============================================================
-        // FIX: stamp the user's explicit modal choice onto the payload
-        // BEFORE it is written to pending_ops.
-        // ============================================================
         if (actionType === 'update') {
             payload.update_mode = 'update';
         } else if (actionType === 'create') {
             payload.update_mode = 'create';
-            if (payload.keep_sold_with_old === undefined) {
-                payload.keep_sold_with_old = true;
-            }
+            if (payload.keep_sold_with_old === undefined) payload.keep_sold_with_old = true;
         } else if (actionType === 'auto' && batchId) {
             payload.update_mode = 'auto';
         }
 
-        // ============================================================
-        // ✅ FIX: Stamp numeric batch_id as a redundant route hint so
-        //    sync.js's safety net can rescue a mis-routed op even if
-        //    op.operation ever reads as 'add'.
-        // ============================================================
         if ((actionType === 'update' || actionType === 'auto' || actionType === 'create') &&
             batchId && /^\d+$/.test(String(batchId))) {
             payload.batch_id = parseInt(batchId, 10);
         }
 
-        // Always attempt to save locally via Dexie + queue
         if (db) {
             try {
                 let localBatchId = batchId;
@@ -1443,30 +1250,20 @@
                     if (!product) {
                         const newProductId = 'prod_' + Date.now();
                         await db.products.add({
-                            id: newProductId,
-                            name: payload.name,
-                            brand: payload.brand,
-                            category: payload.category,
-                            cost_price: payload.cost_price,
-                            selling_price: payload.selling_price,
-                            stock: payload.quantity,
+                            id: newProductId, name: payload.name, brand: payload.brand,
+                            category: payload.category, cost_price: payload.cost_price,
+                            selling_price: payload.selling_price, stock: payload.quantity,
                             discount: payload.discount
                         });
                         product = { id: newProductId };
                     }
                     await db.batches.add({
-                        id: tempId,
-                        product_id: product.id,
-                        quantity: payload.quantity,
-                        remaining_quantity: payload.quantity,
-                        cost_price: payload.cost_price,
-                        selling_price: payload.selling_price,
-                        discount: payload.discount,
-                        date: new Date().toISOString(),
-                        action: 'added',
-                        source: payload.source || 'Unknown',
-                        claimed_quantity: 0,
-                        sold_quantity: 0,
+                        id: tempId, product_id: product.id,
+                        quantity: payload.quantity, remaining_quantity: payload.quantity,
+                        cost_price: payload.cost_price, selling_price: payload.selling_price,
+                        discount: payload.discount, date: new Date().toISOString(),
+                        action: 'added', source: payload.source || 'Unknown',
+                        claimed_quantity: 0, sold_quantity: 0,
                         original_quantity: payload.quantity,
                         original_date: new Date().toISOString(),
                         original_cost_price: payload.cost_price,
@@ -1477,16 +1274,8 @@
                 } else if (actionType === 'update' || actionType === 'auto') {
                     const oldBatch = await db.batches.get(batchId);
                     if (!oldBatch) throw new Error('Batch not found locally');
-
-                    // ✅ Mirror the server's in-place update rule exactly:
-                    //      new_remaining = old_remaining + (new_quantity − old_quantity)
-                    //    NOT `new_quantity − sold`. The delta form preserves the
-                    //    correct remaining for stock-moved batches (which have
-                    //    remaining=0 but no real sales), preventing the previous
-                    //    resurrection bug that double-counted inventory.
                     const delta = (parseInt(payload.quantity, 10) || 0) - (parseInt(oldBatch.quantity, 10) || 0);
                     const newRemaining = Math.max((parseInt(oldBatch.remaining_quantity, 10) || 0) + delta, 0);
-
                     await db.batches.update(batchId, {
                         quantity: payload.quantity,
                         remaining_quantity: newRemaining,
@@ -1504,13 +1293,10 @@
                     record_id: localBatchId,
                     payload: payload,
                     timestamp: new Date().toISOString(),
-                    attempts: 0,
-                    synced: 0
+                    attempts: 0, synced: 0
                 });
 
-                if (navigator.onLine) {
-                    await pushPending();
-                }
+                if (navigator.onLine) await pushPending();
 
                 alert('Purchase saved locally' + (navigator.onLine ? ' and synced.' : '. Will sync when online.'));
                 resetForm();
@@ -1524,7 +1310,6 @@
             }
         }
 
-        // Fallback: use API (if no Dexie)
         try {
             let url = '/api/purchases';
             let method = 'POST';
@@ -1544,7 +1329,7 @@
             }
             const data = await res.json();
             if (data.success) {
-                alert(editMode ? '✅ Accessory purchase updated!' : '✅ Accessory purchase added!');
+                alert(editMode ? `✅ ${GROUP_LABEL} purchase updated!` : `✅ ${GROUP_LABEL} purchase added!`);
                 resetForm();
                 editMode = false;
                 editBatchId = null;
@@ -1554,14 +1339,6 @@
             }
         } catch (error) {
             console.warn('Network error, saving purchase offline:', error);
-
-            // ============================================================
-            // ✅ FIX: Preserve the user's actual choice on offline fallback.
-            //    Previously 'create' was silently downgraded to 'update',
-            //    discarding the user's modal selection. Now we stamp the
-            //    mode AND batch_id so the queued op routes correctly when
-            //    the network returns.
-            // ============================================================
             if (actionType === 'create') {
                 payload.update_mode = 'create';
                 if (payload.keep_sold_with_old === undefined) payload.keep_sold_with_old = true;
@@ -1573,10 +1350,6 @@
             if (batchId && /^\d+$/.test(String(batchId))) {
                 payload.batch_id = parseInt(batchId, 10);
             }
-
-            // Queue as 'update' op when a numeric batchId exists — sync.js
-            // will then PUT with the correct update_mode. For a brand-new
-            // 'add' with no id, queue as 'add' against a temp id.
             const queuedOp = (actionType === 'add' && !batchId) ? 'add' : 'update';
             await savePendingPurchase(payload, queuedOp, batchId);
             updatePendingBadge();
@@ -1636,11 +1409,10 @@
             alert(`❌ Batch #${batchId} not found. It may have been deleted.`);
             return;
         }
-        // ✅ REAL sold count for form title
         const soldQty = getRealSold(purchase);
         document.getElementById('name').value = purchase.name || '';
         document.getElementById('brand').value = purchase.brand || '';
-        document.getElementById('category').value = purchase.category || 'Accessory';
+        document.getElementById('category').value = purchase.category || DEFAULT_CAT;
         document.getElementById('quantity').value = purchase.quantity || '';
         document.getElementById('cost_price').value = purchase.cost_price || '';
         document.getElementById('discount').value = purchase.discount || 0;
@@ -1650,14 +1422,14 @@
         editMode = true;
         editBatchId = batchId;
 
-        document.getElementById('formTitle').innerHTML = `✏️ Update Accessory Purchase <span class="bg-green-100 text-green-800 text-xs font-semibold px-2.5 py-0.5 rounded">Accessories</span> ${soldQty > 0 ? `<span class="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded ml-2">📊 ${soldQty} Sold</span>` : ''}`;
-        document.getElementById('submitBtn').innerHTML = '✏️ Update Accessory Purchase';
+        document.getElementById('formTitle').innerHTML = `✏️ Update ${GROUP_LABEL} Purchase <span class="bg-[#E8F5E9] text-[#1B5E20] text-xs font-semibold px-2.5 py-0.5 rounded">${GROUP_BADGE}</span> ${soldQty > 0 ? `<span class="text-xs bg-[#E8F5E9] text-[#1B5E20] px-2 py-0.5 rounded ml-2">📊 ${soldQty} Sold</span>` : ''}`;
+        document.getElementById('submitBtn').innerHTML = `✏️ Update ${GROUP_LABEL} Purchase`;
         document.getElementById('cancelBtn').classList.remove('hidden');
 
         const form = document.querySelector('.bg-white.rounded-xl.shadow-md.p-6.mb-6');
         if (form) {
             form.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            form.style.border = '3px solid #f59e0b';
+            form.style.border = '3px solid #2E7D32';
             form.style.transition = 'border-color 0.5s';
             setTimeout(() => { form.style.border = 'none'; }, 3000);
         }
@@ -1666,7 +1438,7 @@
     function resetForm() {
         document.getElementById('name').value = '';
         document.getElementById('brand').value = '';
-        document.getElementById('category').value = 'Accessory';
+        document.getElementById('category').value = DEFAULT_CAT;
         document.getElementById('quantity').value = '';
         document.getElementById('cost_price').value = '';
         document.getElementById('discount').value = '';
@@ -1674,18 +1446,16 @@
         document.getElementById('source').value = '';
         editMode = false;
         editBatchId = null;
-        document.getElementById('formTitle').innerHTML = '➕ Add Accessory Purchase <span class="bg-green-100 text-green-800 text-xs font-semibold px-2.5 py-0.5 rounded">Accessories</span>';
-        document.getElementById('submitBtn').innerHTML = '➕ Add Accessory Purchase';
+        document.getElementById('formTitle').innerHTML = `➕ Add ${GROUP_LABEL} Purchase <span class="bg-[#E8F5E9] text-[#1B5E20] text-xs font-semibold px-2.5 py-0.5 rounded">${GROUP_BADGE}</span>`;
+        document.getElementById('submitBtn').innerHTML = `➕ Add ${GROUP_LABEL} Purchase`;
         document.getElementById('cancelBtn').classList.add('hidden');
         const form = document.querySelector('.bg-white.rounded-xl.shadow-md.p-6.mb-6');
         if (form) form.style.border = 'none';
         if (window.history && window.history.pushState) {
-            const newUrl = window.location.pathname;
-            window.history.pushState({}, '', newUrl);
+            window.history.pushState({}, '', window.location.pathname);
         }
     }
 
-    // ---------- Clear filters ----------
     function clearFilters() {
         document.getElementById('fromDate').value = '';
         document.getElementById('toDate').value = '';
@@ -1697,7 +1467,6 @@
         loadPurchases(true);
     }
 
-    // ========== FILTER FUNCTION ==========
     async function filterPurchases() {
         let fromDate = document.getElementById('fromDate').value;
         let toDate = document.getElementById('toDate').value;
@@ -1719,9 +1488,8 @@
                 return d >= from && d <= to;
             });
         }
-        if (showUpdatedOnly) {
-            filtered = filtered.filter(p => p.action !== 'added');
-        }
+        if (showUpdatedOnly) filtered = filtered.filter(p => p.action !== 'added');
+
         const keyword = document.getElementById('searchInput').value.trim();
         if (keyword) {
             const isBatchSearch = /^#?\d+$/.test(keyword);
@@ -1744,7 +1512,6 @@
         document.getElementById('clearSearchBtn').classList.add('hidden');
     }
 
-    // ---------- PDF ----------
     async function generatePDF() {
         if (!navigator.onLine) {
             alert('PDF generation requires internet. Please connect and try again.');
@@ -1758,16 +1525,8 @@
             return;
         }
 
-        let totalQty = 0,
-            totalCost = 0,
-            totalDiscount = 0,
-            totalSelling = 0,
-            totalProfit = 0,
-            totalCapital = 0;
-        let totalClaimed = 0,
-            totalClaimedCost = 0,
-            totalRemaining = 0,
-            totalSold = 0;
+        let totalQty = 0, totalCost = 0, totalDiscount = 0, totalSelling = 0, totalProfit = 0;
+        let totalClaimed = 0, totalClaimedCost = 0, totalRemaining = 0, totalSold = 0;
         purchasesToExport.forEach(p => {
             const itemQty = p.quantity || 0;
             const remainingQty = p.remaining_quantity || 0;
@@ -1775,7 +1534,6 @@
             const itemSelling = p.selling_price || 0;
             const itemDiscount = p.discount || 0;
             const claimed = p.claimed_quantity || 0;
-            // ✅ REAL sold count
             const sold = getRealSold(p);
             totalQty += itemQty;
             totalRemaining += remainingQty;
@@ -1785,8 +1543,7 @@
             totalSelling += itemSelling * itemQty;
             totalClaimed += claimed;
             totalClaimedCost += claimed * itemCost;
-            const itemProfit = (itemSelling - itemCost) * itemQty - itemDiscount;
-            totalProfit += itemProfit;
+            totalProfit += (itemSelling - itemCost) * itemQty - itemDiscount;
         });
         const adjustedCapital = totalCost - totalClaimedCost;
         const soldPercentage = totalQty > 0 ? ((totalSold / totalQty) * 100) : 0;
@@ -1828,7 +1585,7 @@
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `Purchases_Accessories_${new Date().toISOString().slice(0, 19)}.pdf`;
+            a.download = `Purchases_${GROUP}_${new Date().toISOString().slice(0, 19)}.pdf`;
             document.body.appendChild(a);
             a.click();
             a.remove();
@@ -1839,7 +1596,6 @@
         }
     }
 
-    // ---------- SUGGESTIONS (with category exclusion) ----------
     let nameTimeout, brandTimeout, catTimeout, sourceTimeout;
 
     async function fetchProductSuggestions(inputId, suggestionsId) {
@@ -1853,22 +1609,21 @@
             return;
         }
         try {
-            const res = await fetch(
-                `/api/purchases/suggestions/product?q=${encodeURIComponent(q)}&exclude_category=Screen`);
+            const res = await fetch(`/api/purchases/suggestions/product?q=${encodeURIComponent(q)}`);
             if (!res.ok) throw new Error();
-            const suggestions = await res.json();
+            const raw = await res.json();
+            const suggestions = (raw || []).filter(s => isInGroup(s.category));
             const box = document.getElementById(suggestionsId);
-            if (!suggestions || suggestions.length === 0) {
+            if (suggestions.length === 0) {
                 box.classList.add('hidden');
                 return;
             }
             box.innerHTML = suggestions.map(s => `
-                    <div class="px-3 py-1.5 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-0 text-sm" 
-                         onclick="selectProductSuggestion('${escapeHtml(s.name)}', '${escapeHtml(s.brand)}', '${escapeHtml(s.category)}')">
-                        <div class="font-medium">${escapeHtml(s.name)}</div>
-                        <div class="text-xs text-gray-500">${escapeHtml(s.brand)}${s.category ? ` · ${escapeHtml(s.category)}` : ''}</div>
-                    </div>
-                `).join('');
+                <div class="px-3 py-1.5 hover:bg-[#E8F5E9] cursor-pointer border-b border-gray-100 last:border-0 text-sm"
+                     onclick="selectProductSuggestion('${escapeHtml(s.name)}', '${escapeHtml(s.brand)}', '${escapeHtml(s.category)}')">
+                    <div class="font-medium">${escapeHtml(s.name)}</div>
+                    <div class="text-xs text-gray-500">${escapeHtml(s.brand)}${s.category ? ` · ${escapeHtml(s.category)}` : ''}</div>
+                </div>`).join('');
             box.classList.remove('hidden');
             const rect = document.getElementById(inputId).getBoundingClientRect();
             box.style.top = rect.bottom + window.scrollY + 'px';
@@ -1882,35 +1637,24 @@
     window.selectProductSuggestion = function(name, brand, category) {
         document.getElementById('name').value = name;
         document.getElementById('brand').value = brand;
-        document.getElementById('category').value = category || 'Accessory';
+        document.getElementById('category').value = category || DEFAULT_CAT;
         document.getElementById('nameSuggestions').classList.add('hidden');
         document.getElementById('brandSuggestions').classList.add('hidden');
     };
 
     async function fetchCategorySuggestions() {
-        if (!navigator.onLine) {
-            document.getElementById('categorySuggestions').classList.add('hidden');
-            return;
-        }
-        const q = document.getElementById('category').value.trim();
-        if (!q) { document.getElementById('categorySuggestions').classList.add('hidden'); return; }
-        try {
-            const res = await fetch(`/api/purchases/suggestions/category?q=${encodeURIComponent(q)}&exclude_category=Screen`);
-            if (!res.ok) throw new Error();
-            const suggestions = await res.json();
-            const box = document.getElementById('categorySuggestions');
-            if (!suggestions || suggestions.length === 0) { box.classList.add('hidden'); return; }
-            box.innerHTML = suggestions.map(s =>
-                    `<div class="px-3 py-1 hover:bg-gray-100 cursor-pointer" onclick="selectCategorySuggestion('${escapeHtml(s.category)}')">${escapeHtml(s.category)}</div>`
-                ).join('');
-            box.classList.remove('hidden');
-            const rect = document.getElementById('category').getBoundingClientRect();
-            box.style.top = rect.bottom + window.scrollY + 'px';
-            box.style.left = rect.left + 'px';
-            box.style.width = rect.width + 'px';
-        } catch (err) {
-            document.getElementById('categorySuggestions').classList.add('hidden');
-        }
+        const q = document.getElementById('category').value.trim().toLowerCase();
+        const matches = ALLOWED_CATS.filter(c => !q || c.toLowerCase().includes(q));
+        const box = document.getElementById('categorySuggestions');
+        if (matches.length === 0) { box.classList.add('hidden'); return; }
+        box.innerHTML = matches.map(c =>
+            `<div class="px-3 py-1 hover:bg-[#E8F5E9] cursor-pointer" onclick="selectCategorySuggestion('${escapeHtml(c)}')">${escapeHtml(c)}</div>`
+        ).join('');
+        box.classList.remove('hidden');
+        const rect = document.getElementById('category').getBoundingClientRect();
+        box.style.top = rect.bottom + window.scrollY + 'px';
+        box.style.left = rect.left + 'px';
+        box.style.width = rect.width + 'px';
     }
 
     async function fetchSourceSuggestions() {
@@ -1927,8 +1671,8 @@
             const box = document.getElementById('sourceSuggestions');
             if (!suggestions || suggestions.length === 0) { box.classList.add('hidden'); return; }
             box.innerHTML = suggestions.map(s =>
-                    `<div class="px-3 py-1 hover:bg-gray-100 cursor-pointer" onclick="selectSourceSuggestion('${escapeHtml(s.source)}')">${escapeHtml(s.source)}</div>`
-                ).join('');
+                `<div class="px-3 py-1 hover:bg-[#E8F5E9] cursor-pointer" onclick="selectSourceSuggestion('${escapeHtml(s.source)}')">${escapeHtml(s.source)}</div>`
+            ).join('');
             box.classList.remove('hidden');
             const rect = document.getElementById('source').getBoundingClientRect();
             box.style.top = rect.bottom + window.scrollY + 'px';
@@ -1943,17 +1687,19 @@
         document.getElementById('category').value = cat;
         document.getElementById('categorySuggestions').classList.add('hidden');
     };
-
     window.selectSourceSuggestion = function(source) {
         document.getElementById('source').value = source;
         document.getElementById('sourceSuggestions').classList.add('hidden');
     };
 
-    // ---------- Event listeners ----------
     document.addEventListener('DOMContentLoaded', function() {
-        initSummaryToggle();
+        document.getElementById('formTitle').innerHTML = `➕ Add ${GROUP_LABEL} Purchase <span class="bg-[#E8F5E9] text-[#1B5E20] text-xs font-semibold px-2.5 py-0.5 rounded">${GROUP_BADGE}</span>`;
+        document.getElementById('formGroupBadge').textContent = GROUP_BADGE;
+        document.getElementById('submitBtn').innerHTML = `➕ Add ${GROUP_LABEL} Purchase`;
+        document.getElementById('category').value = DEFAULT_CAT;
+        document.getElementById('category').placeholder = `e.g. ${ALLOWED_CATS.slice(0, 2).join(', ')}`;
 
-        // ✅ Kick off the load (loading state already visible in HTML + showLoadingState)
+        initSummaryToggle();
         loadPurchases();
         if (typeof updatePendingBadge === 'function') updatePendingBadge();
 
@@ -1967,9 +1713,7 @@
         document.getElementById('advancedToggle').addEventListener('click', function() {
             document.getElementById('advancedSearch').classList.toggle('hidden');
         });
-        document.getElementById('applyAdvancedSearch').addEventListener('click', function() {
-            applyAdvancedSearch();
-        });
+        document.getElementById('applyAdvancedSearch').addEventListener('click', applyAdvancedSearch);
         document.getElementById('clearSearchBtn').addEventListener('click', function() {
             document.getElementById('searchInput').value = '';
             this.classList.add('hidden');
@@ -1993,10 +1737,14 @@
             clearTimeout(brandTimeout);
             brandTimeout = setTimeout(() => fetchProductSuggestions('brand', 'brandSuggestions'), 300);
         });
-        document.getElementById('category').addEventListener('input', () => { clearTimeout(catTimeout);
-            catTimeout = setTimeout(fetchCategorySuggestions, 300); });
-        document.getElementById('source').addEventListener('input', () => { clearTimeout(sourceTimeout);
-            sourceTimeout = setTimeout(fetchSourceSuggestions, 300); });
+        document.getElementById('category').addEventListener('input', () => {
+            clearTimeout(catTimeout);
+            catTimeout = setTimeout(fetchCategorySuggestions, 300);
+        });
+        document.getElementById('source').addEventListener('input', () => {
+            clearTimeout(sourceTimeout);
+            sourceTimeout = setTimeout(fetchSourceSuggestions, 300);
+        });
 
         document.addEventListener('click', function(e) {
             if (!e.target.closest('#name')) document.getElementById('nameSuggestions').classList.add('hidden');
@@ -2008,7 +1756,6 @@
 
     window.addEventListener('online', function() { loadPurchases(true); });
 
-    // Expose functions for inline onclick
     window.viewPurchaseHistory = viewPurchaseHistory;
     window.closeHistoryModal = closeHistoryModal;
     window.toggleUpdateHistory = toggleUpdateHistory;

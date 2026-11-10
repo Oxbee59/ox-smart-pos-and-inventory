@@ -5,12 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>OX Smart POS</title>
 
-    <!-- ===== EARLY THEME (prevents white flash on dark theme) ===== -->
+    <!-- ===== EARLY THEME ===== -->
     <style>
-        html[data-theme="dark"] { background: #0f172a; }
+        html[data-theme="dark"] { background: #08120a; }
+        :root {
+            --brand-primary: #1B5E20;
+            --brand-dark: #0D2B1D;
+            --brand-light: #E8F5E9;
+            --brand-gold: #F1C40F;
+        }
     </style>
     <script>
-        // Global settings + theme helper. Must run before any CSS paints.
         window.APP_SETTINGS = {
             theme:          '{{ (settings.theme if settings else "light")|e }}',
             currencySymbol: '{{ (settings.currency_symbol if settings else "₵")|e }}',
@@ -35,7 +40,7 @@
 
     <!-- ===== PWA MANIFEST & THEME ===== -->
     <link rel="manifest" href="/static/manifest.json">
-    <meta name="theme-color" content="#00CFCF">
+    <meta name="theme-color" content="#1B5E20">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
@@ -65,7 +70,7 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body { height: 100%; }
         body {
-            background: #f3f4f6;
+            background: #F4F9F4;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             overflow: hidden;
             transition: background 0.2s ease, color 0.2s ease;
@@ -75,10 +80,12 @@
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
 
         /* === SIDEBAR === */
-        .nav-link { transition: all 0.2s ease; }
-        .nav-link:hover { background-color: #334155; }
-        .nav-link.active { background-color: #00CFCF; color: #0f172a; }
-        .dropdown-toggle { cursor: pointer; user-select: none; }
+        .nav-link { transition: all 0.2s ease; border-radius: 8px; color: #E8F5E9; }
+        .nav-link:hover { background-color: #1A3F2B; color: #ffffff; }
+        .nav-link.active { background-color: #2E7D32; color: white; font-weight: 600; }
+        
+        .dropdown-toggle { cursor: pointer; user-select: none; border-radius: 8px; transition: all 0.2s; color: #E8F5E9; }
+        .dropdown-toggle:hover { background-color: #1A3F2B; color: white; }
         .dropdown-toggle i.fa-chevron-down { transition: transform 0.2s ease; }
         .dropdown-toggle.open i.fa-chevron-down { transform: rotate(180deg); }
         .dropdown-menu { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
@@ -90,8 +97,8 @@
             padding: 1px 6px; border-radius: 10px; margin-left: 4px;
         }
         .sysadmin-badge {
-            background: linear-gradient(135deg, #f59e0b, #d97706);
-            color: white; font-size: 0.55rem; padding: 1px 8px;
+            background: linear-gradient(135deg, #F1C40F, #d97706);
+            color: #0D2B1D; font-size: 0.55rem; padding: 1px 8px;
             border-radius: 10px; margin-left: 4px; font-weight: 700;
             text-transform: uppercase; letter-spacing: 0.5px;
             border: 1px solid #fbbf24;
@@ -102,18 +109,35 @@
         .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 40; }
         .sidebar-overlay.active { display: block; }
         .sidebar {
-            position: fixed; top: 0; left: 0; width: 240px; height: 100vh;
-            z-index: 50; background: #1E293B;
+            position: fixed; top: 0; left: 0; width: 260px; height: 100vh;
+            z-index: 50; background: #0D2B1D;
             box-shadow: 4px 0 15px rgba(0,0,0,0.2);
             overflow-y: auto; flex-shrink: 0;
             transition: transform 0.3s ease; transform: translateX(-100%);
         }
         .sidebar.open { transform: translateX(0); }
 
+        /* Logo Typography */
+        .brand-title {
+            font-family: 'Georgia', serif;
+            color: #F1C40F;
+            text-align: center;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+        .brand-sub {
+            color: #ffffff;
+            font-family: 'Georgia', serif;
+            font-style: italic;
+            font-size: 0.8rem;
+            text-align: center;
+            opacity: 0.9;
+        }
+
         @media (min-width: 768px) {
             .sidebar {
                 position: relative; transform: translateX(0) !important;
-                width: 224px; min-height: 100vh; height: 100%;
+                width: 240px; min-height: 100vh; height: 100%;
                 border-radius: 0 1.5rem 1.5rem 0; flex-shrink: 0;
             }
             .sidebar-overlay { display: none !important; }
@@ -135,7 +159,7 @@
             background: none; border: none; cursor: pointer; padding: 8px;
             color: #1E293B; font-size: 1.5rem;
         }
-        .hamburger-btn:hover { color: #00CFCF; }
+        .hamburger-btn:hover { color: #2E7D32; }
         .sidebar-close-btn {
             position: absolute; top: 12px; right: 12px;
             background: none; border: none; color: #94a3b8; font-size: 1.5rem;
@@ -143,12 +167,12 @@
         }
         .sidebar-close-btn:hover { color: white; background: #334155; }
 
-        /* ===== TOP BAR (always visible) ===== */
+        /* ===== TOP BAR ===== */
         .topbar {
             display: flex; align-items: center; gap: 10px;
             padding: 8px 12px;
             background: #ffffff;
-            border-bottom: 1px solid #e5e7eb;
+            border-bottom: 1px solid #C8E6C9;
             position: sticky; top: 0; z-index: 30;
             flex-shrink: 0;
             box-shadow: 0 1px 2px rgba(0,0,0,0.03);
@@ -156,7 +180,7 @@
         }
         .topbar-brand { flex: 1; min-width: 0; }
         .topbar-brand h1 {
-            font-size: 1.05rem; font-weight: 700; color: #4f46e5;
+            font-size: 1.1rem; font-weight: 700; color: #1B5E20;
             margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
         .topbar-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
@@ -169,14 +193,14 @@
         .notif-wrapper { position: relative; }
         .notif-bell {
             position: relative;
-            background: #f1f5f9; border: 0;
+            background: #E8F5E9; border: 0;
             width: 40px; height: 40px; border-radius: 10px;
-            cursor: pointer; color: #475569; font-size: 17px;
+            cursor: pointer; color: #1B5E20; font-size: 17px;
             transition: background 0.15s, color 0.15s;
             display: flex; align-items: center; justify-content: center;
         }
-        .notif-bell:hover { background: #e2e8f0; color: #0f172a; }
-        .notif-bell.active { background: #e0f2fe; color: #0369a1; }
+        .notif-bell:hover { background: #C8E6C9; color: #0D2B1D; }
+        .notif-bell.active { background: #A5D6A7; color: #0D2B1D; }
         .notif-bell.ring { animation: bell-ring 0.7s ease-in-out; }
         @keyframes bell-ring {
             0%, 100% { transform: rotate(0); }
@@ -218,7 +242,7 @@
             display: flex; align-items: center; gap: 8px;
         }
         .notif-header-title .count {
-            background: #e0f2fe; color: #0369a1;
+            background: #E8F5E9; color: #1B5E20;
             font-size: 0.7rem; padding: 1px 7px; border-radius: 8px; font-weight: 600;
         }
         .notif-clear {
@@ -245,11 +269,11 @@
         }
         .notif-item:hover { background: #f8fafc; }
         .notif-item:last-child { border-bottom: 0; }
-        .notif-item.unread { background: #f0f9ff; }
-        .notif-item.unread:hover { background: #e0f2fe; }
+        .notif-item.unread { background: #F4F9F4; }
+        .notif-item.unread:hover { background: #E8F5E9; }
         .notif-item.unread::before {
             content: ''; position: absolute; left: 0; top: 12px; bottom: 12px;
-            width: 3px; background: #00CFCF; border-radius: 0 3px 3px 0;
+            width: 3px; background: #2E7D32; border-radius: 0 3px 3px 0;
         }
 
         .notif-icon {
@@ -281,7 +305,7 @@
         }
         .notif-progress-fill {
             height: 100%;
-            background: linear-gradient(90deg, #00CFCF, #0ea5e9);
+            background: linear-gradient(90deg, #1B5E20, #4CAF50);
             border-radius: 2px; transition: width 0.5s ease; width: 0;
         }
 
@@ -299,19 +323,19 @@
             .notif-dropdown { width: calc(100vw - 16px); right: -4px; }
         }
 
-        /* ===== USER CHIP (clickable) ===== */
+        /* ===== USER CHIP ===== */
         .user-chip {
             display: flex; align-items: center; gap: 6px;
-            padding: 6px 10px; background: #f1f5f9;
+            padding: 6px 10px; background: #E8F5E9;
             border-radius: 10px; font-size: 0.8rem;
-            color: #334155; font-weight: 500; white-space: nowrap;
+            color: #1B5E20; font-weight: 600; white-space: nowrap;
             text-decoration: none;
             cursor: pointer;
             transition: background 0.15s, color 0.15s, transform 0.1s;
         }
-        .user-chip:hover  { background: #e2e8f0; color: #0f172a; }
+        .user-chip:hover  { background: #C8E6C9; color: #0D2B1D; }
         .user-chip:active { transform: scale(0.97); }
-        .user-chip i { color: #00CFCF; font-size: 1.1rem; }
+        .user-chip i { color: #2E7D32; font-size: 1.1rem; }
         @media (max-width: 480px) {
             .user-chip span { display: none; }
             .user-chip { padding: 6px 8px; }
@@ -330,21 +354,21 @@
 
         /* === FOOTER === */
         footer {
-            background: #1E293B; color: #9ca3af;
+            background: #0D2B1D; color: #A5D6A7;
             text-align: center; padding: 4px 8px;
             font-size: 0.55rem; flex-shrink: 0;
-            border-top: 1px solid #334155;
+            border-top: 1px solid #1A3F2B;
             line-height: 1.4; font-weight: 500; z-index: 5;
         }
-        footer a { color: #6b8cae; text-decoration: underline; font-weight: 600; }
+        footer a { color: #F1C40F; text-decoration: underline; font-weight: 600; }
         footer a:hover { color: #ffffff; }
 
         .settings-link { border-left: 3px solid transparent; transition: all 0.3s ease; }
-        .settings-link:hover { border-left-color: #f59e0b; }
-        .settings-link i { color: #f59e0b; }
+        .settings-link:hover { border-left-color: #F1C40F; background: #1A3F2B; }
+        .settings-link i { color: #F1C40F; }
         .settings-link .settings-badge {
-            background: linear-gradient(135deg, #f59e0b, #d97706);
-            color: white; font-size: 0.5rem; padding: 1px 6px;
+            background: linear-gradient(135deg, #F1C40F, #d97706);
+            color: #0D2B1D; font-size: 0.5rem; padding: 1px 6px;
             border-radius: 8px; margin-left: auto;
             font-weight: 700; text-transform: uppercase;
         }
@@ -371,7 +395,7 @@
             border-radius: 0.5rem; cursor: pointer; font-weight: 600;
         }
         .install-modal-box .btn-row .cancel-btn { background: #e5e7eb; color: #1f2937; }
-        .install-modal-box .btn-row .confirm-btn { background: #00CFCF; color: white; }
+        .install-modal-box .btn-row .confirm-btn { background: #1B5E20; color: white; }
         .install-modal-box .error-msg {
             color: #ef4444; font-size: 0.875rem;
             margin-top: -0.5rem; display: none;
@@ -392,14 +416,14 @@
             text-align: center; color: #1f2937;
             box-shadow: 0 30px 80px rgba(0,0,0,0.5);
         }
-        .pin-lock-box h2 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem; color: #00CFCF; }
+        .pin-lock-box h2 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem; color: #1B5E20; }
         .pin-lock-box p { color: #6b7280; font-size: 0.9rem; margin-bottom: 1.5rem; }
         .pin-dots { display: flex; gap: 0.75rem; justify-content: center; margin: 1.5rem 0; }
         .pin-dot {
             width: 16px; height: 16px; border-radius: 50%;
             border: 2px solid #d1d5db; background: white; transition: all 0.2s;
         }
-        .pin-dot.filled { background: #00CFCF; border-color: #00CFCF; }
+        .pin-dot.filled { background: #1B5E20; border-color: #1B5E20; }
         .pin-error { color: #ef4444; font-size: 0.875rem; min-height: 1.5rem; margin-bottom: 0.5rem; }
         .pin-keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-top: 1rem; }
         .pin-key {
@@ -415,110 +439,48 @@
 
         /* ============================================================
            DARK THEME OVERRIDES
-           Applied when <body class="dark-theme"> (set by applyAppTheme)
            ============================================================ */
-        body.dark-theme { background: #0f172a !important; color: #e2e8f0 !important; }
+        body.dark-theme { background: #08120a !important; color: #e2e8f0 !important; }
 
         body.dark-theme .topbar {
-            background: #1e293b !important;
-            border-color: #334155 !important;
+            background: #0D2B1D !important;
+            border-color: #1A3F2B !important;
         }
-        body.dark-theme .topbar-brand h1 { color: #a5b4fc !important; }
+        body.dark-theme .topbar-brand h1 { color: #A5D6A7 !important; }
         body.dark-theme .hamburger-btn   { color: #e2e8f0 !important; }
 
         body.dark-theme .notif-bell {
-            background: #334155 !important;
-            color: #cbd5e1 !important;
+            background: #1A3F2B !important;
+            color: #A5D6A7 !important;
         }
-        body.dark-theme .notif-bell:hover  { background: #475569 !important; color: #f8fafc !important; }
-        body.dark-theme .notif-bell.active { background: #0c4a6e !important; color: #bae6fd !important; }
+        body.dark-theme .notif-bell:hover  { background: #2E7D32 !important; color: #ffffff !important; }
 
-        body.dark-theme .notif-dropdown {
-            background: #1e293b !important;
-            border-color: #334155 !important;
-        }
-        body.dark-theme .notif-header {
-            background: #1e293b !important;
-            border-color: #334155 !important;
-        }
+        body.dark-theme .notif-dropdown { background: #0D2B1D !important; border-color: #1A3F2B !important; }
+        body.dark-theme .notif-header { background: #0D2B1D !important; border-color: #1A3F2B !important; }
         body.dark-theme .notif-header-title { color: #e2e8f0 !important; }
-        body.dark-theme .notif-header-title .count { background: #0c4a6e !important; color: #bae6fd !important; }
-        body.dark-theme .notif-clear { color: #94a3b8 !important; }
-        body.dark-theme .notif-clear:hover { background: #334155 !important; color: #e2e8f0 !important; }
-        body.dark-theme .notif-item        { border-color: #1e293b !important; }
-        body.dark-theme .notif-item:hover  { background: #0f172a !important; }
-        body.dark-theme .notif-item.unread { background: #0c2340 !important; }
-        body.dark-theme .notif-title       { color: #e2e8f0 !important; }
-        body.dark-theme .notif-msg         { color: #94a3b8 !important; }
-        body.dark-theme .notif-time        { color: #64748b !important; }
-        body.dark-theme .notif-icon        { background: #334155 !important; }
-        body.dark-theme .notif-progress    { background: #334155 !important; }
-        body.dark-theme .notif-close       { color: #64748b !important; }
-        body.dark-theme .notif-close:hover { background: #334155 !important; color: #e2e8f0 !important; }
-        body.dark-theme .notif-empty       { color: #64748b !important; }
-        body.dark-theme .notif-empty i     { color: #475569 !important; }
+        body.dark-theme .notif-clear:hover { background: #1A3F2B !important; }
 
         body.dark-theme .user-chip {
-            background: #334155 !important; color: #cbd5e1 !important;
+            background: #1A3F2B !important; color: #A5D6A7 !important;
         }
-        body.dark-theme .user-chip:hover {
-            background: #475569 !important; color: #f8fafc !important;
-        }
-        body.dark-theme .user-chip i { color: #67e8f9 !important; }
+        body.dark-theme .user-chip:hover { background: #2E7D32 !important; color: #ffffff !important; }
+        body.dark-theme .user-chip i { color: #F1C40F !important; }
 
-        body.dark-theme .main-content { background: #0f172a !important; }
-        body.dark-theme .mobile-header,
-        body.dark-theme footer { background: #0b1220 !important; }
+        body.dark-theme .main-content { background: #08120a !important; }
+        body.dark-theme footer { background: #051007 !important; }
 
-        /* Cards & panels */
-        body.dark-theme .bg-white,
-        body.dark-theme .bg-gray-50,
-        body.dark-theme .bg-gray-100 { background-color: #1e293b !important; color: #e2e8f0 !important; }
+        body.dark-theme .bg-white, body.dark-theme .bg-gray-50, body.dark-theme .bg-gray-100 { background-color: #0D2B1D !important; color: #e2e8f0 !important; }
+        body.dark-theme .text-gray-800, body.dark-theme .text-gray-700 { color: #e2e8f0 !important; }
+        body.dark-theme .text-gray-600, body.dark-theme .text-gray-500 { color: #94a3b8 !important; }
+        body.dark-theme .border, body.dark-theme .border-gray-100, body.dark-theme .border-gray-200 { border-color: #1A3F2B !important; }
 
-        /* Text */
-        body.dark-theme .text-gray-800,
-        body.dark-theme .text-gray-700 { color: #e2e8f0 !important; }
-        body.dark-theme .text-gray-600,
-        body.dark-theme .text-gray-500 { color: #94a3b8 !important; }
-        body.dark-theme .text-gray-400 { color: #64748b !important; }
-        body.dark-theme .text-indigo-600,
-        body.dark-theme .text-indigo-700 { color: #a5b4fc !important; }
-        body.dark-theme .text-amber-600,
-        body.dark-theme .text-amber-500 { color: #fcd34d !important; }
-
-        /* Borders */
-        body.dark-theme .border,
-        body.dark-theme .border-gray-100,
-        body.dark-theme .border-gray-200,
-        body.dark-theme .border-gray-300 { border-color: #334155 !important; }
-
-        /* Inputs */
-        body.dark-theme input,
-        body.dark-theme select,
-        body.dark-theme textarea {
-            background-color: #1e293b !important;
+        body.dark-theme input, body.dark-theme select, body.dark-theme textarea {
+            background-color: #0D2B1D !important;
             color: #e2e8f0 !important;
-            border-color: #334155 !important;
+            border-color: #1A3F2B !important;
         }
-        body.dark-theme input::placeholder { color: #64748b !important; }
-
-        /* Tables */
-        body.dark-theme table,
-        body.dark-theme th,
-        body.dark-theme td {
-            color: #e2e8f0 !important;
-            border-color: #334155 !important;
-        }
-
-        /* Shadows softened on dark background */
-        body.dark-theme .shadow,
-        body.dark-theme .shadow-sm,
-        body.dark-theme .shadow-md,
-        body.dark-theme .shadow-lg,
-        body.dark-theme .shadow-xl { box-shadow: 0 2px 12px rgba(0,0,0,0.55) !important; }
-
-        /* Sidebar stays dark in both themes */
-        body.dark-theme .sidebar { background: #0b1220 !important; }
+        body.dark-theme table, body.dark-theme th, body.dark-theme td { color: #e2e8f0 !important; border-color: #1A3F2B !important; }
+        body.dark-theme .sidebar { background: #051007 !important; }
     </style>
 </head>
 <body>
@@ -566,15 +528,18 @@
             <i class="fas fa-times"></i>
         </button>
 
-        <div class="px-4 py-5 sidebar-content">
-            <h2 class="text-xl font-bold text-white">🧾 TOMFRIMP MOBICOM</h2>
-            <p class="text-xs text-gray-400 mt-1">OX SMART INVENTORY & POS SYSTEM</p>
+        <!-- LOGO SECTION (Shop Name) -->
+        <div class="px-4 py-6 sidebar-content text-center">
+            <i class="fas fa-leaf text-4xl text-green-400 mb-2"></i>
+            <h2 class="brand-title text-xl">KRISTODEA</h2>
+            <h3 class="brand-title text-lg">- NNURO FIE</h3>
+            <p class="brand-sub mt-1">Herbs, Barks, Roots &<br>Spiritual Oils</p>
         </div>
 
         {% if current_user %}
-        <div class="mx-3 mb-4 p-2 bg-[#273449] rounded-xl">
+        <div class="mx-3 mb-4 p-2 bg-[#1A3F2B] rounded-xl border border-green-800">
             <div class="flex items-center gap-2 text-white text-sm">
-                <i class="fas fa-user-circle text-lg"></i>
+                <i class="fas fa-user-circle text-lg text-green-400"></i>
                 <span class="font-semibold truncate">{{ current_user.username }}</span>
                 {% if current_user.username.lower() == 'oxbee' %}
                 <span class="sysadmin-badge">⭐ Sys Admin</span>
@@ -583,132 +548,153 @@
                 <span class="protected-badge">Admin</span>
                 {% endif %}
             </div>
-            <div class="text-xs text-[#00CFCF] mt-1">Role: {{ current_user.role }}</div>
+            <div class="text-xs text-green-400 mt-1 capitalize">Role: {{ current_user.role }}</div>
         </div>
         {% endif %}
 
-        <nav class="flex-1 px-2 space-y-1 overflow-y-auto pb-4">
+        <nav class="flex-1 px-3 space-y-1 overflow-y-auto pb-4">
             {% if current_user and current_user.role == 'admin' %}
-            <a href="/" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
-                <i class="fas fa-tachometer-alt w-5"></i> Dashboard
+            <a href="/" class="nav-link flex items-center gap-3 px-3 py-2 text-green-100 hover:text-white transition text-sm">
+                <i class="fas fa-home w-5 text-center"></i> Dashboard
             </a>
             {% endif %}
 
-            <a href="/sales" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
-                <i class="fas fa-cash-register w-5"></i> Sales (Accessories)
-            </a>
-            <a href="/products" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
-                <i class="fas fa-boxes w-5"></i> Products (Accessories)
-            </a>
-            <a href="/today-sales" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
-                <i class="fas fa-chart-line w-5"></i> Today's Sales (Accessories)
+            <!-- ============================================================ -->
+            <!-- SECTION: SALES  (flat link = Others / dropdown = Oils)       -->
+            <!-- ============================================================ -->
+            <a href="/sales" class="nav-link flex items-center gap-3 px-3 py-2 text-green-100 hover:text-white transition text-sm mt-1">
+                <i class="fas fa-cash-register w-5 text-center"></i> Sales
+                <span class="text-[10px] text-green-400 ml-auto font-medium">Roots &amp; Barks</span>
             </a>
 
-            {% if current_user and current_user.role == 'admin' %}
-            <a href="/analytics" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
-                <i class="fas fa-chart-pie w-5"></i> Analytics
+            <!-- ============================================================ -->
+            <!-- SECTION: PRODUCTS                                            -->
+            <!-- ============================================================ -->
+            <a href="/products" class="nav-link flex items-center gap-3 px-3 py-2 text-green-100 hover:text-white transition text-sm">
+                <i class="fas fa-boxes w-5 text-center"></i> Products
+                <span class="text-[10px] text-green-400 ml-auto font-medium">Roots &amp; Barks</span>
             </a>
-            <a href="/archive" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
-                <i class="fas fa-archive w-5"></i> Archive
-            </a>
-            {% endif %}
 
+            <!-- ============================================================ -->
+            <!-- SECTION: TODAY'S SALES                                       -->
+            <!-- ============================================================ -->
+            <a href="/today-sales" class="nav-link flex items-center gap-3 px-3 py-2 text-green-100 hover:text-white transition text-sm">
+                <i class="fas fa-chart-line w-5 text-center"></i> Today's Sales
+                <span class="text-[10px] text-green-400 ml-auto font-medium">Roots &amp; Barks</span>
+            </a>
+
+            <!-- ============================================================ -->
+            <!-- OILS DROPDOWN  (Sales Oils / Products Oils / Today's Sales)  -->
+            <!-- ============================================================ -->
             <div class="mt-2">
-                <div class="dropdown-toggle flex items-center justify-between px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm" onclick="toggleDropdown(this)">
+                <div class="dropdown-toggle flex items-center justify-between px-3 py-2 text-green-100 text-sm" onclick="toggleDropdown(this)">
                     <span class="flex items-center gap-3">
-                        <i class="fas fa-mobile-alt w-5"></i> Screens
+                        <i class="fas fa-flask w-5 text-center"></i> Oils
                     </span>
                     <i class="fas fa-chevron-down text-xs"></i>
                 </div>
                 <div class="dropdown-menu space-y-1 pl-2">
-                    <a href="/sales/screens" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
-                        <i class="fas fa-cash-register w-5"></i> Sales (Screens)
+                    <a href="/sales/oils" class="nav-link flex items-center gap-3 px-3 py-2 text-green-100 hover:text-white transition text-sm">
+                        <i class="fas fa-cash-register w-4"></i> Sales (Oils)
                     </a>
-                    <a href="/products/screens" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
-                        <i class="fas fa-boxes w-5"></i> Products (Screens)
+                    <a href="/products/oils" class="nav-link flex items-center gap-3 px-3 py-2 text-green-100 hover:text-white transition text-sm">
+                        <i class="fas fa-boxes w-4"></i> Products (Oils)
                     </a>
-                    <a href="/today-sales/screens" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
-                        <i class="fas fa-chart-line w-5"></i> Today's Sales (Screens)
+                    <a href="/today-sales/oils" class="nav-link flex items-center gap-3 px-3 py-2 text-green-100 hover:text-white transition text-sm">
+                        <i class="fas fa-chart-line w-4"></i> Today's Sales (Oils)
                     </a>
                 </div>
             </div>
 
-            {% if current_user and current_user.role == 'admin' %}
-            <div class="border-t border-gray-700 my-2"></div>
-            <div class="text-xs text-gray-500 uppercase px-3 py-1">Admin</div>
-            {% endif %}
-
+            <!-- ============================================================ -->
+            <!-- CLAIMS                                                       -->
+            <!-- ============================================================ -->
             {% if current_user %}
-            <a href="/claims" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
-                <i class="fas fa-clipboard-list w-5"></i> Claims
+            <a href="/claims" class="nav-link flex items-center gap-3 px-3 py-2 text-green-100 hover:text-white transition text-sm mt-1">
+                <i class="fas fa-clipboard-list w-5 text-center"></i> Claims
                 <span class="text-xs text-yellow-400 ml-auto">⚠️</span>
             </a>
             {% endif %}
 
+            <!-- ============================================================ -->
+            <!-- ADMIN SECTION                                                -->
+            <!-- ============================================================ -->
             {% if current_user and current_user.role == 'admin' %}
-            <a href="/logs" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
-                <i class="fas fa-history w-5"></i> User Logs
+            <div class="border-t border-green-900 my-2"></div>
+            <div class="text-xs text-green-600 uppercase px-3 py-1 font-bold">Admin</div>
+
+            <a href="/logs" class="nav-link flex items-center gap-3 px-3 py-2 text-green-100 hover:text-white transition text-sm">
+                <i class="fas fa-history w-5 text-center"></i> User Logs
                 <span class="text-xs text-blue-400 ml-auto">📋</span>
             </a>
-            <a href="/purchases" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
-                <i class="fas fa-shopping-cart w-5"></i> Purchases (Accessories)
+
+            <!-- PURCHASES — both pages visible -->
+            <a href="/purchases" class="nav-link flex items-center gap-3 px-3 py-2 text-green-100 hover:text-white transition text-sm">
+                <i class="fas fa-shopping-cart w-5 text-center"></i> Purchases
+                <span class="text-[10px] text-green-400 ml-auto font-medium">Roots &amp; Barks</span>
             </a>
-            <a href="/purchases/screens" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
-                <i class="fas fa-shopping-cart w-5"></i> Purchases (Screens)
+            <a href="/purchases/oils" class="nav-link flex items-center gap-3 px-3 py-2 text-green-100 hover:text-white transition text-sm">
+                <i class="fas fa-flask w-5 text-center"></i> Purchases (Oils)
+                <span class="text-[10px] text-emerald-400 ml-auto font-medium">Oils</span>
             </a>
-            <a href="/inventory/import" target="_blank" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
-                <i class="fas fa-file-import w-5"></i> Import Data
+
+            <a href="/analytics" class="nav-link flex items-center gap-3 px-3 py-2 text-green-100 hover:text-white transition text-sm">
+                <i class="fas fa-chart-pie w-5 text-center"></i> Analytics
             </a>
-            <a href="/admin/users" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
-                <i class="fas fa-users-cog w-5"></i> Users
+            <a href="/archive" class="nav-link flex items-center gap-3 px-3 py-2 text-green-100 hover:text-white transition text-sm">
+                <i class="fas fa-archive w-5 text-center"></i> Archive
             </a>
             
-            <!-- NEW MEDICAL HERBAL SHOP LINK -->
-            <a href="/herbal-shop" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
-                <i class="fas fa-leaf w-5 text-emerald-400"></i> Medical Herbal Shop
-                <span class="text-[10px] bg-amber-500 text-white px-1.5 py-0.5 rounded ml-auto font-bold">SOON</span>
+            <!-- REMOVED IMPORT DATA AS REQUESTED -->
+            
+            <a href="/admin/users" class="nav-link flex items-center gap-3 px-3 py-2 text-green-100 hover:text-white transition text-sm">
+                <i class="fas fa-users-cog w-5 text-center"></i> Users
             </a>
-            <!-- END NEW LINK -->
+            
+            <!-- REMOVED MEDICAL HERBAL SHOP AS REQUESTED -->
 
             {% endif %}
 
+            <!-- ============================================================ -->
+            <!-- SYSTEM ADMIN SECTION                                         -->
+            <!-- ============================================================ -->
             {% if current_user and current_user.username.lower() == 'oxbee' %}
-            <div class="border-t border-gray-700 my-2"></div>
-            <div class="text-xs text-amber-500 uppercase px-3 py-1 font-bold">
+            <div class="border-t border-green-900 my-2"></div>
+            <div class="text-xs text-[#F1C40F] uppercase px-3 py-1 font-bold">
                 <i class="fas fa-crown mr-1"></i> System Admin
             </div>
-            <a href="/settings" class="nav-link settings-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
-                <i class="fas fa-cog w-5"></i> Settings
+            <a href="/settings" class="nav-link settings-link flex items-center gap-3 px-3 py-2 text-green-100 hover:text-white transition text-sm">
+                <i class="fas fa-cog w-5 text-center"></i> Settings
                 <span class="settings-badge">⭐ System</span>
             </a>
-            <a href="/activities" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
-                <i class="fas fa-activity w-5"></i> Activities
+            <a href="/activities" class="nav-link settings-link flex items-center gap-3 px-3 py-2 text-green-100 hover:text-white transition text-sm">
+                <i class="fas fa-activity w-5 text-center"></i> Activities
                 <span class="settings-badge">📊 Activity</span>
             </a>
             {% endif %}
 
             {% if current_user %}
-            <div class="mt-4 flex flex-col gap-2 px-3 py-1">
+            <div class="mt-4 flex flex-col gap-2 px-1 py-1">
                 <div class="flex items-center gap-2">
-                    <span id="pending-badge" class="text-xs text-yellow-300 bg-gray-700 px-2 py-0.5 rounded-full" style="display:none;"></span>
-                    <button id="syncOfflineBtn" onclick="syncAllPending()" class="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md transition">
+                    <span id="pending-badge" class="text-xs text-yellow-300 bg-green-900 px-2 py-0.5 rounded-full" style="display:none;"></span>
+                    <button id="syncOfflineBtn" onclick="syncAllPending()" class="text-xs bg-[#2E7D32] hover:bg-[#1B5E20] text-white px-3 py-1.5 rounded-md transition w-full font-medium">
                         <i class="fas fa-cloud-upload-alt mr-1"></i> Sync Offline
                     </button>
                 </div>
 
                 {% if current_user and current_user.username.lower() == 'oxbee' %}
-                <button id="installAppBtn" class="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-md transition hidden">
+                <button id="installAppBtn" class="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-md transition hidden w-full font-medium">
                     <i class="fas fa-download mr-1"></i> Install App
                 </button>
                 {% endif %}
 
-                <button onclick="clearOfflineData()" class="text-xs bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-md transition">
+                <button onclick="clearOfflineData()" class="text-xs bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-md transition w-full font-medium">
                     <i class="fas fa-trash mr-1"></i> Clear Offline Data
                 </button>
             </div>
 
             <div class="pt-4 pb-2">
-                <button onclick="logout()" class="w-full bg-amber-500 hover:bg-amber-600 text-black font-semibold py-2 rounded-lg transition flex items-center justify-center gap-2 text-sm">
+                <button onclick="logout()" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 rounded-lg transition flex items-center justify-center gap-2 text-sm">
                     <i class="fas fa-sign-out-alt"></i> Logout
                 </button>
             </div>
@@ -725,6 +711,7 @@
                 <i class="fas fa-bars text-2xl"></i>
             </button>
 
+            <!-- SYSTEM NAME IN HEADER -->
             <div class="topbar-brand">
                 <h1>OX Smart POS</h1>
             </div>
@@ -739,7 +726,7 @@
                     <div class="notif-dropdown" id="notifDropdown" role="menu">
                         <div class="notif-header">
                             <div class="notif-header-title">
-                                <i class="fas fa-bell text-cyan-500"></i>
+                                <i class="fas fa-bell text-green-600"></i>
                                 Notifications
                                 <span class="count" id="notifCount">0</span>
                             </div>
@@ -754,7 +741,7 @@
                     </div>
                 </div>
 
-                <!-- User chip — clickable: admins → edit their own user page; regular users → settings -->
+                <!-- User chip -->
                 {% if current_user %}
                 {% set _is_admin_user = (current_user.role == 'admin' or current_user.username.lower() == 'oxbee') %}
                 <a href="{{ ('/admin/users/' ~ session.user_id ~ '/edit') if _is_admin_user else '/settings' }}"
@@ -776,7 +763,7 @@
 
         <footer>
             <div class="px-2">
-                TOMFRIMP MOBICOM SOLUTIONS | HOME OF COMPUTER, PHONES, AND ACCESSORIES
+                KRISTODEA - NNURO FIE | Herbs, Barks, Roots & Spiritual Oils
             </div>
             <div class="mt-1">
                 Developed by HUMMNINGBIRD DIGITAL SOLUTIONS © <span id="footerYear">2026</span> - All Rights Reserved
@@ -784,7 +771,7 @@
             <div class="mt-1">
                 <a href="/offline">📶 Offline</a>
                 {% if current_user and current_user.username.lower() == 'oxbee' %}
-                <span class="ml-2 text-xs text-amber-500">⚙️ System Admin</span>
+                <span class="ml-2 text-xs text-[#F1C40F]">⚙️ System Admin</span>
                 {% endif %}
             </div>
         </footer>
@@ -865,11 +852,7 @@
             const list = document.getElementById('notifList');
             if (!list) return;
             if (items.length === 0) {
-                list.innerHTML = `
-                    <div class="notif-empty">
-                        <i class="fas fa-bell-slash"></i>
-                        <div>No notifications yet</div>
-                    </div>`;
+                list.innerHTML = `<div class="notif-empty"><i class="fas fa-bell-slash"></i><div>No notifications yet</div></div>`;
                 return;
             }
             list.innerHTML = items.map(n => {
@@ -1010,14 +993,21 @@
     const INSTALL_PASSWORD = 'oxsmart2050';
     const PIN_CODE = '2050';
 
+    // 8 real pages — 4 sections × 2 groups (Others + Oils)
     const PROTECTED_ROUTES = [
-        '/', '/products', '/products/screens',
-        '/sales', '/sales/screens',
-        '/purchases', '/purchases/screens',
-        '/analytics', '/today-sales', '/today-sales/screens',
-        '/archive', '/claims', '/logs',
-        '/admin/users', '/settings', '/inventory/import',
+        '/',
+        '/sales',          '/sales/oils',
+        '/products',       '/products/oils',
+        '/purchases',      '/purchases/oils',
+        '/today-sales',    '/today-sales/oils',
+        '/analytics',
+        '/archive',
+        '/claims',
+        '/logs',
+        '/admin/users',
+        '/settings',
         '/activities'
+        // Removed '/inventory/import' and '/herbal-shop' as requested
     ];
 
     async function cacheAllPages() {
@@ -1258,7 +1248,7 @@
                     deferredPrompt.prompt();
                     const result = await deferredPrompt.userChoice;
                     if (result.outcome === 'accepted') {
-                        Notifications.success('App installed', 'Open OX Smart POS from your home screen.');
+                        Notifications.success('App installed', 'Open Kristodea from your home screen.');
                         localStorage.setItem('app_version', APP_VERSION);
                         installButton.classList.add('hidden');
                     }
@@ -1280,7 +1270,7 @@
             }
         });
         window.addEventListener('appinstalled', () => {
-            Notifications.success('App installed', 'Open OX Smart POS from your home screen.');
+            Notifications.success('App installed', 'Open Kristodea from your home screen.');
             localStorage.setItem('app_version', APP_VERSION);
             installButton.classList.add('hidden');
             deferredPrompt = null;
@@ -1542,11 +1532,6 @@
 (function () {
     'use strict';
 
-    // ------------------------------------------------------------
-    // batchGoodStock(batch)
-    // Clamp remaining - claimed at 0. Reused everywhere a "good"
-    // figure appears so the number is always consistent.
-    // ------------------------------------------------------------
     function batchGoodStock(batch) {
         if (!batch) return 0;
         const rem = parseInt(batch.remaining_quantity || 0, 10);
@@ -1554,12 +1539,6 @@
         return Math.max(rem - claimed, 0);
     }
 
-    // ------------------------------------------------------------
-    // batchRealSold(batch)
-    // Prefer API's sold_quantity (from sales_items). Fall back to
-    // quantity - remaining for stale Dexie caches. Never includes
-    // claimed units. Same rule used across Products, Sales, Purchases.
-    // ------------------------------------------------------------
     function batchRealSold(batch) {
         if (!batch) return 0;
         if (typeof batch.sold_quantity === 'number') return batch.sold_quantity;
@@ -1568,36 +1547,12 @@
         return Math.max(qty - rem, 0);
     }
 
-    // ------------------------------------------------------------
-    // roundMoney(v)
-    // Rounds to 2dp as a number. Used as the grouping key so that
-    // float drift (12.0000001 vs 12) never splits a group.
-    // ------------------------------------------------------------
     function roundMoney(v) {
         const n = parseFloat(v);
         if (isNaN(n)) return 0;
         return Math.round(n * 100) / 100;
     }
 
-    // ------------------------------------------------------------
-    // groupBatchesByPrice(batches)
-    //
-    // Groups an array of batch objects by (cost_price, selling_price).
-    // Returns an array of group objects:
-    //
-    //   {
-    //     key: "12|25",
-    //     cost_price: 12,
-    //     selling_price: 25,
-    //     batches: [ <real batch>, ... ],   // newest first
-    //     totals: { quantity, remaining, claimed, sold, good }
-    //   }
-    //
-    // Groups are sorted by cost then selling.
-    //
-    // Groups are DISPLAY-ONLY. They carry no `batch_id`. Every edit,
-    // delete, or sale must resolve back to a real batch in `batches`.
-    // ------------------------------------------------------------
     function groupBatchesByPrice(batches) {
         if (!Array.isArray(batches) || batches.length === 0) return [];
 
@@ -1628,7 +1583,6 @@
 
         for (const g of map.values()) {
             g.totals.good = Math.max(g.totals.remaining - g.totals.claimed, 0);
-            // Newest first — matches existing renderBatchList sort behaviour.
             g.batches.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
         }
 
@@ -1637,19 +1591,6 @@
         );
     }
 
-    // ------------------------------------------------------------
-    // fifoPickFromGroup(group, qty)
-    //
-    // Splits `qty` units across a group's real batches, oldest first.
-    // Only draws from batches that have good stock (remaining-claimed>0).
-    //
-    // Returns: [ { batch_id, qty, batch }, ... ]
-    // Throws:  if the group can't cover the requested qty.
-    //
-    // This is the ONLY place that maps a display-group quantity back to
-    // real batch_ids. Sales must always go through this before sending
-    // to /api/sales/complete.
-    // ------------------------------------------------------------
     function fifoPickFromGroup(group, qty) {
         const need0 = parseInt(qty || 0, 10);
         if (need0 <= 0) return [];
@@ -1657,7 +1598,6 @@
             throw new Error('fifoPickFromGroup: empty group');
         }
 
-        // Sort a shallow copy oldest-first for FIFO consumption.
         const ordered = [...group.batches].sort(
             (a, b) => new Date(a.date || 0) - new Date(b.date || 0)
         );
@@ -1686,14 +1626,11 @@
         return picks;
     }
 
-    // ------------------------------------------------------------
-    // Exports
-    // ------------------------------------------------------------
-    window.batchGoodStock     = batchGoodStock;
-    window.batchRealSold      = batchRealSold;
-    window.roundMoney         = roundMoney;
+    window.batchGoodStock      = batchGoodStock;
+    window.batchRealSold       = batchRealSold;
+    window.roundMoney          = roundMoney;
     window.groupBatchesByPrice = groupBatchesByPrice;
-    window.fifoPickFromGroup  = fifoPickFromGroup;
+    window.fifoPickFromGroup   = fifoPickFromGroup;
 
     console.log('✅ Batch grouping helpers loaded');
 })();
