@@ -656,20 +656,9 @@
             <a href="/purchases/screens" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                 <i class="fas fa-shopping-cart w-5"></i> Purchases (Screens)
             </a>
-            <a href="/inventory/import" target="_blank" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
-                <i class="fas fa-file-import w-5"></i> Import Data
-            </a>
             <a href="/admin/users" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
                 <i class="fas fa-users-cog w-5"></i> Users
             </a>
-            
-            <!-- NEW MEDICAL HERBAL SHOP LINK -->
-            <a href="/herbal-shop" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-[#334155] transition text-sm">
-                <i class="fas fa-leaf w-5 text-emerald-400"></i> Medical Herbal Shop
-                <span class="text-[10px] bg-amber-500 text-white px-1.5 py-0.5 rounded ml-auto font-bold">SOON</span>
-            </a>
-            <!-- END NEW LINK -->
-
             {% endif %}
 
             {% if current_user and current_user.username.lower() == 'oxbee' %}
@@ -1542,11 +1531,6 @@
 (function () {
     'use strict';
 
-    // ------------------------------------------------------------
-    // batchGoodStock(batch)
-    // Clamp remaining - claimed at 0. Reused everywhere a "good"
-    // figure appears so the number is always consistent.
-    // ------------------------------------------------------------
     function batchGoodStock(batch) {
         if (!batch) return 0;
         const rem = parseInt(batch.remaining_quantity || 0, 10);
@@ -1554,12 +1538,6 @@
         return Math.max(rem - claimed, 0);
     }
 
-    // ------------------------------------------------------------
-    // batchRealSold(batch)
-    // Prefer API's sold_quantity (from sales_items). Fall back to
-    // quantity - remaining for stale Dexie caches. Never includes
-    // claimed units. Same rule used across Products, Sales, Purchases.
-    // ------------------------------------------------------------
     function batchRealSold(batch) {
         if (!batch) return 0;
         if (typeof batch.sold_quantity === 'number') return batch.sold_quantity;
@@ -1568,36 +1546,12 @@
         return Math.max(qty - rem, 0);
     }
 
-    // ------------------------------------------------------------
-    // roundMoney(v)
-    // Rounds to 2dp as a number. Used as the grouping key so that
-    // float drift (12.0000001 vs 12) never splits a group.
-    // ------------------------------------------------------------
     function roundMoney(v) {
         const n = parseFloat(v);
         if (isNaN(n)) return 0;
         return Math.round(n * 100) / 100;
     }
 
-    // ------------------------------------------------------------
-    // groupBatchesByPrice(batches)
-    //
-    // Groups an array of batch objects by (cost_price, selling_price).
-    // Returns an array of group objects:
-    //
-    //   {
-    //     key: "12|25",
-    //     cost_price: 12,
-    //     selling_price: 25,
-    //     batches: [ <real batch>, ... ],   // newest first
-    //     totals: { quantity, remaining, claimed, sold, good }
-    //   }
-    //
-    // Groups are sorted by cost then selling.
-    //
-    // Groups are DISPLAY-ONLY. They carry no `batch_id`. Every edit,
-    // delete, or sale must resolve back to a real batch in `batches`.
-    // ------------------------------------------------------------
     function groupBatchesByPrice(batches) {
         if (!Array.isArray(batches) || batches.length === 0) return [];
 
@@ -1628,7 +1582,6 @@
 
         for (const g of map.values()) {
             g.totals.good = Math.max(g.totals.remaining - g.totals.claimed, 0);
-            // Newest first — matches existing renderBatchList sort behaviour.
             g.batches.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
         }
 
@@ -1637,19 +1590,6 @@
         );
     }
 
-    // ------------------------------------------------------------
-    // fifoPickFromGroup(group, qty)
-    //
-    // Splits `qty` units across a group's real batches, oldest first.
-    // Only draws from batches that have good stock (remaining-claimed>0).
-    //
-    // Returns: [ { batch_id, qty, batch }, ... ]
-    // Throws:  if the group can't cover the requested qty.
-    //
-    // This is the ONLY place that maps a display-group quantity back to
-    // real batch_ids. Sales must always go through this before sending
-    // to /api/sales/complete.
-    // ------------------------------------------------------------
     function fifoPickFromGroup(group, qty) {
         const need0 = parseInt(qty || 0, 10);
         if (need0 <= 0) return [];
@@ -1657,7 +1597,6 @@
             throw new Error('fifoPickFromGroup: empty group');
         }
 
-        // Sort a shallow copy oldest-first for FIFO consumption.
         const ordered = [...group.batches].sort(
             (a, b) => new Date(a.date || 0) - new Date(b.date || 0)
         );
@@ -1686,9 +1625,6 @@
         return picks;
     }
 
-    // ------------------------------------------------------------
-    // Exports
-    // ------------------------------------------------------------
     window.batchGoodStock     = batchGoodStock;
     window.batchRealSold      = batchRealSold;
     window.roundMoney         = roundMoney;
