@@ -10,7 +10,7 @@ def get_today_sales(selected_date=None, start_datetime=None, end_datetime=None):
         cursor.execute("""
             SELECT COALESCE(SUM(s.total), 0)
             FROM sales s
-            WHERE s.date BETWEEN ? AND ?
+            WHERE s.date BETWEEN %s AND %s
             AND s.reversed = 0
             AND EXISTS (
                 SELECT 1 FROM sales_items si
@@ -29,7 +29,7 @@ def get_today_sales(selected_date=None, start_datetime=None, end_datetime=None):
         cursor.execute("""
             SELECT COALESCE(SUM(s.total), 0)
             FROM sales s
-            WHERE DATE(s.date) = ?
+            WHERE s.date::date = %s
             AND s.reversed = 0
             AND EXISTS (
                 SELECT 1 FROM sales_items si
@@ -47,7 +47,7 @@ def get_today_sales(selected_date=None, start_datetime=None, end_datetime=None):
         cursor.execute("""
             SELECT COALESCE(SUM(s.total), 0)
             FROM sales s
-            WHERE DATE(s.date) = DATE('now', 'localtime')
+            WHERE s.date::date = CURRENT_DATE
             AND s.reversed = 0
             AND EXISTS (
                 SELECT 1 FROM sales_items si
@@ -76,7 +76,7 @@ def get_today_profit(selected_date=None, start_datetime=None, end_datetime=None)
         cursor.execute("""
             SELECT COALESCE(SUM(s.profit), 0)
             FROM sales s
-            WHERE s.date BETWEEN ? AND ?
+            WHERE s.date BETWEEN %s AND %s
             AND s.reversed = 0
             AND EXISTS (
                 SELECT 1 FROM sales_items si
@@ -95,7 +95,7 @@ def get_today_profit(selected_date=None, start_datetime=None, end_datetime=None)
         cursor.execute("""
             SELECT COALESCE(SUM(s.profit), 0)
             FROM sales s
-            WHERE DATE(s.date) = ?
+            WHERE s.date::date = %s
             AND s.reversed = 0
             AND EXISTS (
                 SELECT 1 FROM sales_items si
@@ -113,7 +113,7 @@ def get_today_profit(selected_date=None, start_datetime=None, end_datetime=None)
         cursor.execute("""
             SELECT COALESCE(SUM(s.profit), 0)
             FROM sales s
-            WHERE DATE(s.date) = DATE('now', 'localtime')
+            WHERE s.date::date = CURRENT_DATE
             AND s.reversed = 0
             AND EXISTS (
                 SELECT 1 FROM sales_items si
@@ -196,17 +196,19 @@ def get_low_stock_products(threshold=10):
     cursor.execute("""
         SELECT p.name, p.brand, p.category, p.stock,
                COALESCE(
-                   (SELECT GROUP_CONCAT(id, ',')
-                    FROM (SELECT id FROM purchase_batches WHERE product_id = p.id ORDER BY date ASC)),
-                   ''
+                   (SELECT array_agg(pb.id ORDER BY pb.date ASC)
+                    FROM purchase_batches pb
+                    WHERE pb.product_id = p.id),
+                   '{}'::integer[]
                ) as all_batch_ids,
                COALESCE(
-                   (SELECT GROUP_CONCAT(id, ',')
-                    FROM (SELECT id FROM purchase_batches WHERE product_id = p.id AND remaining_quantity > 0 ORDER BY date ASC)),
-                   ''
+                   (SELECT array_agg(pb.id ORDER BY pb.date ASC)
+                    FROM purchase_batches pb
+                    WHERE pb.product_id = p.id AND pb.remaining_quantity > 0),
+                   '{}'::integer[]
                ) as active_batch_ids
         FROM products p
-        WHERE p.stock <= ?
+        WHERE p.stock <= %s
         AND p.stock >= 0
         AND NOT EXISTS (
             SELECT 1 FROM deleted_products dp 
@@ -220,14 +222,12 @@ def get_low_stock_products(threshold=10):
     products = cursor.fetchall()
     conn.close()
     
+    # Return as list of tuples with batch_ids as the 5th element
+    # Use active_batch_ids (remaining_quantity > 0) as the primary batch list
+    # If no active batches, return all_batch_ids to show history
     result = []
     for p in products:
-        name, brand, category, stock, all_batch_str, active_batch_str = p
-        
-        # Convert comma-separated strings back to lists of integers
-        all_batch_ids = [int(x) for x in str(all_batch_str).split(',') if x]
-        active_batch_ids = [int(x) for x in str(active_batch_str).split(',') if x]
-        
+        name, brand, category, stock, all_batch_ids, active_batch_ids = p
         # Use active batches if available, otherwise show all batches
         batch_ids = active_batch_ids if active_batch_ids else all_batch_ids
         result.append((name, brand, category, stock, batch_ids))
@@ -240,9 +240,9 @@ def get_weekly_sales():
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT DATE(s.date), COALESCE(SUM(s.total), 0)
+        SELECT s.date::date, COALESCE(SUM(s.total), 0)
         FROM sales s
-        WHERE DATE(s.date) >= DATE('now', '-6 days', 'localtime')
+        WHERE s.date >= CURRENT_DATE - INTERVAL '6 days'
         AND s.reversed = 0
         AND EXISTS (
             SELECT 1 FROM sales_items si
@@ -255,8 +255,8 @@ def get_weekly_sales():
                 AND dp.source = 'product'
             )
         )
-        GROUP BY DATE(s.date)
-        ORDER BY DATE(s.date)
+        GROUP BY s.date::date
+        ORDER BY s.date::date
     """)
     data = cursor.fetchall()
     conn.close()
@@ -283,14 +283,14 @@ def get_top_products(selected_date=None, limit=5, start_datetime=None, end_datet
     """
     
     if start_datetime and end_datetime:
-        query += " AND s.date BETWEEN ? AND ?"
+        query += " AND s.date BETWEEN %s AND %s"
         params.extend([start_datetime, end_datetime])
     elif selected_date:
         dt = selected_date.isoformat() if hasattr(selected_date, 'isoformat') else selected_date
-        query += " AND DATE(s.date) = ?"
+        query += " AND s.date::date = %s"
         params.append(dt)
     
-    query += " GROUP BY si.product_id, p.name, p.brand, p.category ORDER BY qty DESC LIMIT ?"
+    query += " GROUP BY si.product_id, p.name, p.brand, p.category ORDER BY qty DESC LIMIT %s"
     params.append(limit)
     
     cursor.execute(query, params)
@@ -306,7 +306,7 @@ def get_sales_history(selected_date=None, start_datetime=None, end_datetime=None
     params = []
     
     query = """
-        SELECT DATE(s.date),
+        SELECT s.date::date,
                COALESCE(SUM(s.total), 0) AS total_sales,
                COALESCE(SUM(s.profit), 0) AS total_profit,
                COALESCE(SUM(s.discount), 0) AS total_discount
@@ -326,14 +326,14 @@ def get_sales_history(selected_date=None, start_datetime=None, end_datetime=None
     """
     
     if start_datetime and end_datetime:
-        query += " AND s.date BETWEEN ? AND ?"
+        query += " AND s.date BETWEEN %s AND %s"
         params.extend([start_datetime, end_datetime])
     elif selected_date:
         dt = selected_date.isoformat() if hasattr(selected_date, 'isoformat') else selected_date
-        query += " AND DATE(s.date) = ?"
+        query += " AND s.date::date = %s"
         params.append(dt)
     
-    query += " GROUP BY DATE(s.date) ORDER BY DATE(s.date) DESC"
+    query += " GROUP BY s.date::date ORDER BY s.date::date DESC"
     
     cursor.execute(query, params)
     rows = cursor.fetchall()
@@ -346,6 +346,7 @@ def get_dashboard_summary(start_datetime=None, end_datetime=None):
     """
     Get all dashboard summary data in one call.
     Returns sales, profit, total_products, total_batches, low_stock_count, and low_stock_products.
+    Now total_products counts only products with at least one batch (consistent with product pages).
     """
     conn = get_connection()
     cursor = conn.cursor()
@@ -357,7 +358,7 @@ def get_dashboard_summary(start_datetime=None, end_datetime=None):
                 COALESCE(SUM(s.total), 0) as total_sales,
                 COALESCE(SUM(s.profit), 0) as total_profit
             FROM sales s
-            WHERE s.date BETWEEN ? AND ?
+            WHERE s.date BETWEEN %s AND %s
             AND s.reversed = 0
             AND EXISTS (
                 SELECT 1 FROM sales_items si
@@ -377,7 +378,7 @@ def get_dashboard_summary(start_datetime=None, end_datetime=None):
                 COALESCE(SUM(s.total), 0) as total_sales,
                 COALESCE(SUM(s.profit), 0) as total_profit
             FROM sales s
-            WHERE DATE(s.date) = DATE('now', 'localtime')
+            WHERE s.date::date = CURRENT_DATE
             AND s.reversed = 0
             AND EXISTS (
                 SELECT 1 FROM sales_items si
@@ -396,7 +397,8 @@ def get_dashboard_summary(start_datetime=None, end_datetime=None):
     total_sales = sales_data[0] or 0
     total_profit = sales_data[1] or 0
     
-    # Get total products
+    # Get total products – now only those with at least one batch
+    # (reuse the function to keep logic in one place)
     total_products = get_total_products()
     
     # Get total batches
@@ -413,18 +415,20 @@ def get_dashboard_summary(start_datetime=None, end_datetime=None):
     """)
     total_batches = cursor.fetchone()[0] or 0
     
-    # Get low stock products
+    # Get low stock products with ALL batch IDs (including depleted batches)
     cursor.execute("""
         SELECT p.name, p.brand, p.category, p.stock,
                COALESCE(
-                   (SELECT GROUP_CONCAT(id, ',')
-                    FROM (SELECT id FROM purchase_batches WHERE product_id = p.id ORDER BY date ASC)),
-                   ''
+                   (SELECT array_agg(pb.id ORDER BY pb.date ASC)
+                    FROM purchase_batches pb
+                    WHERE pb.product_id = p.id),
+                   '{}'::integer[]
                ) as all_batch_ids,
                COALESCE(
-                   (SELECT GROUP_CONCAT(id, ',')
-                    FROM (SELECT id FROM purchase_batches WHERE product_id = p.id AND remaining_quantity > 0 ORDER BY date ASC)),
-                   ''
+                   (SELECT array_agg(pb.id ORDER BY pb.date ASC)
+                    FROM purchase_batches pb
+                    WHERE pb.product_id = p.id AND pb.remaining_quantity > 0),
+                   '{}'::integer[]
                ) as active_batch_ids
         FROM products p
         WHERE p.stock <= 10
@@ -442,11 +446,11 @@ def get_dashboard_summary(start_datetime=None, end_datetime=None):
     
     conn.close()
     
+    # Process rows to use active batches if available, otherwise all batches
     processed_rows = []
     for row in low_stock_rows:
-        name, brand, category, stock, all_batch_str, active_batch_str = row
-        all_batch_ids = [int(x) for x in str(all_batch_str).split(',') if x]
-        active_batch_ids = [int(x) for x in str(active_batch_str).split(',') if x]
+        name, brand, category, stock, all_batch_ids, active_batch_ids = row
+        # Use active batches if available, otherwise show all batches
         batch_ids = active_batch_ids if active_batch_ids else all_batch_ids
         processed_rows.append((name, brand, category, stock, batch_ids))
     
@@ -456,5 +460,5 @@ def get_dashboard_summary(start_datetime=None, end_datetime=None):
         'total_products': total_products,
         'total_batches': total_batches,
         'low_stock_count': len(processed_rows),
-        'low_stock_products': processed_rows
+        'low_stock_products': processed_rows  # Each row: (name, brand, category, stock, batch_ids)
     }

@@ -1,13 +1,13 @@
-{% extends "base.html" %}
+{% extends 'base.html' %}
 
 {% block content %}
 <div class="flex justify-between items-center mb-6">
     <div>
-        <h1 class="text-3xl font-bold text-[#1B5E20]">👥 User Management</h1>
+        <h1 class="text-3xl font-bold text-gray-800">👥 User Management</h1>
         <p class="text-sm text-gray-500 mt-1">Manage system users and their permissions</p>
     </div>
     <div class="text-sm text-gray-500">
-        <span class="bg-[#E8F5E9] text-[#1B5E20] px-2 py-1 rounded font-medium">👤 You: {{ current_user.username }}</span>
+        <span class="bg-green-100 text-green-800 px-2 py-1 rounded">👤 You: {{ current_user.username }}</span>
     </div>
 </div>
 
@@ -21,27 +21,27 @@
 <input type="hidden" id="currentUsername" value="{{ current_user.username|default('') }}">
 
 <!-- Create User Form -->
-<div class="bg-white rounded-lg shadow p-6 mb-8 border border-[#E8F5E9]">
-    <h2 class="text-xl font-semibold mb-4 text-[#1B5E20]">➕ Create New User</h2>
+<div class="bg-white rounded-lg shadow p-6 mb-8">
+    <h2 class="text-xl font-semibold mb-4">➕ Create New User</h2>
     <form id="createUserForm" class="flex flex-wrap gap-4 items-end">
         <div>
             <label class="block text-sm font-medium text-gray-700">Username</label>
             <input type="text" id="newUsername" required autocomplete="off"
-                   class="mt-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-1 focus:ring-[#2E7D32] focus:border-[#2E7D32] outline-none w-48">
+                   class="mt-1 px-3 py-2 border border-gray-300 rounded-md focus:ring focus:ring-indigo-200 w-48">
         </div>
         <div>
             <label class="block text-sm font-medium text-gray-700">Password</label>
             <input type="password" id="newPassword" required autocomplete="new-password"
-                   class="mt-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-1 focus:ring-[#2E7D32] focus:border-[#2E7D32] outline-none w-48">
+                   class="mt-1 px-3 py-2 border border-gray-300 rounded-md focus:ring focus:ring-indigo-200 w-48">
         </div>
         <div>
             <label class="block text-sm font-medium text-gray-700">Role</label>
-            <select id="newRole" class="mt-1 px-3 py-2 border border-gray-300 rounded-md focus:border-[#2E7D32] outline-none">
+            <select id="newRole" class="mt-1 px-3 py-2 border border-gray-300 rounded-md">
                 <option value="user">User</option>
                 <option value="admin">Admin</option>
             </select>
         </div>
-        <button type="submit" class="bg-[#2E7D32] hover:bg-[#1B5E20] text-white px-4 py-2 rounded-md transition font-medium">
+        <button type="submit" class="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-md transition">
             Create User
         </button>
     </form>
@@ -49,15 +49,15 @@
 </div>
 
 <!-- Users Table -->
-<div class="bg-white rounded-lg shadow overflow-x-auto border border-[#E8F5E9]">
+<div class="bg-white rounded-lg shadow overflow-x-auto">
     <table class="min-w-full divide-y divide-gray-200">
-        <thead class="bg-[#E8F5E9]">
+        <thead class="bg-gray-50">
             <tr>
-                <th class="px-6 py-3 text-left text-xs font-semibold text-[#1B5E20] uppercase tracking-wider">ID</th>
-                <th class="px-6 py-3 text-left text-xs font-semibold text-[#1B5E20] uppercase tracking-wider">Username</th>
-                <th class="px-6 py-3 text-left text-xs font-semibold text-[#1B5E20] uppercase tracking-wider">Role</th>
-                <th class="px-6 py-3 text-left text-xs font-semibold text-[#1B5E20] uppercase tracking-wider">Created At</th>
-                <th class="px-6 py-3 text-left text-xs font-semibold text-[#1B5E20] uppercase tracking-wider">Actions</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created At</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
             </tr>
         </thead>
         <tbody id="usersTableBody" class="bg-white divide-y divide-gray-200">
@@ -68,11 +68,11 @@
 
 <!-- ========== ERROR MODAL ========== -->
 <div id="errorModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
-    <div class="bg-white rounded-xl shadow-xl w-96 max-w-lg p-6 border border-[#E8F5E9]">
+    <div class="bg-white rounded-xl shadow-xl w-96 max-w-lg p-6">
         <div class="flex items-start gap-3">
             <div class="text-3xl text-red-500">❌</div>
             <div class="flex-1">
-                <h3 class="text-lg font-bold text-[#1B5E20]">Cannot Delete User</h3>
+                <h3 class="text-lg font-bold text-gray-800">Cannot Delete User</h3>
                 <p id="errorModalMessage" class="text-sm text-gray-700 mt-1"></p>
                 <div id="errorModalDetails" class="text-xs text-gray-500 mt-2 border-t pt-2 hidden">
                     <strong>Details:</strong> <span id="errorModalDetailsText"></span>
@@ -80,7 +80,7 @@
             </div>
         </div>
         <div class="flex justify-end mt-4">
-            <button onclick="closeErrorModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded transition">
+            <button onclick="closeErrorModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded">
                 OK
             </button>
         </div>
@@ -214,7 +214,7 @@
             if (role === 'admin') {
                 return '<span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Admin</span>';
             }
-            return '<span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-[#E8F5E9] text-[#1B5E20]">User</span>';
+            return '<span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">User</span>';
         }
 
         function escapeHtml(text) {
@@ -250,13 +250,13 @@
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${user.created_at ? new Date(user.created_at).toLocaleString() : '—'}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
                         <a href="/admin/users/${user.id}/edit" 
-                           class="text-[#2E7D32] hover:text-[#1B5E20] ${isProtected ? 'opacity-50 cursor-not-allowed' : ''}"
+                           class="text-blue-600 hover:text-blue-900 ${isProtected ? 'opacity-50 cursor-not-allowed' : ''}"
                            ${isProtected ? 'onclick="return false;" title="Cannot edit system administrator"' : ''}>
                             ✏️ Edit
                         </a>
 
                         ${!isCurrentUser && !isProtected ? `
-                            <button class="role-toggle text-[#1B5E20] hover:text-[#0D2B1D] ml-2" 
+                            <button class="role-toggle text-indigo-600 hover:text-indigo-900 ml-2" 
                                     data-id="${user.id}" 
                                     data-role="${user.role === 'admin' ? 'user' : 'admin'}">
                                 ${user.role === 'admin' ? 'Demote' : 'Promote'}
@@ -389,7 +389,7 @@
                 });
                 const data = await res.json();
                 if (data.success) {
-                    msg.className = 'text-[#2E7D32] font-medium';
+                    msg.className = 'text-green-500';
                     msg.textContent = 'User created successfully!';
                     document.getElementById('newUsername').value = '';
                     document.getElementById('newPassword').value = '';

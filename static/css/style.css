@@ -1,13 +1,13 @@
 /* ============================================================
-   ROOT VARIABLES — KRISTODEA / NNURO FIE HERBAL THEME
+   ROOT VARIABLES
    ============================================================ */
 :root {
     /* Light Theme (Default) */
-    --bg-primary:      #F4F9F4;
+    --bg-primary:      #f4f6f9;
     --bg-secondary:    #ffffff;
     --bg-card:         #ffffff;
-    --bg-sidebar:      #0D2B1D;
-    --bg-sidebar-hover:#1A3F2B;
+    --bg-sidebar:      #1E293B;
+    --bg-sidebar-hover:#334155;
     --bg-topbar:       #ffffff;
 
     --text-primary:    #1E293B;
@@ -23,10 +23,9 @@
     --input-border:    #d1d5db;
     --hover-bg:        #f3f4f6;
 
-    /* Herbal Accents */
-    --accent:          #2E7D32;
-    --accent-hover:    #1B5E20;
-    --accent-amber:    #F1C40F;
+    --accent:          #00CFCF;
+    --accent-hover:    #00b8b8;
+    --accent-amber:    #f59e0b;
     --accent-amber-hover: #d97706;
 
     --danger:          #ef4444;
@@ -34,36 +33,36 @@
     --info:            #3b82f6;
     --warning:         #f59e0b;
 
-    --table-header:    #0D2B1D;
-    --table-stripe:    #F4F9F4;
+    --table-header:    #1E293B;
+    --table-stripe:    #f8fafc;
 }
 
 /* ============================================================
-   DARK THEME — Herbal dark palette
+   DARK THEME — palette matches base.html exactly
    ============================================================ */
 body.dark-theme {
-    --bg-primary:      #08120a;
-    --bg-secondary:    #0D2B1D;
-    --bg-card:         #0D2B1D;
-    --bg-sidebar:      #051007;
-    --bg-sidebar-hover:#1A3F2B;
-    --bg-topbar:       #0D2B1D;
+    --bg-primary:      #0f172a;
+    --bg-secondary:    #1e293b;
+    --bg-card:         #1e293b;
+    --bg-sidebar:      #0b1220;
+    --bg-sidebar-hover:#334155;
+    --bg-topbar:       #1e293b;
 
     --text-primary:    #e2e8f0;
     --text-secondary:  #94a3b8;
     --text-light:      #64748b;
     --text-white:      #f8fafc;
 
-    --border-color:    #1A3F2B;
+    --border-color:    #334155;
     --shadow-color:    rgba(0, 0, 0, 0.45);
     --shadow-dark:     rgba(0, 0, 0, 0.65);
 
-    --input-bg:        #0D2B1D;
-    --input-border:    #1A3F2B;
-    --hover-bg:        #1A3F2B;
+    --input-bg:        #1e293b;
+    --input-border:    #334155;
+    --hover-bg:        #334155;
 
-    --table-header:    #051007;
-    --table-stripe:    #0D2B1D;
+    --table-header:    #0b1220;
+    --table-stripe:    #1e293b;
 }
 
 /* ============================================================
@@ -75,12 +74,14 @@ body.dark-theme {
     box-sizing: border-box;
 }
 
+/* Scoped transition — avoids jank on notification re-renders */
 body, body * {
     transition-property: background-color, color, border-color, box-shadow;
     transition-duration: 0.2s;
     transition-timing-function: ease;
 }
 
+/* Remove transition on elements that update frequently */
 .notif-progress-fill,
 .notif-bell.ring,
 .loading-spinner,
@@ -140,6 +141,7 @@ body {
     transform: translateX(0);
 }
 
+/* Desktop: sidebar always visible */
 @media (min-width: 768px) {
     .sidebar {
         position: relative;
@@ -152,6 +154,7 @@ body {
     }
 }
 
+/* Sidebar overlay */
 .sidebar-overlay {
     display: none;
     position: fixed;
@@ -163,6 +166,7 @@ body {
     display: block;
 }
 
+/* Sidebar close button (mobile only) */
 .sidebar-close-btn {
     display: none;
 }
@@ -183,10 +187,11 @@ body {
     }
     .sidebar-close-btn:hover {
         color: white;
-        background: var(--bg-sidebar-hover);
+        background: #334155;
     }
 }
 
+/* Sidebar content */
 .sidebar-content {
     padding: 20px 0;
 }
@@ -212,11 +217,11 @@ body {
     text-align: center;
 }
 .nav-link.active {
-    background-color: var(--accent);
+    background-color: var(--bg-sidebar-hover);
     color: #ffffff;
 }
 
-/* Hamburger (mobile) */
+/* Hamburger button (mobile) */
 .hamburger-btn {
     display: none;
     background: none;
@@ -235,7 +240,7 @@ body {
     }
 }
 
-/* Settings link */
+/* Settings link special styling */
 .settings-link {
     border-left: 3px solid transparent;
     transition: all 0.3s ease;
@@ -247,8 +252,8 @@ body {
     color: var(--accent-amber);
 }
 .settings-link .settings-badge {
-    background: linear-gradient(135deg, #F1C40F, #d97706);
-    color: #0D2B1D;
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: white;
     font-size: 0.5rem;
     padding: 1px 6px;
     border-radius: 8px;
@@ -280,8 +285,6 @@ body {
 .main-content {
     flex: 1;
     padding: 1rem;
-    /* PUSH CONTENT UP SO FIXED BOTTOM BARS DON'T OVERLAP */
-    padding-bottom: 200px !important; 
     overflow-y: auto;
     overflow-x: hidden;
     min-height: 0;
@@ -292,12 +295,11 @@ body {
 @media (min-width: 768px) {
     .main-content {
         padding: 1.5rem;
-        padding-bottom: 200px !important;
     }
 }
 
 /* ============================================================
-   TOPBAR
+   TOPBAR (fallback styles — base.html overrides with its own)
    ============================================================ */
 .topbar {
     display: flex;
@@ -305,7 +307,7 @@ body {
     gap: 10px;
     padding: 8px 12px;
     background: var(--bg-topbar);
-    border-bottom: 1px solid #C8E6C9;
+    border-bottom: 1px solid var(--border-color);
     position: sticky;
     top: 0;
     z-index: 30;
@@ -319,7 +321,7 @@ body {
 .topbar-brand h1 {
     font-size: 1.05rem;
     font-weight: 700;
-    color: #1B5E20;
+    color: #4f46e5;
     margin: 0;
     white-space: nowrap;
     overflow: hidden;
@@ -338,32 +340,32 @@ body {
 }
 
 /* ============================================================
-   NOTIFICATION BELL
+   NOTIFICATION BELL (fallback — base.html has final styles)
    ============================================================ */
 .notif-wrapper {
     position: relative;
 }
 .notif-bell {
     position: relative;
-    background: #E8F5E9;
+    background: #f1f5f9;
     border: 0;
     width: 40px;
     height: 40px;
     border-radius: 10px;
     cursor: pointer;
-    color: #1B5E20;
+    color: #475569;
     font-size: 17px;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: background 0.15s, color 0.15s;
 }
-.notif-bell:hover  { background: #C8E6C9; color: #0D2B1D; }
-.notif-bell.active { background: #A5D6A7; color: #0D2B1D; }
+.notif-bell:hover  { background: #e2e8f0; color: #0f172a; }
+.notif-bell.active { background: #e0f2fe; color: #0369a1; }
 
-body.dark-theme .notif-bell        { background: #1A3F2B; color: #A5D6A7; }
-body.dark-theme .notif-bell:hover  { background: #2E7D32; color: #ffffff; }
-body.dark-theme .notif-bell.active { background: #14532d; color: #bbf7d0; }
+body.dark-theme .notif-bell        { background: #334155; color: #cbd5e1; }
+body.dark-theme .notif-bell:hover  { background: #475569; color: #f8fafc; }
+body.dark-theme .notif-bell.active { background: #0c4a6e; color: #bae6fd; }
 
 .notif-badge {
     position: absolute;
@@ -390,23 +392,23 @@ body.dark-theme .notif-bell.active { background: #14532d; color: #bbf7d0; }
     align-items: center;
     gap: 6px;
     padding: 6px 10px;
-    background: #E8F5E9;
+    background: #f1f5f9;
     border-radius: 10px;
     font-size: 0.8rem;
-    color: #1B5E20;
-    font-weight: 600;
+    color: #334155;
+    font-weight: 500;
     white-space: nowrap;
     text-decoration: none;
     cursor: pointer;
     transition: background 0.15s, color 0.15s, transform 0.1s;
 }
-.user-chip:hover  { background: #C8E6C9; color: #0D2B1D; }
+.user-chip:hover  { background: #e2e8f0; color: #0f172a; }
 .user-chip:active { transform: scale(0.97); }
-.user-chip i { color: #2E7D32; font-size: 1.1rem; }
+.user-chip i { color: var(--accent); font-size: 1.1rem; }
 
-body.dark-theme .user-chip        { background: #1A3F2B; color: #A5D6A7; }
-body.dark-theme .user-chip:hover  { background: #2E7D32; color: #ffffff; }
-body.dark-theme .user-chip i      { color: #F1C40F; }
+body.dark-theme .user-chip        { background: #334155; color: #cbd5e1; }
+body.dark-theme .user-chip:hover  { background: #475569; color: #f8fafc; }
+body.dark-theme .user-chip i      { color: #67e8f9; }
 
 @media (max-width: 480px) {
     .user-chip        { padding: 6px 8px; }
@@ -418,19 +420,19 @@ body.dark-theme .user-chip i      { color: #F1C40F; }
    ============================================================ */
 footer {
     background: var(--bg-sidebar);
-    color: #A5D6A7;
+    color: #9ca3af;
     text-align: center;
     padding: 4px 8px;
     font-size: 0.55rem;
     flex-shrink: 0;
-    border-top: 1px solid #1A3F2B;
+    border-top: 1px solid #334155;
     line-height: 1.4;
     font-weight: 500;
     position: relative;
     z-index: 5;
 }
 footer a {
-    color: #F1C40F;
+    color: #6b8cae;
     text-decoration: underline;
     font-weight: 600;
 }
@@ -522,7 +524,7 @@ input, select, textarea {
 }
 input:focus, select:focus, textarea:focus {
     border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgba(46, 125, 50, 0.2);
+    box-shadow: 0 0 0 3px rgba(0, 207, 207, 0.2);
 }
 input::placeholder, textarea::placeholder {
     color: var(--text-light);
@@ -693,10 +695,10 @@ body.dark-theme .alert-info    { background: #1e3a5f; color: #93c5fd; }
     border-color: var(--accent-amber) !important;
 }
 .theme-option.bg-amber-50 {
-    background: rgba(241, 196, 15, 0.1);
+    background: rgba(245, 158, 11, 0.1);
 }
 body.dark-theme .theme-option.bg-amber-50 {
-    background: rgba(241, 196, 15, 0.15);
+    background: rgba(245, 158, 11, 0.15);
 }
 
 /* ============================================================
@@ -814,7 +816,7 @@ body.dark-theme .theme-option.bg-amber-50 {
 .stock-good    { background: #d1fae5; }
 
 body.dark-theme .stock-item    { color: #e2e8f0; }
-body.dark-theme .stock-total   { background: #1A3F2B; }
+body.dark-theme .stock-total   { background: #334155; }
 body.dark-theme .stock-sold    { background: #1e3a5f; }
 body.dark-theme .stock-claimed { background: #7f1d1d; }
 body.dark-theme .stock-good    { background: #064e3b; }
@@ -875,7 +877,7 @@ body.dark-theme .notice-close:hover {
 }
 
 /* ============================================================
-   LOADING SPINNERS
+   LOADING SPINNERS (used by purchases/products pages)
    ============================================================ */
 @keyframes loading-rotate {
     to { transform: rotate(360deg); }
@@ -897,64 +899,4 @@ body.dark-theme .notice-close:hover {
     border-radius: 50%;
     animation: loading-rotate 0.8s linear infinite;
     vertical-align: -2px;
-}
-
-/* ============================================================
-   FIXES & TAILWIND OVERRIDES (Forcing visibility & theme)
-   ============================================================ */
-
-/* 1. Fix bottom summary bar (Purchases Page) */
-#summaryBar, 
-.fixed.bottom-0 {
-    background-color: #0D2B1D !important; 
-    color: #E8F5E9 !important;
-    border-top: 2px solid #2E7D32 !important;
-    box-shadow: 0 -4px 15px rgba(0,0,0,0.3) !important;
-    padding: 12px 16px !important;
-    z-index: 45 !important; /* Ensure it stays above main content */
-}
-
-/* Make all text inside the summary bright */
-#summaryBar div, 
-#summaryBar span {
-    color: #E8F5E9 !important;
-}
-
-/* Fix layout squishing inside summary */
-#summaryBar .grid {
-    display: flex !important;
-    flex-wrap: wrap !important;
-    justify-content: space-around !important;
-    gap: 10px !important;
-}
-
-/* 2. Force Tailwind hardcoded grays to be readable */
-.text-gray-400, .text-gray-500 { color: #4B5563 !important; }
-.text-gray-600, .text-gray-700 { color: #374151 !important; }
-
-body.dark-theme .text-gray-400 { color: #94a3b8 !important; }
-body.dark-theme .text-gray-500 { color: #cbd5e1 !important; }
-body.dark-theme .text-gray-600 { color: #e2e8f0 !important; }
-body.dark-theme .text-gray-700 { color: #f1f5f9 !important; }
-body.dark-theme .text-gray-800, body.dark-theme .text-gray-900 { color: #ffffff !important; }
-
-/* 3. Force Inputs/Selects to respect dark mode even with Tailwind classes */
-input, select, textarea {
-    background-color: var(--input-bg) !important;
-    color: var(--text-primary) !important;
-    border-color: var(--input-border) !important;
-}
-
-/* 4. Force hardcoded white backgrounds to become dark in dark theme */
-body.dark-theme .bg-white { background-color: var(--bg-card) !important; border-color: var(--border-color) !important; }
-body.dark-theme .bg-gray-50 { background-color: var(--bg-primary) !important; }
-body.dark-theme .bg-gray-100 { background-color: #1A3F2B !important; }
-
-/* 5. Fix Tailwind Blue/Indigo buttons in Dark mode */
-body.dark-theme .bg-blue-500, body.dark-theme .bg-blue-600 { background-color: #2E7D32 !important; }
-body.dark-theme .bg-blue-500:hover, body.dark-theme .bg-blue-600:hover { background-color: #1B5E20 !important; }
-
-/* 6. Ensure borders in Dark Mode are visible */
-body.dark-theme .border, body.dark-theme .border-b, body.dark-theme .border-t, body.dark-theme .border-gray-200, body.dark-theme .border-gray-300 {
-    border-color: var(--border-color) !important;
 }
